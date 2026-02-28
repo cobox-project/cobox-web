@@ -25,10 +25,13 @@ export function AppSidebar() {
   return (
     <aside className="flex h-full w-[60px] shrink-0 flex-col items-center border-r bg-sidebar py-3">
       {/* Logo */}
-      <div className="mb-4 flex h-8 w-8 items-center justify-center rounded-lg bg-foreground">
-        <span className="text-[10px] font-bold tracking-tight text-background">
-          Co
-        </span>
+      <div className="mb-4 flex flex-col items-center gap-0.5">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-foreground">
+          <span className="text-[10px] font-bold tracking-tight text-background">
+            Co
+          </span>
+        </div>
+        <span className="text-[8px] text-muted-foreground">v0.1</span>
       </div>
 
       {/* Navigation */}
