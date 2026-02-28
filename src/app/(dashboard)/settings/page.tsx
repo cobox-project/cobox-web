@@ -54,8 +54,8 @@ export default function SettingsPage() {
 
   return (
     <div className="flex h-full">
-      {/* Settings sidebar */}
-      <div className="w-[200px] shrink-0 border-r px-3 py-6">
+      {/* Settings nav (second column) */}
+      <div className="w-[200px] shrink-0 border-r bg-background px-3 py-4">
         <h1 className="px-2.5 text-[15px] font-semibold mb-4">設定</h1>
         <nav className="space-y-0.5">
           {tabs.map((tab) => {
@@ -79,7 +79,7 @@ export default function SettingsPage() {
         </nav>
       </div>
 
-      {/* Settings content */}
+      {/* Settings content (third column) */}
       <div className="flex-1 overflow-y-auto">
         <div className="mx-auto max-w-xl px-8 py-6">
           {activeTab === "accounts" && <AccountsSettings />}
@@ -148,7 +148,6 @@ function AccountsSettings() {
         })}
       </div>
 
-      {/* Addable channels */}
       <div className="mt-6">
         <p className="text-[11px] font-medium text-muted-foreground mb-2">
           追加可能
@@ -174,9 +173,7 @@ function AccountsSettings() {
                   <p className="text-[13px] font-medium">
                     {channelLabels[channel]}
                   </p>
-                  <p className="text-[11px] text-muted-foreground">
-                    未接続
-                  </p>
+                  <p className="text-[11px] text-muted-foreground">未接続</p>
                 </div>
                 <Button
                   variant="outline"

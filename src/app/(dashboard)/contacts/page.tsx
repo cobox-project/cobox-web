@@ -12,6 +12,7 @@ import {
   Facebook,
   Phone,
   AtSign,
+  Users,
 } from "lucide-react";
 
 const channelIcons: Record<Channel, React.ElementType> = {
@@ -53,8 +54,8 @@ export default function ContactsPage() {
   return (
     <div className="flex h-full">
       {/* Contact list */}
-      <div className="flex h-full w-[320px] shrink-0 flex-col border-r">
-        <div className="shrink-0 border-b px-4 py-3">
+      <div className="flex h-full w-[300px] shrink-0 flex-col border-r bg-background">
+        <div className="shrink-0 px-4 pt-4 pb-2">
           <h1 className="text-[15px] font-semibold mb-2">連絡先</h1>
           <div className="flex items-center gap-2 rounded-md border px-2.5 py-1.5">
             <Search className="h-3.5 w-3.5 text-muted-foreground" />
@@ -126,8 +127,11 @@ export default function ContactsPage() {
       {selected ? (
         <ContactDetail contact={selected} />
       ) : (
-        <div className="flex flex-1 items-center justify-center text-muted-foreground text-[13px]">
-          連絡先を選択してください
+        <div className="flex flex-1 items-center justify-center text-muted-foreground">
+          <div className="text-center">
+            <Users className="mx-auto h-10 w-10 mb-3 opacity-20" />
+            <p className="text-[13px]">連絡先を選択してください</p>
+          </div>
         </div>
       )}
     </div>
