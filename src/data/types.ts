@@ -1,11 +1,28 @@
 export type Channel = "instagram" | "line" | "email" | "facebook";
 export type Status = "open" | "pending" | "resolved";
 
+export interface Account {
+  id: string;
+  channel: Channel;
+  name: string;
+  description: string;
+}
+
 export interface TeamMember {
   id: string;
   name: string;
   avatar?: string;
-  initials: string;
+}
+
+export interface Contact {
+  id: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  note?: string;
+  channels: { channel: Channel; handle: string }[];
+  conversationIds: string[];
+  createdAt: string;
 }
 
 export interface Message {
@@ -19,9 +36,9 @@ export interface Message {
 
 export interface Conversation {
   id: string;
+  accountId: string;
+  contactId: string;
   contactName: string;
-  contactAvatar?: string;
-  contactInitials: string;
   channel: Channel;
   status: Status;
   assignee?: TeamMember;
