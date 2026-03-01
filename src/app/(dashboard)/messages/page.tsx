@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback, useRef, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import {
   accounts,
@@ -33,10 +33,13 @@ import {
   ChevronRight,
   Search,
   Inbox,
-  SlidersHorizontal,
   X,
   Trash2,
   User,
+  Star,
+  ShieldBan,
+  Stamp,
+  AlertTriangle,
 } from "lucide-react";
 
 const channelIcons: Record<Channel, React.ElementType> = {
@@ -53,16 +56,7 @@ const channelStyles: Record<Channel, { bg: string; text: string }> = {
   facebook: { bg: "bg-channel-facebook/10", text: "text-channel-facebook" },
 };
 
-const statusConfig: Record<
-  Status,
-  { label: string; icon: React.ElementType }
-> = {
-  open: { label: "未対応", icon: CircleDashed },
-  pending: { label: "保留中", icon: Clock },
-  resolved: { label: "完了", icon: Check },
-};
-
-type FolderFilter = "all" | "open" | "pending" | "resolved" | "mine" | string;
+type FolderFilter = "all" | "pending" | "resolved" | "favorite" | "spam" | "mine";
 
 function getContactHandle(conversation: Conversation): string | null {
   const contact = contacts.find((c) => c.id === conversation.contactId);
@@ -75,6 +69,12 @@ function getAccountName(accountId: string): string {
   return accounts.find((a) => a.id === accountId)?.name ?? "";
 }
 
+function isUnreplied(conv: Conversation): boolean {
+  if (conv.messages.length === 0) return true;
+  const lastMsg = conv.messages[conv.messages.length - 1];
+  return lastMsg.isInbound && !lastMsg.isInternal;
+}
+
 export default function MessagesPage() {
   const [conversations, setConversations] = useState(allConversations);
   const [selectedId, setSelectedId] = useState<string | null>(
@@ -83,18 +83,19 @@ export default function MessagesPage() {
   const [folderFilter, setFolderFilter] = useState<FolderFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [detailContactId, setDetailContactId] = useState<string | null>(null);
-  const [showFilter, setShowFilter] = useState(false);
-  const [filterStatus, setFilterStatus] = useState<Status | "">("");
-  const [filterChannel, setFilterChannel] = useState<Channel | "">("");
+  const [unrepliedOnly, setUnrepliedOnly] = useState(false);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     let list = conversations;
 
+    // Filter out spam unless viewing spam folder
+    if (folderFilter !== "spam") {
+      list = list.filter((c) => !c.isSpam);
+    }
+
     switch (folderFilter) {
       case "all":
-        break;
-      case "open":
-        list = list.filter((c) => c.status === "open");
         break;
       case "pending":
         list = list.filter((c) => c.status === "pending");
@@ -102,19 +103,19 @@ export default function MessagesPage() {
       case "resolved":
         list = list.filter((c) => c.status === "resolved");
         break;
+      case "favorite":
+        list = list.filter((c) => c.isFavorite);
+        break;
+      case "spam":
+        list = list.filter((c) => c.isSpam);
+        break;
       case "mine":
         list = list.filter((c) => c.assignee?.id === currentUser.id);
         break;
-      default:
-        list = list.filter((c) => c.accountId === folderFilter);
-        break;
     }
 
-    if (filterStatus) {
-      list = list.filter((c) => c.status === filterStatus);
-    }
-    if (filterChannel) {
-      list = list.filter((c) => c.channel === filterChannel);
+    if (unrepliedOnly) {
+      list = list.filter(isUnreplied);
     }
 
     if (searchQuery.trim()) {
@@ -128,7 +129,7 @@ export default function MessagesPage() {
     }
 
     return list;
-  }, [conversations, folderFilter, searchQuery, filterStatus, filterChannel]);
+  }, [conversations, folderFilter, searchQuery, unrepliedOnly]);
 
   const selectedConversation = useMemo(
     () => conversations.find((c) => c.id === selectedId) ?? null,
@@ -159,32 +160,66 @@ export default function MessagesPage() {
     []
   );
 
+  const handleToggleFavorite = useCallback((id: string) => {
+    setConversations((prev) =>
+      prev.map((c) =>
+        c.id === id ? { ...c, isFavorite: !c.isFavorite } : c
+      )
+    );
+  }, []);
+
+  const handleMarkSpam = useCallback((id: string) => {
+    setConversations((prev) =>
+      prev.map((c) =>
+        c.id === id ? { ...c, isSpam: true } : c
+      )
+    );
+  }, []);
+
+  const handleDeleteConversation = useCallback((id: string) => {
+    setConversations((prev) => prev.filter((c) => c.id !== id));
+    if (selectedId === id) {
+      setSelectedId(null);
+    }
+    setDeleteConfirmId(null);
+  }, [selectedId]);
+
   const counts = useMemo(() => {
+    const nonSpam = conversations.filter((c) => !c.isSpam);
     return {
-      all: conversations.length,
-      open: conversations.filter((c) => c.status === "open").length,
-      pending: conversations.filter((c) => c.status === "pending").length,
-      resolved: conversations.filter((c) => c.status === "resolved").length,
-      mine: conversations.filter((c) => c.assignee?.id === currentUser.id)
-        .length,
+      all: nonSpam.length,
+      pending: nonSpam.filter((c) => c.status === "pending").length,
+      resolved: nonSpam.filter((c) => c.status === "resolved").length,
+      favorite: nonSpam.filter((c) => c.isFavorite).length,
+      spam: conversations.filter((c) => c.isSpam).length,
+      mine: nonSpam.filter((c) => c.assignee?.id === currentUser.id).length,
     };
   }, [conversations]);
 
-  const accountCounts = useMemo(() => {
-    const map: Record<string, number> = {};
-    for (const acc of accounts) {
-      map[acc.id] = conversations.filter((c) => c.accountId === acc.id).length;
-    }
-    return map;
-  }, [conversations]);
+  // Keyboard navigation
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        const idx = filtered.findIndex((c) => c.id === selectedId);
+        if (e.key === "ArrowDown" && idx < filtered.length - 1) {
+          setSelectedId(filtered[idx + 1].id);
+        } else if (e.key === "ArrowUp" && idx > 0) {
+          setSelectedId(filtered[idx - 1].id);
+        }
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [filtered, selectedId]);
 
   const detailContact = detailContactId
     ? contacts.find((c) => c.id === detailContactId) ?? null
     : null;
 
   return (
-    <div className="flex h-full">
-      {/* ── Layer 2: Folders / Accounts (220px) ── */}
+    <div className="flex h-full overflow-x-auto">
+      {/* ── Layer 2: Folders (220px) ── */}
       <div className="flex h-full w-[220px] shrink-0 flex-col border-r bg-background">
         <div className="shrink-0 px-3 pt-4 pb-2">
           <h2 className="px-2 text-[13px] font-semibold text-foreground">
@@ -193,7 +228,6 @@ export default function MessagesPage() {
         </div>
 
         <nav className="flex-1 overflow-y-auto px-2">
-          {/* Status folders */}
           <div className="space-y-0.5">
             <FolderItem
               icon={Inbox}
@@ -203,15 +237,8 @@ export default function MessagesPage() {
               onClick={() => setFolderFilter("all")}
             />
             <FolderItem
-              icon={CircleDashed}
-              label="未対応"
-              count={counts.open}
-              isActive={folderFilter === "open"}
-              onClick={() => setFolderFilter("open")}
-            />
-            <FolderItem
               icon={Clock}
-              label="保留中"
+              label="保留"
               count={counts.pending}
               isActive={folderFilter === "pending"}
               onClick={() => setFolderFilter("pending")}
@@ -223,8 +250,21 @@ export default function MessagesPage() {
               isActive={folderFilter === "resolved"}
               onClick={() => setFolderFilter("resolved")}
             />
+            <FolderIconOnly
+              icon={Star}
+              count={counts.favorite}
+              isActive={folderFilter === "favorite"}
+              onClick={() => setFolderFilter("favorite")}
+            />
+            <FolderItem
+              icon={ShieldBan}
+              label="スパム"
+              count={counts.spam}
+              isActive={folderFilter === "spam"}
+              onClick={() => setFolderFilter("spam")}
+            />
             <FolderItemWithAvatar
-              label="自分の担当"
+              label="自分のアサイン"
               count={counts.mine}
               isActive={folderFilter === "mine"}
               onClick={() => setFolderFilter("mine")}
@@ -239,14 +279,15 @@ export default function MessagesPage() {
             <div className="space-y-0.5">
               {accounts.map((account) => {
                 const Icon = channelIcons[account.channel];
+                const nonSpam = conversations.filter((c) => !c.isSpam && c.accountId === account.id);
                 return (
                   <FolderItem
                     key={account.id}
                     icon={Icon}
                     label={account.name}
-                    count={accountCounts[account.id]}
-                    isActive={folderFilter === account.id}
-                    onClick={() => setFolderFilter(account.id)}
+                    count={nonSpam.length}
+                    isActive={false}
+                    onClick={() => {}}
                     iconColor={channelStyles[account.channel].text}
                   />
                 );
@@ -258,68 +299,26 @@ export default function MessagesPage() {
 
       {/* ── Layer 3: Thread list (320px) ── */}
       <div className="flex h-full w-[320px] shrink-0 flex-col border-r bg-background">
-        {/* Search */}
-        <div className="shrink-0 px-3 pt-3 pb-2">
-          <div className="flex items-center gap-2 rounded-md border px-2.5 py-1.5">
-            <Search className="h-3.5 w-3.5 text-muted-foreground" />
+        {/* Search + unreplied only */}
+        <div className="shrink-0 px-3 pt-3 pb-2 space-y-2">
+          <div className="flex items-center gap-2 rounded-xl border px-3 py-2">
+            <Search className="h-4 w-4 text-muted-foreground" />
             <input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="スレッドを検索..."
-              className="flex-1 bg-transparent text-[12px] outline-none placeholder:text-muted-foreground/50"
+              className="flex-1 bg-transparent text-[13px] outline-none placeholder:text-muted-foreground/50"
             />
-            <button
-              onClick={() => setShowFilter(!showFilter)}
-              className={cn(
-                "cursor-pointer rounded p-0.5 transition-colors",
-                showFilter
-                  ? "bg-brand/10 text-brand"
-                  : "text-muted-foreground hover:bg-accent hover:text-foreground"
-              )}
-            >
-              <SlidersHorizontal className="h-3.5 w-3.5" />
-            </button>
           </div>
-
-          {/* Filter panel */}
-          {showFilter && (
-            <div className="mt-2 space-y-2 rounded-md border p-2.5">
-              <div>
-                <label className="text-[10px] font-medium text-muted-foreground">ステータス</label>
-                <select
-                  value={filterStatus}
-                  onChange={(e) => setFilterStatus(e.target.value as Status | "")}
-                  className="mt-0.5 w-full rounded border bg-background px-2 py-1 text-[11px] outline-none"
-                >
-                  <option value="">すべて</option>
-                  <option value="open">未対応</option>
-                  <option value="pending">保留中</option>
-                  <option value="resolved">完了</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-[10px] font-medium text-muted-foreground">チャネル</label>
-                <select
-                  value={filterChannel}
-                  onChange={(e) => setFilterChannel(e.target.value as Channel | "")}
-                  className="mt-0.5 w-full rounded border bg-background px-2 py-1 text-[11px] outline-none"
-                >
-                  <option value="">すべて</option>
-                  <option value="email">Email</option>
-                  <option value="line">LINE</option>
-                  <option value="instagram">Instagram</option>
-                </select>
-              </div>
-              {(filterStatus || filterChannel) && (
-                <button
-                  onClick={() => { setFilterStatus(""); setFilterChannel(""); }}
-                  className="cursor-pointer text-[10px] text-brand hover:underline"
-                >
-                  フィルターをクリア
-                </button>
-              )}
-            </div>
-          )}
+          <label className="flex items-center gap-2 px-1 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={unrepliedOnly}
+              onChange={(e) => setUnrepliedOnly(e.target.checked)}
+              className="h-3.5 w-3.5 rounded border-muted-foreground/30 accent-brand"
+            />
+            <span className="text-[12px] text-muted-foreground">未返信のみ</span>
+          </label>
         </div>
 
         {/* Thread list */}
@@ -349,6 +348,9 @@ export default function MessagesPage() {
           onStatusChange={handleStatusChange}
           onAssigneeChange={handleAssigneeChange}
           onOpenContactDetail={(contactId) => setDetailContactId(contactId)}
+          onToggleFavorite={handleToggleFavorite}
+          onMarkSpam={handleMarkSpam}
+          onRequestDelete={(id) => setDeleteConfirmId(id)}
         />
       ) : (
         <div className="flex flex-1 items-center justify-center text-muted-foreground">
@@ -365,6 +367,45 @@ export default function MessagesPage() {
           contact={detailContact}
           onClose={() => setDetailContactId(null)}
         />
+      )}
+
+      {/* Delete confirmation dialog */}
+      {deleteConfirmId && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/30"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setDeleteConfirmId(null);
+          }}
+        >
+          <div className="w-[380px] rounded-xl bg-background p-6 shadow-xl">
+            <div className="mb-4 flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-destructive/10">
+                <AlertTriangle className="h-5 w-5 text-destructive" />
+              </div>
+              <div>
+                <h3 className="text-[15px] font-semibold">完全に削除しますか？</h3>
+                <p className="text-[12px] text-muted-foreground">この操作は取り消せません。</p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 px-4 text-[13px]"
+                onClick={() => setDeleteConfirmId(null)}
+              >
+                キャンセル
+              </Button>
+              <Button
+                size="sm"
+                className="h-9 bg-destructive hover:bg-destructive/90 px-4 text-[13px]"
+                onClick={() => handleDeleteConversation(deleteConfirmId)}
+              >
+                削除する
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -391,7 +432,7 @@ function FolderItem({
     <button
       onClick={onClick}
       className={cn(
-        "flex w-full items-center gap-2.5 rounded-md px-2.5 py-[7px] text-[13px] font-medium transition-colors cursor-pointer",
+        "flex w-full items-center gap-2.5 rounded-md px-2.5 py-[8px] text-[13px] font-medium transition-colors cursor-pointer",
         isActive
           ? "bg-accent text-foreground"
           : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
@@ -404,6 +445,38 @@ function FolderItem({
         )}
       />
       <span className="flex-1 truncate text-left">{label}</span>
+      {count > 0 && (
+        <span className="text-[11px] tabular-nums text-muted-foreground/60">
+          {count}
+        </span>
+      )}
+    </button>
+  );
+}
+
+function FolderIconOnly({
+  icon: Icon,
+  count,
+  isActive,
+  onClick,
+}: {
+  icon: React.ElementType;
+  count: number;
+  isActive: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "flex w-full items-center gap-2.5 rounded-md px-2.5 py-[8px] text-[13px] font-medium transition-colors cursor-pointer",
+        isActive
+          ? "bg-accent text-foreground"
+          : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+      )}
+    >
+      <Icon className="h-[16px] w-[16px] shrink-0" />
+      <span className="flex-1 truncate text-left">お気に入り</span>
       {count > 0 && (
         <span className="text-[11px] tabular-nums text-muted-foreground/60">
           {count}
@@ -428,7 +501,7 @@ function FolderItemWithAvatar({
     <button
       onClick={onClick}
       className={cn(
-        "flex w-full items-center gap-2.5 rounded-md px-2.5 py-[7px] text-[13px] font-medium transition-colors cursor-pointer",
+        "flex w-full items-center gap-2.5 rounded-md px-2.5 py-[8px] text-[13px] font-medium transition-colors cursor-pointer",
         isActive
           ? "bg-accent text-foreground"
           : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
@@ -475,7 +548,6 @@ function ConversationItem({
   const Icon = channelIcons[channel];
   const style = channelStyles[channel];
   const handle = getContactHandle(conversation);
-  const StatusIcon = statusConfig[status].icon;
 
   return (
     <button
@@ -483,9 +555,9 @@ function ConversationItem({
       className={cn(
         "flex w-full gap-3 border-b px-4 py-3 text-left transition-colors cursor-pointer",
         isSelected
-          ? "bg-brand/12"
+          ? "bg-brand text-white"
           : unreadCount > 0
-            ? "bg-brand/4"
+            ? "bg-brand/4 hover:bg-brand/8"
             : "bg-background hover:bg-accent/40"
       )}
     >
@@ -493,10 +565,10 @@ function ConversationItem({
       <div
         className={cn(
           "flex h-9 w-9 shrink-0 items-center justify-center rounded-full mt-0.5",
-          style.bg
+          isSelected ? "bg-white/20" : style.bg
         )}
       >
-        <Icon className={cn("h-[18px] w-[18px]", style.text)} />
+        <Icon className={cn("h-[18px] w-[18px]", isSelected ? "text-white" : style.text)} />
       </div>
 
       {/* Content */}
@@ -505,31 +577,45 @@ function ConversationItem({
           <span
             className={cn(
               "truncate text-[13px]",
-              unreadCount > 0
-                ? "font-semibold text-foreground"
-                : "font-medium text-foreground"
+              isSelected
+                ? "font-semibold text-white"
+                : unreadCount > 0
+                  ? "font-semibold text-foreground"
+                  : "font-medium text-foreground"
             )}
           >
             {contactName}
           </span>
-          <span className="shrink-0 text-[10px] text-muted-foreground">
+          <span className={cn(
+            "shrink-0 text-[10px]",
+            isSelected ? "text-white/70" : "text-muted-foreground"
+          )}>
             {lastMessageAt}
           </span>
         </div>
 
         {handle && (
-          <p className="mt-0.5 truncate text-[10px] text-muted-foreground/70">
+          <p className={cn(
+            "mt-0.5 truncate text-[10px]",
+            isSelected ? "text-white/60" : "text-muted-foreground/70"
+          )}>
             {handle}
           </p>
         )}
 
         {subject && (
-          <p className="mt-0.5 truncate text-[11px] font-medium text-foreground/70">
+          <p className={cn(
+            "mt-0.5 truncate text-[11px] font-medium",
+            isSelected ? "text-white/80" : "text-foreground/70"
+          )}>
             {subject}
           </p>
         )}
 
-        <p className="mt-0.5 truncate text-[11px] leading-relaxed text-muted-foreground">
+        <p className={cn(
+          "mt-0.5 truncate text-[11px] leading-relaxed",
+          isSelected ? "text-white/70" : "text-muted-foreground"
+        )}>
           {lastMessage}
         </p>
 
@@ -537,7 +623,10 @@ function ConversationItem({
         <div className="mt-1.5 flex items-center justify-between">
           <div className="flex items-center gap-1">
             {assignee ? (
-              <span className="flex items-center gap-1 truncate text-[10px] text-muted-foreground">
+              <span className={cn(
+                "flex items-center gap-1 truncate text-[10px]",
+                isSelected ? "text-white/60" : "text-muted-foreground"
+              )}>
                 <Avatar
                   src={assignee.avatar}
                   fallback={assignee.name}
@@ -547,15 +636,20 @@ function ConversationItem({
                 {assignee.name}
               </span>
             ) : (
-              <span className="text-[10px] font-medium text-muted-foreground/60">
+              <span className={cn(
+                "text-[10px] font-medium",
+                isSelected ? "text-white/50" : "text-muted-foreground/60"
+              )}>
                 未アサイン
               </span>
             )}
           </div>
-          <span className="flex items-center gap-1 text-[9px] font-medium text-muted-foreground/60">
-            <StatusIcon className="h-3 w-3" />
-            {statusConfig[status].label}
-          </span>
+          {conversation.isFavorite && (
+            <Star className={cn(
+              "h-3 w-3 fill-current",
+              isSelected ? "text-white/60" : "text-amber-400"
+            )} />
+          )}
         </div>
       </div>
     </button>
@@ -569,11 +663,17 @@ function ConversationDetail({
   onStatusChange,
   onAssigneeChange,
   onOpenContactDetail,
+  onToggleFavorite,
+  onMarkSpam,
+  onRequestDelete,
 }: {
   conversation: Conversation;
   onStatusChange: (id: string, status: Status) => void;
   onAssigneeChange: (id: string, assigneeId: string | null) => void;
   onOpenContactDetail: (contactId: string) => void;
+  onToggleFavorite: (id: string) => void;
+  onMarkSpam: (id: string) => void;
+  onRequestDelete: (id: string) => void;
 }) {
   const [replyText, setReplyText] = useState("");
   const [memoText, setMemoText] = useState("");
@@ -587,10 +687,8 @@ function ConversationDetail({
   const style = channelStyles[conversation.channel];
   const handle = getContactHandle(conversation);
 
-  // Initialize email fields from conversation data
   const isEmail = conversation.channel === "email";
   const isSelfAssigned = conversation.assignee?.id === currentUser.id;
-  const isUnassigned = !conversation.assignee;
 
   useEffect(() => {
     if (isEmail) {
@@ -605,144 +703,161 @@ function ConversationDetail({
   }, [conversation.id, isEmail, conversation.contactId, conversation.subject]);
 
   return (
-    <div className="flex h-full flex-1 flex-col bg-background">
+    <div className="flex h-full min-w-[400px] flex-1 flex-col bg-background">
       {/* Header */}
-      <header className="flex h-13 shrink-0 items-center justify-between border-b px-5">
-        <div className="flex min-w-0 items-center gap-3">
+      <header className="flex shrink-0 items-center justify-between border-b px-5 py-3">
+        <button
+          onClick={() => onOpenContactDetail(conversation.contactId)}
+          className="flex min-w-0 items-center gap-3 cursor-pointer rounded-lg px-2 py-1.5 -ml-2 transition-colors hover:bg-accent active:bg-accent/80"
+        >
           <div
             className={cn(
-              "flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
+              "flex h-9 w-9 shrink-0 items-center justify-center rounded-full",
               style.bg
             )}
           >
             <Icon className={cn("h-4 w-4", style.text)} />
           </div>
           <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => onOpenContactDetail(conversation.contactId)}
-                className="cursor-pointer truncate text-[14px] font-semibold hover:text-brand transition-colors"
-              >
-                {conversation.contactName}
-              </button>
-            </div>
+            <p className="truncate text-[14px] font-semibold leading-tight">
+              {conversation.contactName}
+            </p>
             {handle && (
-              <p className="truncate text-[11px] text-muted-foreground">
+              <p className="truncate text-[11px] leading-tight text-muted-foreground">
                 {handle}
               </p>
             )}
           </div>
-        </div>
+        </button>
 
-        <div className="flex items-center gap-1">
-          {/* Assignee dropdown (left) */}
-          <Dropdown
-            align="right"
-            trigger={
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7 gap-1.5 text-[11px]"
-              >
-                {conversation.assignee ? (
-                  <>
-                    <Avatar
-                      src={conversation.assignee.avatar}
-                      fallback={conversation.assignee.name}
-                      size="sm"
-                      className="h-4 w-4 text-[6px]"
-                    />
-                    {conversation.assignee.name}
-                  </>
-                ) : (
-                  <>
-                    <User className="h-3 w-3" />
-                    未アサイン
-                  </>
-                )}
-                <ChevronDown className="h-2.5 w-2.5 text-muted-foreground" />
-              </Button>
-            }
-          >
-            <DropdownItem
-              active={!conversation.assignee}
-              onClick={() => onAssigneeChange(conversation.id, null)}
+        <div className="flex items-center gap-1.5">
+          {/* Favorite toggle */}
+          <Tooltip content="お気に入り" side="bottom">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="h-8 w-8"
+              onClick={() => onToggleFavorite(conversation.id)}
             >
-              <UserPlus className="h-3.5 w-3.5" />
-              未アサイン
-            </DropdownItem>
-            {teamMembers.map((m) => (
-              <DropdownItem
-                key={m.id}
-                active={conversation.assignee?.id === m.id}
-                onClick={() => onAssigneeChange(conversation.id, m.id)}
-              >
-                <Avatar
-                  src={m.avatar}
-                  fallback={m.name}
-                  size="sm"
-                  className="h-4 w-4 text-[6px]"
-                />
-                {m.name}
-              </DropdownItem>
-            ))}
-          </Dropdown>
+              <Star className={cn(
+                "h-4 w-4",
+                conversation.isFavorite
+                  ? "fill-amber-400 text-amber-400"
+                  : "text-muted-foreground"
+              )} />
+            </Button>
+          </Tooltip>
 
-          {/* Status dropdown (right) */}
-          <Dropdown
-            align="right"
-            trigger={
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7 gap-1.5 text-[11px]"
-              >
-                {(() => {
-                  const s = statusConfig[conversation.status];
-                  const SIcon = s.icon;
-                  return (
+          {/* Assign UI */}
+          <div className="flex items-center rounded-lg border">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-9 gap-1.5 rounded-r-none border-r text-[12px] px-3"
+              onClick={() => onAssigneeChange(conversation.id, currentUser.id)}
+            >
+              <Stamp className="h-3.5 w-3.5" />
+              自分にアサイン
+            </Button>
+            <Dropdown
+              align="right"
+              trigger={
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-9 gap-1 rounded-l-none text-[12px] px-3"
+                >
+                  {conversation.assignee ? (
                     <>
-                      <SIcon className="h-3 w-3" />
-                      {s.label}
-                      <ChevronDown className="h-2.5 w-2.5 text-muted-foreground" />
+                      <Avatar
+                        src={conversation.assignee.avatar}
+                        fallback={conversation.assignee.name}
+                        size="sm"
+                        className="h-4 w-4 text-[6px]"
+                      />
+                      {conversation.assignee.name}
                     </>
-                  );
-                })()}
-              </Button>
+                  ) : (
+                    "アサイン"
+                  )}
+                  <ChevronDown className="h-2.5 w-2.5 text-muted-foreground" />
+                </Button>
+              }
+            >
+              <DropdownItem
+                active={!conversation.assignee}
+                onClick={() => onAssigneeChange(conversation.id, null)}
+              >
+                <UserPlus className="h-3.5 w-3.5" />
+                未アサイン
+              </DropdownItem>
+              {teamMembers.map((m) => (
+                <DropdownItem
+                  key={m.id}
+                  active={conversation.assignee?.id === m.id}
+                  onClick={() => onAssigneeChange(conversation.id, m.id)}
+                >
+                  <Avatar
+                    src={m.avatar}
+                    fallback={m.name}
+                    size="sm"
+                    className="h-4 w-4 text-[6px]"
+                  />
+                  {m.name}
+                </DropdownItem>
+              ))}
+            </Dropdown>
+          </div>
+
+          {/* Resolve button - always visible */}
+          <Button
+            size="sm"
+            className={cn(
+              "h-9 gap-1.5 text-[12px] px-4",
+              conversation.status === "resolved"
+                ? "bg-foreground/10 text-foreground hover:bg-foreground/15"
+                : "bg-brand hover:bg-brand/90"
+            )}
+            onClick={() =>
+              onStatusChange(
+                conversation.id,
+                conversation.status === "resolved" ? "open" : "resolved"
+              )
             }
           >
-            {(Object.keys(statusConfig) as Status[]).map((s) => {
-              const conf = statusConfig[s];
-              const SIcon = conf.icon;
-              return (
-                <DropdownItem
-                  key={s}
-                  active={s === conversation.status}
-                  onClick={() => onStatusChange(conversation.id, s)}
-                >
-                  <SIcon className="h-3.5 w-3.5" />
-                  {conf.label}
-                </DropdownItem>
-              );
-            })}
-          </Dropdown>
+            <Check className="h-3.5 w-3.5" />
+            {conversation.status === "resolved" ? "再開する" : "完了"}
+          </Button>
 
-          {/* More options - always visible */}
+          {/* More options */}
           <Dropdown
             align="right"
             trigger={
-              <Button variant="ghost" size="icon-sm">
+              <Button variant="ghost" size="icon-sm" className="h-8 w-8">
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
             }
           >
-            <DropdownItem onClick={() => onOpenContactDetail(conversation.contactId)}>
-              連絡先を表示
+            <DropdownItem
+              onClick={() =>
+                onStatusChange(conversation.id, "pending")
+              }
+            >
+              <Clock className="h-3.5 w-3.5" />
+              保留にする
             </DropdownItem>
-            <DropdownItem>会話をアーカイブ</DropdownItem>
-            <DropdownItem className="text-destructive">
+            <DropdownItem
+              onClick={() => onMarkSpam(conversation.id)}
+            >
+              <ShieldBan className="h-3.5 w-3.5" />
+              スパムとして報告
+            </DropdownItem>
+            <DropdownItem
+              className="text-destructive"
+              onClick={() => onRequestDelete(conversation.id)}
+            >
               <Trash2 className="h-3.5 w-3.5" />
-              削除
+              完全に削除
             </DropdownItem>
           </Dropdown>
         </div>
@@ -766,19 +881,20 @@ function ConversationDetail({
         {/* Input control overlay */}
         {!isSelfAssigned && (
           <div className="relative">
-            <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80 backdrop-blur-[1px] rounded-t-lg">
+            <div className="absolute inset-0 z-10 flex items-center justify-center bg-brand-light/60 backdrop-blur-[1px] rounded-t-lg">
               <div className="flex items-center gap-2">
                 <Button
                   size="sm"
-                  className="h-8 gap-1.5 bg-brand hover:bg-brand/90 text-[12px]"
+                  className="h-9 gap-1.5 bg-brand hover:bg-brand/90 text-[13px] px-4"
                   onClick={() => onAssigneeChange(conversation.id, currentUser.id)}
                 >
+                  <Stamp className="h-3.5 w-3.5" />
                   自分にアサイン
                 </Button>
                 <Dropdown
                   align="right"
                   trigger={
-                    <Button variant="outline" size="sm" className="h-8 text-[12px]">
+                    <Button variant="outline" size="sm" className="h-9 text-[13px] px-4 bg-white">
                       他の人をアサイン
                       <ChevronDown className="h-3 w-3 ml-1" />
                     </Button>
@@ -852,7 +968,7 @@ function ConversationDetail({
                   <Button
                     variant="ghost"
                     size="icon-sm"
-                    className="text-muted-foreground"
+                    className="h-8 w-8 text-muted-foreground"
                     disabled={!isSelfAssigned}
                   >
                     <Paperclip className="h-4 w-4" />
@@ -860,7 +976,7 @@ function ConversationDetail({
                 </Tooltip>
                 <Button
                   size="sm"
-                  className="h-7 rounded-md bg-brand hover:bg-brand/90 px-3 text-[11px]"
+                  className="h-8 rounded-md bg-brand hover:bg-brand/90 px-4 text-[12px]"
                   disabled={!replyText.trim() || !isSelfAssigned}
                 >
                   <Send className="h-3 w-3 mr-1" />
@@ -869,33 +985,33 @@ function ConversationDetail({
               </div>
             </div>
 
-            {/* Internal memo input - full width, icon only centered */}
+            {/* Team memo input */}
             <div className="rounded-lg border border-amber-200/50 bg-amber-50/30">
-              <div className="flex items-center justify-center py-1">
-                <MessageSquareText className="h-4 w-4 text-amber-500" />
+              <div className="flex items-start gap-2.5 px-3 pt-2.5 pb-0">
+                <MessageSquareText className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+                <textarea
+                  value={memoText}
+                  onChange={(e) => setMemoText(e.target.value)}
+                  placeholder="チーム内メモを入力"
+                  rows={1}
+                  className="flex-1 resize-none bg-transparent text-[12px] leading-relaxed outline-none placeholder:text-amber-400/60"
+                  onInput={(e) => {
+                    const el = e.currentTarget;
+                    el.style.height = "auto";
+                    el.style.height = Math.min(el.scrollHeight, 80) + "px";
+                  }}
+                />
               </div>
-              <textarea
-                value={memoText}
-                onChange={(e) => setMemoText(e.target.value)}
-                placeholder="社内メモを入力"
-                rows={1}
-                className="w-full resize-none bg-transparent px-3 pb-1 text-[12px] leading-relaxed outline-none placeholder:text-amber-400/60"
-                onInput={(e) => {
-                  const el = e.currentTarget;
-                  el.style.height = "auto";
-                  el.style.height = Math.min(el.scrollHeight, 80) + "px";
-                }}
-              />
-              {memoText.trim() && (
-                <div className="flex justify-end px-3 pb-2">
-                  <Button
-                    size="icon-sm"
-                    className="rounded-md bg-amber-500 hover:bg-amber-600"
-                  >
-                    <Send className="h-3 w-3" />
-                  </Button>
-                </div>
-              )}
+              <div className="flex justify-end px-3 pb-2 pt-1">
+                <Button
+                  size="sm"
+                  className="h-7 rounded-md bg-amber-500 hover:bg-amber-600 px-3 text-[11px]"
+                  disabled={!memoText.trim()}
+                >
+                  <Send className="h-3 w-3 mr-1" />
+                  送信
+                </Button>
+              </div>
             </div>
           </div>
         </div>
@@ -920,16 +1036,27 @@ function MessageBubble({
     return (
       <div className="flex justify-center">
         <div className="max-w-md rounded-lg border border-amber-200/60 bg-amber-50/40 px-4 py-2.5">
-          <div className="mb-1 flex items-center gap-1.5">
-            <MessageSquareText className="h-3 w-3 text-amber-500" />
-            <span className="text-[10px] font-medium text-amber-600">
-              社内メモ — {senderName}
-            </span>
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-1.5">
+              <MessageSquareText className="h-3 w-3 text-amber-500" />
+              <span className="text-[10px] font-medium text-amber-600">
+                チーム内メモ
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Avatar
+                src={teamMembers.find((m) => m.name === senderName)?.avatar}
+                fallback={senderName}
+                size="sm"
+                className="h-4 w-4 text-[5px]"
+              />
+              <span className="text-[10px] text-amber-600">{senderName}</span>
+              <span className="text-[10px] text-amber-400">{timestamp}</span>
+            </div>
           </div>
-          <p className="text-[12px] leading-relaxed text-amber-900/70">
+          <p className="mt-1.5 text-[12px] leading-relaxed text-amber-900/70">
             {content}
           </p>
-          <p className="mt-1 text-[10px] text-amber-400">{timestamp}</p>
         </div>
       </div>
     );
@@ -1060,7 +1187,7 @@ function ContactSlidePanel({
           <div>
             <p className="text-[15px] font-semibold">{contact.name}</p>
             {contact.email && (
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-[11px] text-muted-foreground truncate max-w-[180px]">
                 {contact.email}
               </p>
             )}
@@ -1077,7 +1204,7 @@ function ContactSlidePanel({
               {contact.email && (
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground">メール</span>
-                  <span>{contact.email}</span>
+                  <span className="truncate max-w-[150px]">{contact.email}</span>
                 </div>
               )}
               {contact.phone && (
@@ -1089,7 +1216,7 @@ function ContactSlidePanel({
               {contact.channels.map((ch) => (
                 <div key={ch.channel} className="flex items-center justify-between">
                   <span className="text-muted-foreground capitalize">{ch.channel}</span>
-                  <span>{ch.handle}</span>
+                  <span className="truncate max-w-[150px]">{ch.handle}</span>
                 </div>
               ))}
             </div>
@@ -1151,7 +1278,7 @@ function ContactSlidePanel({
                       </p>
                     </div>
                     <Badge variant={conv.status} className="text-[9px] px-1.5 py-0 shrink-0">
-                      {statusConfig[conv.status].label}
+                      {conv.status === "open" ? "未対応" : conv.status === "pending" ? "保留" : "完了"}
                     </Badge>
                   </div>
                 );

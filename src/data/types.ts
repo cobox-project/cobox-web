@@ -62,4 +62,6 @@ export interface Conversation {
   lastMessageAt: string;
   unreadCount: number;
   messages: Message[];
+  isFavorite?: boolean;
+  isSpam?: boolean;
 }

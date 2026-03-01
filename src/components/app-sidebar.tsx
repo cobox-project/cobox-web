@@ -24,49 +24,20 @@ const navItems = [
 
 export function AppSidebar() {
   const pathname = usePathname();
-  const [expanded, setExpanded] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
 
   return (
     <>
-      <aside
-        className={cn(
-          "flex h-full shrink-0 flex-col bg-brand py-3 transition-all duration-200",
-          expanded ? "w-[180px] items-start px-3" : "w-[60px] items-center"
-        )}
-      >
-        {/* Logo - click to toggle */}
-        <button
-          onClick={() => setExpanded(!expanded)}
-          className="mb-6 cursor-pointer"
-        >
-          <div className={cn(
-            "flex items-center gap-2",
-            expanded ? "px-1" : ""
-          )}>
-            <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
-              <path
-                d="M16 4C9.37 4 4 9.37 4 16s5.37 12 12 12c2.12 0 4.12-.55 5.86-1.52"
-                stroke="white"
-                strokeWidth="3.5"
-                strokeLinecap="round"
-                fill="none"
-              />
-              <circle cx="24" cy="26" r="2" fill="white" fillOpacity="0.6" />
-            </svg>
-            {expanded && (
-              <span className="text-[15px] font-bold tracking-tight text-white">
-                Cobox
-              </span>
-            )}
-          </div>
-        </button>
+      <aside className="flex h-full w-[72px] shrink-0 flex-col items-center bg-brand px-2 py-4">
+        {/* Logo - fixed, no toggle */}
+        <div className="mb-7 flex items-center justify-center">
+          <span className="text-[15px] font-black tracking-[-0.08em] text-white leading-none select-none">
+            BOX
+          </span>
+        </div>
 
         {/* Navigation */}
-        <nav className={cn(
-          "flex flex-1 flex-col gap-1",
-          expanded ? "w-full" : "items-center"
-        )}>
+        <nav className="flex flex-1 flex-col items-center gap-1.5">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = pathname.startsWith(item.href);
@@ -76,53 +47,33 @@ export function AppSidebar() {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "relative flex items-center rounded-lg transition-colors",
-                  expanded
-                    ? "gap-2.5 px-3 py-2"
-                    : "w-[52px] flex-col gap-0.5 py-2 justify-center",
+                  "relative flex w-[56px] flex-col items-center justify-center gap-0.5 rounded-lg py-2.5 transition-colors",
                   isActive
                     ? "bg-white text-brand"
                     : "text-white/60 hover:bg-white/10 hover:text-white/90"
                 )}
               >
-                <Icon className={cn(
-                  "shrink-0",
-                  expanded ? "h-[17px] w-[17px]" : "h-[18px] w-[18px]"
-                )} />
-                {expanded ? (
-                  <span className="text-[13px] font-medium">
-                    {item.label}
-                  </span>
-                ) : (
-                  <span className="text-[9px] font-medium leading-tight">
-                    {item.label}
-                  </span>
-                )}
+                <Icon className="h-[18px] w-[18px] shrink-0" />
+                <span className="text-[9px] font-medium leading-tight">
+                  {item.label}
+                </span>
               </Link>
             );
           })}
         </nav>
 
         {/* User profile */}
-        <div className={cn("mt-auto", expanded ? "w-full" : "")}>
+        <div className="mt-auto">
           <button
             onClick={() => setProfileOpen(true)}
-            className={cn(
-              "cursor-pointer overflow-hidden rounded-full ring-2 ring-white/30 transition-all hover:ring-white/60",
-              expanded ? "flex items-center gap-2.5 rounded-lg ring-0 hover:ring-0 w-full px-2 py-1.5 hover:bg-white/10" : ""
-            )}
+            className="cursor-pointer overflow-hidden rounded-full ring-2 ring-white/30 transition-all hover:ring-white/60"
           >
             <Avatar
               src={currentUser.avatar}
               fallback={currentUser.name}
               size="sm"
-              className="h-8 w-8"
+              className="h-9 w-9"
             />
-            {expanded && (
-              <span className="text-[12px] font-medium text-white/80 truncate">
-                {currentUser.name}
-              </span>
-            )}
           </button>
         </div>
       </aside>
@@ -173,7 +124,7 @@ function ProfileSettingsModal({ onClose }: { onClose: () => void }) {
           </div>
         </div>
 
-        {/* Form fields - profile only */}
+        {/* Form fields */}
         <div className="space-y-4">
           <div>
             <label className="mb-1 block text-[12px] font-medium text-muted-foreground">
@@ -181,7 +132,7 @@ function ProfileSettingsModal({ onClose }: { onClose: () => void }) {
             </label>
             <input
               defaultValue={currentUser.name}
-              className="w-full rounded-md border px-3 py-2 text-[13px] outline-none focus:border-brand/40"
+              className="w-full rounded-md border px-3 py-2.5 text-[13px] outline-none focus:border-brand/40"
             />
           </div>
           <div>
@@ -190,7 +141,7 @@ function ProfileSettingsModal({ onClose }: { onClose: () => void }) {
             </label>
             <input
               defaultValue="misaki.tanaka@myshop.jp"
-              className="w-full rounded-md border px-3 py-2 text-[13px] outline-none focus:border-brand/40"
+              className="w-full rounded-md border px-3 py-2.5 text-[13px] outline-none focus:border-brand/40"
             />
           </div>
           <div>
@@ -199,7 +150,7 @@ function ProfileSettingsModal({ onClose }: { onClose: () => void }) {
             </label>
             <input
               defaultValue="美咲"
-              className="w-full rounded-md border px-3 py-2 text-[13px] outline-none focus:border-brand/40"
+              className="w-full rounded-md border px-3 py-2.5 text-[13px] outline-none focus:border-brand/40"
             />
           </div>
         </div>
@@ -207,13 +158,13 @@ function ProfileSettingsModal({ onClose }: { onClose: () => void }) {
         <div className="mt-6 flex justify-end gap-2">
           <button
             onClick={onClose}
-            className="cursor-pointer rounded-lg border px-4 py-2 text-[13px] font-medium transition-colors hover:bg-accent"
+            className="cursor-pointer rounded-lg border px-5 py-2.5 text-[13px] font-medium transition-colors hover:bg-accent"
           >
             キャンセル
           </button>
           <button
             onClick={onClose}
-            className="cursor-pointer rounded-lg bg-brand px-4 py-2 text-[13px] font-medium text-white transition-colors hover:bg-brand/90"
+            className="cursor-pointer rounded-lg bg-brand px-5 py-2.5 text-[13px] font-medium text-white transition-colors hover:bg-brand/90"
           >
             保存
           </button>
