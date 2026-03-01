@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
+import Link from "next/link";
 import { currentUser } from "@/data/mock";
 import { Avatar } from "@/components/ui/avatar";
 import { Camera } from "lucide-react";
@@ -22,13 +23,22 @@ export default function ProfilePage() {
 
   return (
     <div className="flex h-full">
-      {/* Layer 2: sub navigation */}
+      {/* Layer 2: shared sub navigation */}
       <div className="w-[220px] shrink-0 border-r bg-background px-3 py-4">
-        <h1 className="mb-4 px-2.5 text-[15px] font-semibold">プロフィール</h1>
+        <h1 className="mb-4 px-2.5 text-[15px] font-semibold">アカウント</h1>
         <nav className="space-y-0.5">
-          <div className="flex w-full items-center gap-2.5 rounded-md bg-accent px-2.5 py-[7px] text-[15px] font-medium text-foreground">
+          <Link
+            href="/profile"
+            className="flex w-full items-center gap-2.5 rounded-md bg-accent px-2.5 py-[7px] text-[15px] font-medium text-foreground"
+          >
             プロフィール
-          </div>
+          </Link>
+          <Link
+            href="/notifications"
+            className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-[7px] text-[15px] text-muted-foreground hover:bg-accent/50 transition-colors"
+          >
+            通知
+          </Link>
         </nav>
       </div>
 

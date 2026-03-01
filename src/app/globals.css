@@ -74,7 +74,7 @@
   --channel-instagram: oklch(0.62 0.24 330);
   --channel-line: oklch(0.60 0.17 145);
   --channel-email: oklch(0.52 0.14 250);
-  --channel-facebook: oklch(0.52 0.18 260);
+  --channel-facebook: oklch(0.50 0.18 285);
   /* Status colors: monochrome */
   --status-open: oklch(0.45 0 0);
   --status-pending: oklch(0.55 0 0);

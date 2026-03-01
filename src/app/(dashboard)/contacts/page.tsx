@@ -467,12 +467,11 @@ function ContactDetail({
           )}
         </div>
 
-        <div className="mb-4 text-[12px] text-muted-foreground/50">ID: {contact.id}</div>
+        <div className="mb-4 text-[12px] text-muted-foreground">ID: {contact.id}</div>
 
         {isEditing ? (
-          <div className="space-y-6">
+          <div className="space-y-8">
             <section>
-              <h3 className="mb-3 text-[13px] font-medium text-muted-foreground">氏名</h3>
               <div className="space-y-3">
                 <div>
                   <label className="mb-1 block text-[13px] text-muted-foreground">氏名</label>
@@ -488,7 +487,6 @@ function ContactDetail({
             </section>
 
             <section>
-              <h3 className="mb-3 text-[13px] font-medium text-muted-foreground">会社名</h3>
               <div className="space-y-3">
                 <div>
                   <label className="mb-1 block text-[13px] text-muted-foreground">会社名</label>
@@ -504,7 +502,6 @@ function ContactDetail({
             </section>
 
             <section>
-              <h3 className="mb-3 text-[13px] font-medium text-muted-foreground">連絡先</h3>
               <div className="space-y-3">
                 <div>
                   <label className="mb-1 block text-[13px] text-muted-foreground">電話番号</label>
@@ -554,7 +551,6 @@ function ContactDetail({
             </section>
 
             <section>
-              <h3 className="mb-3 text-[13px] font-medium text-muted-foreground">グループ</h3>
               <div className="space-y-2">
                 {groups.map((g) => (
                   <label key={g.id} className="flex items-center gap-2.5 cursor-pointer select-none">
@@ -571,7 +567,6 @@ function ContactDetail({
             </section>
 
             <section>
-              <h3 className="mb-3 text-[13px] font-medium text-muted-foreground">メモ</h3>
               <textarea value={editNote} onChange={(e) => { setEditNote(e.target.value); markChanged(); }}
                 placeholder="メモを入力..." rows={4}
                 className="w-full resize-none rounded-md border px-3 py-2.5 text-[15px] outline-none focus:border-brand/40 placeholder:text-muted-foreground/50" />
@@ -584,15 +579,13 @@ function ContactDetail({
             </div>
           </div>
         ) : (
-          <div className="space-y-5">
+          <div className="space-y-8">
             <section>
-              <h3 className="mb-2 text-[12px] font-medium uppercase tracking-wider text-muted-foreground">氏名</h3>
               <p className="text-[16px] font-medium">{contact.name}</p>
               {contact.nameFurigana && <p className="text-[13px] text-muted-foreground">{contact.nameFurigana}</p>}
             </section>
 
             <section>
-              <h3 className="mb-2 text-[12px] font-medium uppercase tracking-wider text-muted-foreground">会社名</h3>
               {contact.company ? (
                 <>
                   <p className="text-[16px] font-medium">{contact.company}</p>
@@ -604,7 +597,6 @@ function ContactDetail({
             </section>
 
             <section>
-              <h3 className="mb-2 text-[12px] font-medium uppercase tracking-wider text-muted-foreground">連絡先</h3>
               <div className="space-y-2">
                 {contact.phone && (
                   <div className="flex items-center gap-2.5 text-[15px]">
@@ -641,7 +633,6 @@ function ContactDetail({
             </section>
 
             <section>
-              <h3 className="mb-2 text-[12px] font-medium uppercase tracking-wider text-muted-foreground">グループ</h3>
               {memberGroups.length === 0 ? (
                 <p className="text-[14px] text-muted-foreground/60">なし</p>
               ) : (
@@ -654,12 +645,10 @@ function ContactDetail({
             </section>
 
             <section>
-              <h3 className="mb-2 text-[12px] font-medium uppercase tracking-wider text-muted-foreground">メモ</h3>
               <p className="text-[15px] leading-relaxed text-foreground/80">{contact.note || "なし"}</p>
             </section>
 
             <section>
-              <h3 className="mb-2 text-[12px] font-medium uppercase tracking-wider text-muted-foreground">メッセージ履歴</h3>
               {contactConversations.length === 0 ? (
                 <p className="text-[14px] text-muted-foreground">履歴はありません</p>
               ) : (

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
+import Link from "next/link";
 
 export default function NotificationsPage() {
   const saveTimeout = useRef<NodeJS.Timeout | null>(null);
@@ -41,13 +42,22 @@ export default function NotificationsPage() {
 
   return (
     <div className="flex h-full">
-      {/* Layer 2: sub navigation */}
+      {/* Layer 2: shared sub navigation */}
       <div className="w-[220px] shrink-0 border-r bg-background px-3 py-4">
-        <h1 className="mb-4 px-2.5 text-[15px] font-semibold">通知</h1>
+        <h1 className="mb-4 px-2.5 text-[15px] font-semibold">アカウント</h1>
         <nav className="space-y-0.5">
-          <div className="flex w-full items-center gap-2.5 rounded-md bg-accent px-2.5 py-[7px] text-[15px] font-medium text-foreground">
+          <Link
+            href="/profile"
+            className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-[7px] text-[15px] text-muted-foreground hover:bg-accent/50 transition-colors"
+          >
+            プロフィール
+          </Link>
+          <Link
+            href="/notifications"
+            className="flex w-full items-center gap-2.5 rounded-md bg-accent px-2.5 py-[7px] text-[15px] font-medium text-foreground"
+          >
             通知
-          </div>
+          </Link>
         </nav>
       </div>
 
@@ -55,7 +65,7 @@ export default function NotificationsPage() {
       <div className="flex-1 overflow-y-auto">
         <div className="mx-auto max-w-xl px-8 py-8">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-[17px] font-semibold">通知設定</h2>
+            <h2 className="text-[17px] font-semibold">通知</h2>
             {saved && (
               <span className="text-[13px] text-brand font-medium animate-pulse">
                 保存しました

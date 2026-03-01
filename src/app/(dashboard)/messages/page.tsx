@@ -39,7 +39,6 @@ import {
   Star,
   Ban,
   AlertTriangle,
-  Pencil,
 } from "lucide-react";
 
 const channelIcons: Record<Channel, React.ElementType> = {
@@ -770,53 +769,40 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
           {/* Inline reply input - after last message */}
           <div ref={messagesEndRef} />
 
-          {/* Email header fields */}
+          {/* Email header fields - collapsible, subtle */}
           {isEmail && (
-            <div className="space-y-1 rounded-lg border bg-accent/20 px-3 py-2">
-              <div className="flex items-center gap-2 text-[13px]">
-                <span className="w-10 shrink-0 text-right font-medium text-muted-foreground">From</span>
-                <input value={emailFrom} onChange={(e) => setEmailFrom(e.target.value)} className="flex-1 bg-transparent outline-none text-[13px]" />
-              </div>
-              <div className="flex items-center gap-2 text-[13px]">
-                <span className="w-10 shrink-0 text-right font-medium text-muted-foreground">To</span>
-                <input value={emailTo} onChange={(e) => setEmailTo(e.target.value)} className="flex-1 bg-transparent outline-none text-[13px]" />
-              </div>
-              <div className="flex items-center gap-2 text-[13px]">
-                <span className="w-10 shrink-0 text-right font-medium text-muted-foreground">CC</span>
-                <input value={emailCc} onChange={(e) => setEmailCc(e.target.value)} className="flex-1 bg-transparent outline-none text-[13px]" placeholder="任意" />
-              </div>
-              <div className="flex items-center gap-2 text-[13px]">
-                <span className="w-10 shrink-0 text-right font-medium text-muted-foreground">BCC</span>
-                <input value={emailBcc} onChange={(e) => setEmailBcc(e.target.value)} className="flex-1 bg-transparent outline-none text-[13px]" placeholder="任意" />
-              </div>
-              <div className="flex items-center gap-2 text-[13px]">
-                <span className="w-10 shrink-0 text-right font-medium text-muted-foreground">件名</span>
-                <input value={emailSubject} onChange={(e) => setEmailSubject(e.target.value)} className="flex-1 bg-transparent outline-none text-[13px]" />
-              </div>
-            </div>
+            <EmailReplyHeader
+              emailFrom={emailFrom} setEmailFrom={setEmailFrom}
+              emailTo={emailTo} setEmailTo={setEmailTo}
+              emailCc={emailCc} setEmailCc={setEmailCc}
+              emailBcc={emailBcc} setEmailBcc={setEmailBcc}
+              emailSubject={emailSubject} setEmailSubject={setEmailSubject}
+            />
           )}
 
-          {/* Reply input */}
-          <div className="rounded-lg border bg-background focus-within:border-brand/30">
-            <textarea value={replyText} onChange={(e) => handleReplyChange(e.target.value)}
-              placeholder="メッセージを入力..."
-              rows={3}
-              className="w-full resize-none bg-transparent px-3 pt-2.5 pb-0 text-[15px] leading-relaxed outline-none placeholder:text-muted-foreground/50"
-              onInput={(e) => {
-                const el = e.currentTarget;
-                el.style.height = "auto";
-                el.style.height = Math.min(el.scrollHeight, 160) + "px";
-              }} />
-            <div className="flex items-center justify-between px-3 pb-2">
-              <Tooltip content="ファイルを添付" side="top">
-                <Button variant="ghost" size="icon-sm" className="h-8 w-8 text-muted-foreground">
-                  <Paperclip className="h-4 w-4" />
+          {/* Reply input - right-aligned, same max-width as outbound messages */}
+          <div className="flex justify-end">
+            <div className="w-[70%] rounded-lg border bg-background focus-within:border-brand/30">
+              <textarea value={replyText} onChange={(e) => handleReplyChange(e.target.value)}
+                placeholder="メッセージを入力..."
+                rows={3}
+                className="w-full resize-none bg-transparent px-3 pt-2.5 pb-0 text-[15px] leading-relaxed outline-none placeholder:text-muted-foreground/50"
+                onInput={(e) => {
+                  const el = e.currentTarget;
+                  el.style.height = "auto";
+                  el.style.height = Math.min(el.scrollHeight, 160) + "px";
+                }} />
+              <div className="flex items-center justify-between px-3 pb-2">
+                <Tooltip content="ファイルを添付" side="top">
+                  <Button variant="ghost" size="icon-sm" className="h-8 w-8 text-muted-foreground">
+                    <Paperclip className="h-4 w-4" />
+                  </Button>
+                </Tooltip>
+                <Button size="sm" className="h-8 rounded-md bg-brand hover:bg-brand/90 px-4 text-[13px]"
+                  disabled={!replyText.trim()} onClick={handleSendReply}>
+                  <Send className="h-3 w-3 mr-1" /> 送信
                 </Button>
-              </Tooltip>
-              <Button size="sm" className="h-8 rounded-md bg-brand hover:bg-brand/90 px-4 text-[13px]"
-                disabled={!replyText.trim()} onClick={handleSendReply}>
-                <Send className="h-3 w-3 mr-1" /> 送信
-              </Button>
+              </div>
             </div>
           </div>
         </div>
@@ -826,12 +812,12 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
       <div className="border-t px-5 py-3">
         <div className="mx-auto max-w-2xl">
           <div className="rounded-lg border border-amber-200/50 bg-amber-50/30">
-            <div className="flex items-start gap-2.5 px-3 pt-2.5 pb-0">
-              <MessageSquareText className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+            <div className="flex items-center gap-2.5 px-3 py-3">
+              <MessageSquareText className="h-4 w-4 shrink-0 text-amber-500" />
               <textarea value={memoText} onChange={(e) => setMemoText(e.target.value)}
                 placeholder="チーム内メモを入力"
                 rows={1}
-                className="flex-1 resize-none bg-transparent text-[14px] leading-relaxed outline-none placeholder:text-amber-400/60"
+                className="flex-1 resize-none bg-transparent text-[14px] leading-normal outline-none placeholder:text-amber-400/60"
                 onInput={(e) => {
                   const el = e.currentTarget;
                   el.style.height = "auto";
@@ -839,7 +825,7 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
                 }} />
             </div>
             {memoText.trim() && (
-              <div className="flex justify-end px-3 pb-2 pt-1">
+              <div className="flex justify-end px-3 pb-2.5">
                 <Button size="sm" className="h-7 rounded-md bg-amber-500 hover:bg-amber-600 px-3 text-[12px]"
                   onClick={handleSendMemo}>
                   <Send className="h-3 w-3 mr-1" /> 送信
@@ -865,37 +851,16 @@ function MessageBubble({ message, channel }: { message: Message; channel: Channe
     return (
       <div className="flex justify-center">
         <div className="max-w-md rounded-lg border border-amber-200/60 bg-amber-50/40 px-4 py-2.5">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-1.5">
-              <MessageSquareText className="h-3 w-3 text-amber-500" />
-              <span className="text-[12px] font-medium text-amber-600">チーム内メモ</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <Avatar src={teamMembers.find((m) => m.name === senderName)?.avatar} fallback={senderName} size="sm" className="h-4 w-4 text-[5px]" />
-              <span className="text-[12px] text-amber-600">{senderName}</span>
-              <span className="text-[12px] text-amber-400">{timestamp}</span>
-              {senderName === currentUser.name && (
-                <button onClick={() => setEditing(!editing)}
-                  className="cursor-pointer ml-1 text-amber-400 hover:text-amber-600">
-                  <Pencil className="h-3 w-3" />
-                </button>
-              )}
-            </div>
+          <div className="flex items-center gap-1.5 mb-1.5">
+            <MessageSquareText className="h-3 w-3 text-amber-500" />
+            <span className="text-[12px] font-medium text-amber-600">チーム内メモ</span>
           </div>
-          {editing ? (
-            <div className="mt-1.5">
-              <textarea value={editContent} onChange={(e) => setEditContent(e.target.value)}
-                className="w-full resize-none rounded border bg-white px-2 py-1 text-[14px] outline-none" rows={2} />
-              <div className="flex justify-end gap-1 mt-1">
-                <button onClick={() => { setEditing(false); setEditContent(content); }}
-                  className="cursor-pointer text-[12px] text-muted-foreground hover:text-foreground px-2 py-0.5">キャンセル</button>
-                <button onClick={() => setEditing(false)}
-                  className="cursor-pointer text-[12px] text-amber-600 font-medium hover:text-amber-700 px-2 py-0.5">保存</button>
-              </div>
-            </div>
-          ) : (
-            <p className="mt-1.5 text-[14px] leading-relaxed text-amber-900/70">{editContent}</p>
-          )}
+          <p className="text-[14px] leading-relaxed text-amber-900/70">{content}</p>
+          <div className="mt-2 flex items-center gap-1.5">
+            <Avatar src={teamMembers.find((m) => m.name === senderName)?.avatar} fallback={senderName} size="sm" className="h-4 w-4 text-[5px]" />
+            <span className="text-[12px] text-muted-foreground">{senderName}</span>
+            <span className="text-[12px] text-muted-foreground/50">{timestamp}</span>
+          </div>
         </div>
       </div>
     );
@@ -939,6 +904,60 @@ function MessageBubble({ message, channel }: { message: Message; channel: Channe
   );
 }
 
+/* ─── Email Reply Header (collapsible, subtle) ───── */
+
+function EmailReplyHeader({ emailFrom, setEmailFrom, emailTo, setEmailTo,
+  emailCc, setEmailCc, emailBcc, setEmailBcc, emailSubject, setEmailSubject }: {
+  emailFrom: string; setEmailFrom: (v: string) => void;
+  emailTo: string; setEmailTo: (v: string) => void;
+  emailCc: string; setEmailCc: (v: string) => void;
+  emailBcc: string; setEmailBcc: (v: string) => void;
+  emailSubject: string; setEmailSubject: (v: string) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div className="flex justify-end">
+      <div className="w-[70%]">
+        <button onClick={() => setExpanded(!expanded)}
+          className="flex cursor-pointer items-center gap-1 text-[12px] text-muted-foreground/60 hover:text-muted-foreground transition-colors mb-1">
+          <ChevronRight className={cn("h-3 w-3 transition-transform", expanded && "rotate-90")} />
+          <span className="font-medium">{emailSubject || "Re:"}</span>
+          <span className="ml-1">→ {emailTo}</span>
+        </button>
+        {expanded && (
+          <div className="mb-2 space-y-0.5 text-[12px] text-muted-foreground/60">
+            <div className="flex items-center gap-1.5">
+              <span className="w-8 shrink-0 text-right font-medium">From</span>
+              <input value={emailFrom} onChange={(e) => setEmailFrom(e.target.value)}
+                className="flex-1 bg-transparent outline-none text-[12px] hover:text-muted-foreground focus:text-foreground transition-colors" />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-8 shrink-0 text-right font-medium">To</span>
+              <input value={emailTo} onChange={(e) => setEmailTo(e.target.value)}
+                className="flex-1 bg-transparent outline-none text-[12px] hover:text-muted-foreground focus:text-foreground transition-colors" />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-8 shrink-0 text-right font-medium">CC</span>
+              <input value={emailCc} onChange={(e) => setEmailCc(e.target.value)} placeholder="任意"
+                className="flex-1 bg-transparent outline-none text-[12px] hover:text-muted-foreground focus:text-foreground transition-colors placeholder:text-muted-foreground/30" />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-8 shrink-0 text-right font-medium">BCC</span>
+              <input value={emailBcc} onChange={(e) => setEmailBcc(e.target.value)} placeholder="任意"
+                className="flex-1 bg-transparent outline-none text-[12px] hover:text-muted-foreground focus:text-foreground transition-colors placeholder:text-muted-foreground/30" />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-8 shrink-0 text-right font-medium">件名</span>
+              <input value={emailSubject} onChange={(e) => setEmailSubject(e.target.value)}
+                className="flex-1 bg-transparent outline-none text-[12px] hover:text-muted-foreground focus:text-foreground transition-colors" />
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ─── Contact Slide Panel ────────────────────────── */
 
 function ContactSlidePanel({ contact, onClose, onNavigateToContact }: {
@@ -955,16 +974,10 @@ function ContactSlidePanel({ contact, onClose, onNavigateToContact }: {
     <div className="flex h-full w-[320px] min-w-[260px] max-w-[400px] shrink-0 flex-col border-l bg-background animate-slide-in-right">
       <div className="flex items-center justify-between border-b px-4 py-3">
         <h3 className="text-[16px] font-semibold">連絡先詳細</h3>
-        <div className="flex items-center gap-1">
-          <Button variant="outline" size="sm" className="h-7 text-[13px] px-3"
-            onClick={() => { onClose(); onNavigateToContact(contact.id); }}>
-            編集
-          </Button>
-          <button onClick={onClose}
-            className="cursor-pointer rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground">
-            <X className="h-4 w-4" />
-          </button>
-        </div>
+        <button onClick={onClose}
+          className="cursor-pointer rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground">
+          <X className="h-4 w-4" />
+        </button>
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-4">
@@ -1055,6 +1068,14 @@ function ContactSlidePanel({ contact, onClose, onNavigateToContact }: {
             <h4 className="mb-1.5 text-[12px] font-medium uppercase tracking-wider text-muted-foreground">メモ</h4>
             <p className="text-[14px] text-muted-foreground leading-relaxed">{contact.note || "なし"}</p>
           </section>
+
+          {/* Edit button at bottom center */}
+          <div className="pt-4 pb-2 flex justify-center">
+            <Button variant="outline" size="sm" className="h-9 text-[14px] px-6"
+              onClick={() => { onClose(); onNavigateToContact(contact.id); }}>
+              編集する
+            </Button>
+          </div>
         </div>
       </div>
     </div>
