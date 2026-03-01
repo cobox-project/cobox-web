@@ -12,6 +12,7 @@ export interface TeamMember {
   id: string;
   name: string;
   avatar?: string;
+  role?: "admin" | "member";
 }
 
 export interface ContactGroup {
@@ -21,15 +22,25 @@ export interface ContactGroup {
   contactIds: string[];
 }
 
+export interface ChannelHandle {
+  channel: Channel;
+  handle: string;
+  isAutoLinked?: boolean; // true if linked from inbound message
+}
+
 export interface Contact {
   id: string;
   name: string;
+  nameFurigana?: string;
+  company?: string;
+  companyFurigana?: string;
   email?: string;
   phone?: string;
   note?: string;
-  channels: { channel: Channel; handle: string }[];
+  channels: ChannelHandle[];
   conversationIds: string[];
   createdAt: string;
+  isManuallyCreated?: boolean;
 }
 
 export interface EmailHeader {
@@ -61,7 +72,20 @@ export interface Conversation {
   lastMessage: string;
   lastMessageAt: string;
   unreadCount: number;
+  isRead?: boolean;
+  needsAction?: boolean;
   messages: Message[];
   isFavorite?: boolean;
   isSpam?: boolean;
+}
+
+export interface AccountPermission {
+  accountId: string;
+  canView: boolean;
+  canReply: boolean;
+}
+
+export interface MemberPermissions {
+  memberId: string;
+  permissions: AccountPermission[];
 }

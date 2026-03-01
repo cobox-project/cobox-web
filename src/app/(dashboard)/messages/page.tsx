@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
   accounts,
@@ -35,11 +36,10 @@ import {
   Inbox,
   X,
   Trash2,
-  User,
   Star,
-  ShieldBan,
-  Stamp,
+  Ban,
   AlertTriangle,
+  Pencil,
 } from "lucide-react";
 
 const channelIcons: Record<Channel, React.ElementType> = {
@@ -56,46 +56,55 @@ const channelStyles: Record<Channel, { bg: string; text: string }> = {
   facebook: { bg: "bg-channel-facebook/10", text: "text-channel-facebook" },
 };
 
-type FolderFilter = "all" | "pending" | "resolved" | "favorite" | "spam" | "mine";
-
-function getContactHandle(conversation: Conversation): string | null {
-  const contact = contacts.find((c) => c.id === conversation.contactId);
-  if (!contact) return null;
-  const ch = contact.channels.find((c) => c.channel === conversation.channel);
-  return ch?.handle ?? null;
-}
+type FolderFilter = "all" | "mine" | "pending" | "resolved" | "favorite" | "spam";
 
 function getAccountName(accountId: string): string {
   return accounts.find((a) => a.id === accountId)?.name ?? "";
 }
 
-function isUnreplied(conv: Conversation): boolean {
-  if (conv.messages.length === 0) return true;
-  const lastMsg = conv.messages[conv.messages.length - 1];
-  return lastMsg.isInbound && !lastMsg.isInternal;
+function isUnread(conv: Conversation): boolean {
+  return conv.isRead === false || conv.unreadCount > 0;
 }
 
 export default function MessagesPage() {
+  const router = useRouter();
   const [conversations, setConversations] = useState(allConversations);
   const [selectedId, setSelectedId] = useState<string | null>(
     allConversations[0]?.id ?? null
   );
   const [folderFilter, setFolderFilter] = useState<FolderFilter>("all");
+  const [accountFilter, setAccountFilter] = useState<string | null>(null);
+  const [groupFilter, setGroupFilter] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [detailContactId, setDetailContactId] = useState<string | null>(null);
-  const [unrepliedOnly, setUnrepliedOnly] = useState(false);
+  const [unreadOnly, setUnreadOnly] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     let list = conversations;
 
-    // Filter out spam unless viewing spam folder
     if (folderFilter !== "spam") {
       list = list.filter((c) => !c.isSpam);
     }
 
+    // Account filter
+    if (accountFilter) {
+      list = list.filter((c) => c.accountId === accountFilter);
+    }
+
+    // Group filter
+    if (groupFilter) {
+      const group = contactGroups.find((g) => g.id === groupFilter);
+      if (group) {
+        list = list.filter((c) => group.contactIds.includes(c.contactId));
+      }
+    }
+
     switch (folderFilter) {
       case "all":
+        break;
+      case "mine":
+        list = list.filter((c) => c.assignee?.id === currentUser.id);
         break;
       case "pending":
         list = list.filter((c) => c.status === "pending");
@@ -109,13 +118,10 @@ export default function MessagesPage() {
       case "spam":
         list = list.filter((c) => c.isSpam);
         break;
-      case "mine":
-        list = list.filter((c) => c.assignee?.id === currentUser.id);
-        break;
     }
 
-    if (unrepliedOnly) {
-      list = list.filter(isUnreplied);
+    if (unreadOnly) {
+      list = list.filter(isUnread);
     }
 
     if (searchQuery.trim()) {
@@ -129,7 +135,7 @@ export default function MessagesPage() {
     }
 
     return list;
-  }, [conversations, folderFilter, searchQuery, unrepliedOnly]);
+  }, [conversations, folderFilter, accountFilter, groupFilter, searchQuery, unreadOnly]);
 
   const selectedConversation = useMemo(
     () => conversations.find((c) => c.id === selectedId) ?? null,
@@ -138,23 +144,32 @@ export default function MessagesPage() {
 
   const handleStatusChange = useCallback((id: string, status: Status) => {
     setConversations((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, status } : c))
+      prev.map((c) => {
+        if (c.id !== id) return c;
+        const updated = { ...c, status };
+        // If resolved, remove assignee
+        if (status === "resolved") {
+          return { ...updated, assignee: undefined, needsAction: false };
+        }
+        return updated;
+      })
     );
   }, []);
 
   const handleAssigneeChange = useCallback(
     (id: string, assigneeId: string | null) => {
       setConversations((prev) =>
-        prev.map((c) =>
-          c.id === id
-            ? {
-                ...c,
-                assignee: assigneeId
-                  ? teamMembers.find((m) => m.id === assigneeId)
-                  : undefined,
-              }
-            : c
-        )
+        prev.map((c) => {
+          if (c.id !== id) return c;
+          return {
+            ...c,
+            assignee: assigneeId
+              ? teamMembers.find((m) => m.id === assigneeId)
+              : undefined,
+            // Auto set needsAction when assigned
+            needsAction: assigneeId ? true : c.needsAction,
+          };
+        })
       );
     },
     []
@@ -178,21 +193,68 @@ export default function MessagesPage() {
 
   const handleDeleteConversation = useCallback((id: string) => {
     setConversations((prev) => prev.filter((c) => c.id !== id));
-    if (selectedId === id) {
-      setSelectedId(null);
-    }
+    if (selectedId === id) setSelectedId(null);
     setDeleteConfirmId(null);
+  }, [selectedId]);
+
+  const handleToggleNeedsAction = useCallback((id: string) => {
+    setConversations((prev) =>
+      prev.map((c) =>
+        c.id === id ? { ...c, needsAction: !c.needsAction } : c
+      )
+    );
+  }, []);
+
+  const handleMarkUnread = useCallback((id: string) => {
+    setConversations((prev) =>
+      prev.map((c) =>
+        c.id === id ? { ...c, isRead: false, unreadCount: Math.max(1, c.unreadCount) } : c
+      )
+    );
+  }, []);
+
+  const handleSendMessage = useCallback((id: string, content: string, isInternal: boolean) => {
+    setConversations((prev) =>
+      prev.map((c) => {
+        if (c.id !== id) return c;
+        const newMsg: Message = {
+          id: `msg-${Date.now()}`,
+          content,
+          timestamp: "今",
+          isInbound: false,
+          senderName: currentUser.name,
+          isInternal,
+        };
+        return {
+          ...c,
+          messages: [...c.messages, newMsg],
+          lastMessage: isInternal ? c.lastMessage : content,
+          lastMessageAt: "今",
+        };
+      })
+    );
+  }, []);
+
+  // Mark as read on select
+  useEffect(() => {
+    if (selectedId) {
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.id === selectedId ? { ...c, isRead: true, unreadCount: 0 } : c
+        )
+      );
+    }
   }, [selectedId]);
 
   const counts = useMemo(() => {
     const nonSpam = conversations.filter((c) => !c.isSpam);
     return {
       all: nonSpam.length,
+      mine: nonSpam.filter((c) => c.assignee?.id === currentUser.id).length,
       pending: nonSpam.filter((c) => c.status === "pending").length,
       resolved: nonSpam.filter((c) => c.status === "resolved").length,
       favorite: nonSpam.filter((c) => c.isFavorite).length,
       spam: conversations.filter((c) => c.isSpam).length,
-      mine: nonSpam.filter((c) => c.assignee?.id === currentUser.id).length,
     };
   }, [conversations]);
 
@@ -222,58 +284,36 @@ export default function MessagesPage() {
       {/* ── Layer 2: Folders (220px) ── */}
       <div className="flex h-full w-[220px] shrink-0 flex-col border-r bg-background">
         <div className="shrink-0 px-3 pt-4 pb-2">
-          <h2 className="px-2 text-[13px] font-semibold text-foreground">
-            受信トレイ
+          <h2 className="px-2 text-[15px] font-semibold text-foreground">
+            メッセージ
           </h2>
         </div>
 
         <nav className="flex-1 overflow-y-auto px-2">
           <div className="space-y-0.5">
-            <FolderItem
-              icon={Inbox}
-              label="すべて"
-              count={counts.all}
-              isActive={folderFilter === "all"}
-              onClick={() => setFolderFilter("all")}
-            />
-            <FolderItem
-              icon={Clock}
-              label="保留"
-              count={counts.pending}
-              isActive={folderFilter === "pending"}
-              onClick={() => setFolderFilter("pending")}
-            />
-            <FolderItem
-              icon={Check}
-              label="完了"
-              count={counts.resolved}
-              isActive={folderFilter === "resolved"}
-              onClick={() => setFolderFilter("resolved")}
-            />
-            <FolderIconOnly
-              icon={Star}
-              count={counts.favorite}
-              isActive={folderFilter === "favorite"}
-              onClick={() => setFolderFilter("favorite")}
-            />
-            <FolderItem
-              icon={ShieldBan}
-              label="スパム"
-              count={counts.spam}
-              isActive={folderFilter === "spam"}
-              onClick={() => setFolderFilter("spam")}
-            />
-            <FolderItemWithAvatar
-              label="自分のアサイン"
-              count={counts.mine}
+            <FolderItem icon={Inbox} label="すべて" count={counts.all}
+              isActive={folderFilter === "all" && !accountFilter && !groupFilter}
+              onClick={() => { setFolderFilter("all"); setAccountFilter(null); setGroupFilter(null); }} />
+            <FolderItemWithAvatar label="自分のアサイン分" count={counts.mine}
               isActive={folderFilter === "mine"}
-              onClick={() => setFolderFilter("mine")}
-            />
+              onClick={() => { setFolderFilter("mine"); setAccountFilter(null); setGroupFilter(null); }} />
+            <FolderItem icon={Clock} label="保留" count={counts.pending}
+              isActive={folderFilter === "pending"}
+              onClick={() => { setFolderFilter("pending"); setAccountFilter(null); setGroupFilter(null); }} />
+            <FolderItem icon={Check} label="完了" count={counts.resolved}
+              isActive={folderFilter === "resolved"}
+              onClick={() => { setFolderFilter("resolved"); setAccountFilter(null); setGroupFilter(null); }} />
+            <FolderItem icon={Star} label="お気に入り" count={counts.favorite}
+              isActive={folderFilter === "favorite"}
+              onClick={() => { setFolderFilter("favorite"); setAccountFilter(null); setGroupFilter(null); }} />
+            <FolderItem icon={Ban} label="スパム" count={counts.spam}
+              isActive={folderFilter === "spam"}
+              onClick={() => { setFolderFilter("spam"); setAccountFilter(null); setGroupFilter(null); }} />
           </div>
 
           {/* Accounts section */}
           <div className="mt-5">
-            <h3 className="mb-1 px-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+            <h3 className="mb-1 px-2 text-[12px] font-medium uppercase tracking-wider text-muted-foreground">
               アカウント
             </h3>
             <div className="space-y-0.5">
@@ -281,15 +321,29 @@ export default function MessagesPage() {
                 const Icon = channelIcons[account.channel];
                 const nonSpam = conversations.filter((c) => !c.isSpam && c.accountId === account.id);
                 return (
-                  <FolderItem
-                    key={account.id}
-                    icon={Icon}
-                    label={account.name}
-                    count={nonSpam.length}
-                    isActive={false}
-                    onClick={() => {}}
-                    iconColor={channelStyles[account.channel].text}
-                  />
+                  <FolderItem key={account.id} icon={Icon} label={account.name} count={nonSpam.length}
+                    isActive={accountFilter === account.id}
+                    onClick={() => { setAccountFilter(account.id); setFolderFilter("all"); setGroupFilter(null); }}
+                    iconColor={channelStyles[account.channel].text} />
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Groups section */}
+          <div className="mt-5">
+            <h3 className="mb-1 px-2 text-[12px] font-medium uppercase tracking-wider text-muted-foreground">
+              グループ
+            </h3>
+            <div className="space-y-0.5">
+              {contactGroups.map((group) => {
+                const groupConvCount = conversations.filter(
+                  (c) => !c.isSpam && group.contactIds.includes(c.contactId)
+                ).length;
+                return (
+                  <FolderItem key={group.id} icon={Inbox} label={group.name} count={groupConvCount}
+                    isActive={groupFilter === group.id}
+                    onClick={() => { setGroupFilter(group.id); setFolderFilter("all"); setAccountFilter(null); }} />
                 );
               })}
             </div>
@@ -299,43 +353,41 @@ export default function MessagesPage() {
 
       {/* ── Layer 3: Thread list (320px) ── */}
       <div className="flex h-full w-[320px] shrink-0 flex-col border-r bg-background">
-        {/* Search + unreplied only */}
         <div className="shrink-0 px-3 pt-3 pb-2 space-y-2">
           <div className="flex items-center gap-2 rounded-xl border px-3 py-2">
             <Search className="h-4 w-4 text-muted-foreground" />
-            <input
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+            <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="スレッドを検索..."
-              className="flex-1 bg-transparent text-[13px] outline-none placeholder:text-muted-foreground/50"
-            />
+              className="flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted-foreground/50" />
           </div>
-          <label className="flex items-center gap-2 px-1 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={unrepliedOnly}
-              onChange={(e) => setUnrepliedOnly(e.target.checked)}
-              className="h-3.5 w-3.5 rounded border-muted-foreground/30 accent-brand"
-            />
-            <span className="text-[12px] text-muted-foreground">未返信のみ</span>
-          </label>
+
+          {/* Unread only - prominent button style */}
+          <button
+            onClick={() => setUnreadOnly(!unreadOnly)}
+            className={cn(
+              "flex w-full items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-[14px] font-medium transition-colors cursor-pointer",
+              unreadOnly
+                ? "bg-brand text-white border-brand"
+                : "bg-accent/40 text-muted-foreground border-border/60 hover:bg-accent/60"
+            )}
+          >
+            <input type="checkbox" checked={unreadOnly} readOnly
+              className="h-4 w-4 rounded accent-brand pointer-events-none" />
+            未読のみ
+          </button>
         </div>
 
-        {/* Thread list */}
         <div className="flex-1 overflow-y-auto">
           {filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
               <Inbox className="mb-2 h-8 w-8 opacity-30" />
-              <p className="text-[12px]">該当するスレッドがありません</p>
+              <p className="text-[14px]">該当するスレッドがありません</p>
             </div>
           ) : (
             filtered.map((conv) => (
-              <ConversationItem
-                key={conv.id}
-                conversation={conv}
+              <ConversationItem key={conv.id} conversation={conv}
                 isSelected={conv.id === selectedId}
-                onSelect={() => setSelectedId(conv.id)}
-              />
+                onSelect={() => setSelectedId(conv.id)} />
             ))
           )}
         </div>
@@ -345,62 +397,60 @@ export default function MessagesPage() {
       {selectedConversation ? (
         <ConversationDetail
           conversation={selectedConversation}
+          conversations={conversations}
           onStatusChange={handleStatusChange}
           onAssigneeChange={handleAssigneeChange}
           onOpenContactDetail={(contactId) => setDetailContactId(contactId)}
           onToggleFavorite={handleToggleFavorite}
           onMarkSpam={handleMarkSpam}
           onRequestDelete={(id) => setDeleteConfirmId(id)}
+          onToggleNeedsAction={handleToggleNeedsAction}
+          onMarkUnread={handleMarkUnread}
+          onSendMessage={handleSendMessage}
+          onNavigateToContact={(contactId) => {
+            router.push(`/contacts?contact=${contactId}&edit=true`);
+          }}
         />
       ) : (
         <div className="flex flex-1 items-center justify-center text-muted-foreground">
           <div className="text-center">
             <Inbox className="mx-auto mb-3 h-10 w-10 opacity-20" />
-            <p className="text-[13px]">スレッドを選択してください</p>
+            <p className="text-[15px]">スレッドを選択してください</p>
           </div>
         </div>
       )}
 
-      {/* ── Layer 5: Contact detail slide panel ── */}
+      {/* Contact detail slide panel */}
       {detailContact && (
         <ContactSlidePanel
           contact={detailContact}
           onClose={() => setDetailContactId(null)}
+          onNavigateToContact={(contactId) => {
+            router.push(`/contacts?contact=${contactId}&edit=true`);
+          }}
         />
       )}
 
-      {/* Delete confirmation dialog */}
+      {/* Delete confirmation */}
       {deleteConfirmId && (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/30"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setDeleteConfirmId(null);
-          }}
-        >
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/30"
+          onClick={(e) => { if (e.target === e.currentTarget) setDeleteConfirmId(null); }}>
           <div className="w-[380px] rounded-xl bg-background p-6 shadow-xl">
             <div className="mb-4 flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-destructive/10">
                 <AlertTriangle className="h-5 w-5 text-destructive" />
               </div>
               <div>
-                <h3 className="text-[15px] font-semibold">完全に削除しますか？</h3>
-                <p className="text-[12px] text-muted-foreground">この操作は取り消せません。</p>
+                <h3 className="text-[16px] font-semibold">完全に削除しますか？</h3>
+                <p className="text-[13px] text-muted-foreground">この操作は取り消せません。</p>
               </div>
             </div>
             <div className="flex justify-end gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-9 px-4 text-[13px]"
-                onClick={() => setDeleteConfirmId(null)}
-              >
+              <Button variant="outline" size="sm" className="h-9 px-4 text-[14px]" onClick={() => setDeleteConfirmId(null)}>
                 キャンセル
               </Button>
-              <Button
-                size="sm"
-                className="h-9 bg-destructive hover:bg-destructive/90 px-4 text-[13px]"
-                onClick={() => handleDeleteConversation(deleteConfirmId)}
-              >
+              <Button size="sm" className="h-9 bg-destructive hover:bg-destructive/90 px-4 text-[14px]"
+                onClick={() => handleDeleteConversation(deleteConfirmId)}>
                 削除する
               </Button>
             </div>
@@ -411,244 +461,116 @@ export default function MessagesPage() {
   );
 }
 
-/* ─── Folder Item ─────────────────────────────────────── */
+/* ─── Folder Items ───────────────────────────────── */
 
-function FolderItem({
-  icon: Icon,
-  label,
-  count,
-  isActive,
-  onClick,
-  iconColor,
-}: {
-  icon: React.ElementType;
-  label: string;
-  count: number;
-  isActive: boolean;
-  onClick: () => void;
-  iconColor?: string;
+function FolderItem({ icon: Icon, label, count, isActive, onClick, iconColor }: {
+  icon: React.ElementType; label: string; count: number; isActive: boolean;
+  onClick: () => void; iconColor?: string;
 }) {
   return (
-    <button
-      onClick={onClick}
+    <button onClick={onClick}
       className={cn(
-        "flex w-full items-center gap-2.5 rounded-md px-2.5 py-[8px] text-[13px] font-medium transition-colors cursor-pointer",
-        isActive
-          ? "bg-accent text-foreground"
-          : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
-      )}
-    >
-      <Icon
-        className={cn(
-          "h-[16px] w-[16px] shrink-0",
-          !isActive && iconColor
-        )}
-      />
+        "flex w-full items-center gap-2.5 rounded-md px-2.5 py-[8px] text-[15px] font-medium transition-colors cursor-pointer",
+        isActive ? "bg-accent text-foreground" : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+      )}>
+      <Icon className={cn("h-[16px] w-[16px] shrink-0", !isActive && iconColor)} />
       <span className="flex-1 truncate text-left">{label}</span>
-      {count > 0 && (
-        <span className="text-[11px] tabular-nums text-muted-foreground/60">
-          {count}
-        </span>
-      )}
+      {count > 0 && <span className="text-[12px] tabular-nums text-muted-foreground/60">{count}</span>}
     </button>
   );
 }
 
-function FolderIconOnly({
-  icon: Icon,
-  count,
-  isActive,
-  onClick,
-}: {
-  icon: React.ElementType;
-  count: number;
-  isActive: boolean;
-  onClick: () => void;
+function FolderItemWithAvatar({ label, count, isActive, onClick }: {
+  label: string; count: number; isActive: boolean; onClick: () => void;
 }) {
   return (
-    <button
-      onClick={onClick}
+    <button onClick={onClick}
       className={cn(
-        "flex w-full items-center gap-2.5 rounded-md px-2.5 py-[8px] text-[13px] font-medium transition-colors cursor-pointer",
-        isActive
-          ? "bg-accent text-foreground"
-          : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
-      )}
-    >
-      <Icon className="h-[16px] w-[16px] shrink-0" />
-      <span className="flex-1 truncate text-left">お気に入り</span>
-      {count > 0 && (
-        <span className="text-[11px] tabular-nums text-muted-foreground/60">
-          {count}
-        </span>
-      )}
-    </button>
-  );
-}
-
-function FolderItemWithAvatar({
-  label,
-  count,
-  isActive,
-  onClick,
-}: {
-  label: string;
-  count: number;
-  isActive: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={cn(
-        "flex w-full items-center gap-2.5 rounded-md px-2.5 py-[8px] text-[13px] font-medium transition-colors cursor-pointer",
-        isActive
-          ? "bg-accent text-foreground"
-          : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
-      )}
-    >
-      <Avatar
-        src={currentUser.avatar}
-        fallback={currentUser.name}
-        size="sm"
-        className="h-[16px] w-[16px] text-[5px]"
-      />
+        "flex w-full items-center gap-2.5 rounded-md px-2.5 py-[8px] text-[15px] font-medium transition-colors cursor-pointer",
+        isActive ? "bg-accent text-foreground" : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+      )}>
+      <Avatar src={currentUser.avatar} fallback={currentUser.name} size="sm" className="h-[16px] w-[16px] text-[5px]" />
       <span className="flex-1 truncate text-left">{label}</span>
-      {count > 0 && (
-        <span className="text-[11px] tabular-nums text-muted-foreground/60">
-          {count}
-        </span>
-      )}
+      {count > 0 && <span className="text-[12px] tabular-nums text-muted-foreground/60">{count}</span>}
     </button>
   );
 }
 
-/* ─── Conversation List Item ─────────────────────────── */
+/* ─── Conversation List Item ─────────────────────── */
 
-function ConversationItem({
-  conversation,
-  isSelected,
-  onSelect,
-}: {
-  conversation: Conversation;
-  isSelected: boolean;
-  onSelect: () => void;
+function ConversationItem({ conversation, isSelected, onSelect }: {
+  conversation: Conversation; isSelected: boolean; onSelect: () => void;
 }) {
-  const {
-    contactName,
-    channel,
-    status,
-    lastMessage,
-    lastMessageAt,
-    unreadCount,
-    assignee,
-    subject,
-  } = conversation;
-
+  const { contactName, channel, lastMessage, lastMessageAt, assignee, subject } = conversation;
   const Icon = channelIcons[channel];
   const style = channelStyles[channel];
-  const handle = getContactHandle(conversation);
+  const unread = isUnread(conversation);
+  // Priority: resolved (completed) > unread
+  const isResolved = conversation.status === "resolved";
+
+  // Display: subject only for email, lastMessage (1 line) for others
+  const displayText = channel === "email" && subject ? subject : lastMessage;
 
   return (
-    <button
-      onClick={onSelect}
+    <button onClick={onSelect}
       className={cn(
         "flex w-full gap-3 border-b px-4 py-3 text-left transition-colors cursor-pointer",
         isSelected
           ? "bg-brand text-white"
-          : unreadCount > 0
-            ? "bg-brand/4 hover:bg-brand/8"
-            : "bg-background hover:bg-accent/40"
-      )}
-    >
+          : isResolved
+            ? "bg-background hover:bg-accent/40"
+            : unread
+              ? "bg-brand/4 hover:bg-brand/8"
+              : "bg-background hover:bg-accent/40"
+      )}>
       {/* Channel icon */}
-      <div
-        className={cn(
-          "flex h-9 w-9 shrink-0 items-center justify-center rounded-full mt-0.5",
-          isSelected ? "bg-white/20" : style.bg
-        )}
-      >
+      <div className={cn(
+        "flex h-9 w-9 shrink-0 items-center justify-center rounded-full mt-0.5",
+        isSelected ? "bg-white/20" : style.bg
+      )}>
         <Icon className={cn("h-[18px] w-[18px]", isSelected ? "text-white" : style.text)} />
       </div>
 
       {/* Content */}
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
-          <span
-            className={cn(
-              "truncate text-[13px]",
-              isSelected
-                ? "font-semibold text-white"
-                : unreadCount > 0
-                  ? "font-semibold text-foreground"
-                  : "font-medium text-foreground"
-            )}
-          >
+          <span className={cn(
+            "truncate text-[15px]",
+            isSelected ? "font-semibold text-white" : unread ? "font-semibold text-foreground" : "font-medium text-foreground"
+          )}>
             {contactName}
           </span>
-          <span className={cn(
-            "shrink-0 text-[10px]",
-            isSelected ? "text-white/70" : "text-muted-foreground"
-          )}>
+          <span className={cn("shrink-0 text-[12px]", isSelected ? "text-white/70" : "text-muted-foreground")}>
             {lastMessageAt}
           </span>
         </div>
 
-        {handle && (
-          <p className={cn(
-            "mt-0.5 truncate text-[10px]",
-            isSelected ? "text-white/60" : "text-muted-foreground/70"
-          )}>
-            {handle}
-          </p>
-        )}
-
-        {subject && (
-          <p className={cn(
-            "mt-0.5 truncate text-[11px] font-medium",
-            isSelected ? "text-white/80" : "text-foreground/70"
-          )}>
-            {subject}
-          </p>
-        )}
-
         <p className={cn(
-          "mt-0.5 truncate text-[11px] leading-relaxed",
+          "mt-0.5 truncate text-[13px] leading-relaxed",
           isSelected ? "text-white/70" : "text-muted-foreground"
         )}>
-          {lastMessage}
+          {displayText}
         </p>
 
-        {/* Assignee (left) + Status (right) */}
+        {/* Assignee */}
         <div className="mt-1.5 flex items-center justify-between">
           <div className="flex items-center gap-1">
             {assignee ? (
-              <span className={cn(
-                "flex items-center gap-1 truncate text-[10px]",
-                isSelected ? "text-white/60" : "text-muted-foreground"
-              )}>
-                <Avatar
-                  src={assignee.avatar}
-                  fallback={assignee.name}
-                  size="sm"
-                  className="h-4 w-4 text-[6px]"
-                />
+              <span className={cn("flex items-center gap-1 truncate text-[12px]",
+                isSelected ? "text-white/60" : "text-muted-foreground")}>
+                <Avatar src={assignee.avatar} fallback={assignee.name} size="sm" className="h-4 w-4 text-[6px]" />
                 {assignee.name}
               </span>
             ) : (
-              <span className={cn(
-                "text-[10px] font-medium",
-                isSelected ? "text-white/50" : "text-muted-foreground/60"
-              )}>
+              <span className={cn("flex items-center gap-1 text-[12px] font-medium",
+                isSelected ? "text-white/50" : "text-muted-foreground/60")}>
+                <CircleDashed className="h-4 w-4" />
                 未アサイン
               </span>
             )}
           </div>
           {conversation.isFavorite && (
-            <Star className={cn(
-              "h-3 w-3 fill-current",
-              isSelected ? "text-white/60" : "text-amber-400"
-            )} />
+            <Star className={cn("h-3 w-3 fill-current", isSelected ? "text-white/60" : "text-amber-400")} />
           )}
         </div>
       </div>
@@ -656,24 +578,22 @@ function ConversationItem({
   );
 }
 
-/* ─── Conversation Detail ────────────────────────────── */
+/* ─── Conversation Detail ────────────────────────── */
 
-function ConversationDetail({
-  conversation,
-  onStatusChange,
-  onAssigneeChange,
-  onOpenContactDetail,
-  onToggleFavorite,
-  onMarkSpam,
-  onRequestDelete,
-}: {
-  conversation: Conversation;
+function ConversationDetail({ conversation, conversations: allConvs, onStatusChange, onAssigneeChange,
+  onOpenContactDetail, onToggleFavorite, onMarkSpam, onRequestDelete, onToggleNeedsAction,
+  onMarkUnread, onSendMessage, onNavigateToContact }: {
+  conversation: Conversation; conversations: Conversation[];
   onStatusChange: (id: string, status: Status) => void;
   onAssigneeChange: (id: string, assigneeId: string | null) => void;
   onOpenContactDetail: (contactId: string) => void;
   onToggleFavorite: (id: string) => void;
   onMarkSpam: (id: string) => void;
   onRequestDelete: (id: string) => void;
+  onToggleNeedsAction: (id: string) => void;
+  onMarkUnread: (id: string) => void;
+  onSendMessage: (id: string, content: string, isInternal: boolean) => void;
+  onNavigateToContact: (contactId: string) => void;
 }) {
   const [replyText, setReplyText] = useState("");
   const [memoText, setMemoText] = useState("");
@@ -682,17 +602,18 @@ function ConversationDetail({
   const [emailCc, setEmailCc] = useState("");
   const [emailBcc, setEmailBcc] = useState("");
   const [emailSubject, setEmailSubject] = useState("");
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const Icon = channelIcons[conversation.channel];
   const style = channelStyles[conversation.channel];
-  const handle = getContactHandle(conversation);
 
   const isEmail = conversation.channel === "email";
   const isSelfAssigned = conversation.assignee?.id === currentUser.id;
 
+  const contactObj = contacts.find((c) => c.id === conversation.contactId);
+
   useEffect(() => {
     if (isEmail) {
-      const contactObj = contacts.find((c) => c.id === conversation.contactId);
       const contactEmail = contactObj?.channels.find((ch) => ch.channel === "email")?.handle ?? "";
       setEmailTo(contactEmail);
       setEmailSubject(conversation.subject ? `Re: ${conversation.subject}` : "");
@@ -700,319 +621,231 @@ function ConversationDetail({
       setEmailCc("");
       setEmailBcc("");
     }
-  }, [conversation.id, isEmail, conversation.contactId, conversation.subject]);
+  }, [conversation.id, isEmail, contactObj, conversation.subject]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [conversation.messages.length]);
+
+  // Auto-assign on typing
+  const handleReplyChange = (text: string) => {
+    setReplyText(text);
+    if (text.length === 1 && !isSelfAssigned) {
+      onAssigneeChange(conversation.id, currentUser.id);
+    }
+  };
+
+  const handleSendReply = () => {
+    if (!replyText.trim()) return;
+    onSendMessage(conversation.id, replyText.trim(), false);
+    setReplyText("");
+  };
+
+  const handleSendMemo = () => {
+    if (!memoText.trim()) return;
+    onSendMessage(conversation.id, memoText.trim(), true);
+    setMemoText("");
+  };
 
   return (
     <div className="flex h-full min-w-[400px] flex-1 flex-col bg-background">
       {/* Header */}
       <header className="flex shrink-0 items-center justify-between border-b px-5 py-3">
-        <button
-          onClick={() => onOpenContactDetail(conversation.contactId)}
-          className="flex min-w-0 items-center gap-3 cursor-pointer rounded-lg px-2 py-1.5 -ml-2 transition-colors hover:bg-accent active:bg-accent/80"
-        >
-          <div
-            className={cn(
-              "flex h-9 w-9 shrink-0 items-center justify-center rounded-full",
-              style.bg
-            )}
-          >
+        <button onClick={() => onOpenContactDetail(conversation.contactId)}
+          className="flex min-w-0 items-center gap-3 cursor-pointer rounded-lg px-2 py-1.5 -ml-2 transition-colors hover:bg-accent active:bg-accent/80">
+          <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-full", style.bg)}>
             <Icon className={cn("h-4 w-4", style.text)} />
           </div>
-          <div className="min-w-0">
-            <p className="truncate text-[14px] font-semibold leading-tight">
-              {conversation.contactName}
-            </p>
-            {handle && (
-              <p className="truncate text-[11px] leading-tight text-muted-foreground">
-                {handle}
-              </p>
-            )}
+          <div className="min-w-0 text-left">
+            <p className="truncate text-[16px] font-semibold leading-tight">{conversation.contactName}</p>
+            <div className="flex items-center gap-2">
+              {contactObj?.company && (
+                <p className="truncate text-[13px] leading-tight text-muted-foreground">{contactObj.company}</p>
+              )}
+              {contactObj?.email && (
+                <p className="truncate text-[13px] leading-tight text-muted-foreground">{contactObj.email}</p>
+              )}
+            </div>
           </div>
         </button>
 
         <div className="flex items-center gap-1.5">
-          {/* Favorite toggle */}
+          {/* Favorite */}
           <Tooltip content="お気に入り" side="bottom">
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className="h-8 w-8"
-              onClick={() => onToggleFavorite(conversation.id)}
-            >
-              <Star className={cn(
-                "h-4 w-4",
-                conversation.isFavorite
-                  ? "fill-amber-400 text-amber-400"
-                  : "text-muted-foreground"
-              )} />
+            <Button variant="ghost" size="icon-sm" className="h-8 w-8"
+              onClick={() => onToggleFavorite(conversation.id)}>
+              <Star className={cn("h-4 w-4",
+                conversation.isFavorite ? "fill-amber-400 text-amber-400" : "text-muted-foreground")} />
             </Button>
           </Tooltip>
 
-          {/* Assign UI */}
+          {/* Assign */}
           <div className="flex items-center rounded-lg border">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-9 gap-1.5 rounded-r-none border-r text-[12px] px-3"
-              onClick={() => onAssigneeChange(conversation.id, currentUser.id)}
-            >
-              <Stamp className="h-3.5 w-3.5" />
+            <Button variant="ghost" size="sm"
+              className={cn("h-9 gap-1.5 rounded-r-none border-r text-[13px] px-3",
+                isSelfAssigned && "opacity-50 cursor-not-allowed")}
+              disabled={isSelfAssigned}
+              onClick={() => onAssigneeChange(conversation.id, currentUser.id)}>
               自分にアサイン
             </Button>
-            <Dropdown
-              align="right"
+            <Dropdown align="right"
               trigger={
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-9 gap-1 rounded-l-none text-[12px] px-3"
-                >
+                <Button variant="ghost" size="sm" className="h-9 gap-1 rounded-l-none text-[13px] px-3">
                   {conversation.assignee ? (
                     <>
-                      <Avatar
-                        src={conversation.assignee.avatar}
-                        fallback={conversation.assignee.name}
-                        size="sm"
-                        className="h-4 w-4 text-[6px]"
-                      />
+                      <Avatar src={conversation.assignee.avatar} fallback={conversation.assignee.name} size="sm" className="h-4 w-4 text-[6px]" />
                       {conversation.assignee.name}
                     </>
                   ) : (
-                    "アサイン"
+                    <span className="flex items-center gap-1">
+                      <CircleDashed className="h-3.5 w-3.5" />
+                      未アサイン
+                    </span>
                   )}
                   <ChevronDown className="h-2.5 w-2.5 text-muted-foreground" />
                 </Button>
-              }
-            >
-              <DropdownItem
-                active={!conversation.assignee}
-                onClick={() => onAssigneeChange(conversation.id, null)}
-              >
-                <UserPlus className="h-3.5 w-3.5" />
-                未アサイン
+              }>
+              <DropdownItem active={!conversation.assignee} onClick={() => onAssigneeChange(conversation.id, null)}>
+                <CircleDashed className="h-3.5 w-3.5" /> 未アサイン
               </DropdownItem>
               {teamMembers.map((m) => (
-                <DropdownItem
-                  key={m.id}
-                  active={conversation.assignee?.id === m.id}
-                  onClick={() => onAssigneeChange(conversation.id, m.id)}
-                >
-                  <Avatar
-                    src={m.avatar}
-                    fallback={m.name}
-                    size="sm"
-                    className="h-4 w-4 text-[6px]"
-                  />
+                <DropdownItem key={m.id} active={conversation.assignee?.id === m.id}
+                  onClick={() => onAssigneeChange(conversation.id, m.id)}>
+                  <Avatar src={m.avatar} fallback={m.name} size="sm" className="h-4 w-4 text-[6px]" />
                   {m.name}
                 </DropdownItem>
               ))}
             </Dropdown>
           </div>
 
-          {/* Resolve button - always visible */}
-          <Button
-            size="sm"
-            className={cn(
-              "h-9 gap-1.5 text-[12px] px-4",
-              conversation.status === "resolved"
-                ? "bg-foreground/10 text-foreground hover:bg-foreground/15"
-                : "bg-brand hover:bg-brand/90"
-            )}
-            onClick={() =>
-              onStatusChange(
-                conversation.id,
-                conversation.status === "resolved" ? "open" : "resolved"
-              )
-            }
-          >
-            <Check className="h-3.5 w-3.5" />
-            {conversation.status === "resolved" ? "再開する" : "完了"}
-          </Button>
+          {/* Needs action / Resolve */}
+          <Dropdown align="right"
+            trigger={
+              <Button size="sm"
+                className={cn("h-9 gap-1.5 text-[13px] px-4",
+                  conversation.needsAction
+                    ? "bg-amber-500 hover:bg-amber-600"
+                    : conversation.status === "resolved"
+                      ? "bg-foreground/10 text-foreground hover:bg-foreground/15"
+                      : "bg-brand hover:bg-brand/90"
+                )}>
+                {conversation.needsAction ? "要対応" : conversation.status === "resolved" ? "完了済み" : "対応する"}
+                <ChevronDown className="h-3 w-3" />
+              </Button>
+            }>
+            <DropdownItem onClick={() => onToggleNeedsAction(conversation.id)}>
+              {conversation.needsAction ? "要対応を解除" : "要対応にする"}
+            </DropdownItem>
+            <DropdownItem onClick={() => onStatusChange(conversation.id, conversation.status === "resolved" ? "open" : "resolved")}>
+              {conversation.status === "resolved" ? "再開する" : "完了にする"}
+            </DropdownItem>
+          </Dropdown>
 
           {/* More options */}
-          <Dropdown
-            align="right"
-            trigger={
-              <Button variant="ghost" size="icon-sm" className="h-8 w-8">
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            }
-          >
-            <DropdownItem
-              onClick={() =>
-                onStatusChange(conversation.id, "pending")
-              }
-            >
-              <Clock className="h-3.5 w-3.5" />
-              保留にする
+          <Dropdown align="right"
+            trigger={<Button variant="ghost" size="icon-sm" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button>}>
+            <DropdownItem onClick={() => onMarkUnread(conversation.id)}>
+              <Mail className="h-3.5 w-3.5" /> 未読にする
             </DropdownItem>
-            <DropdownItem
-              onClick={() => onMarkSpam(conversation.id)}
-            >
-              <ShieldBan className="h-3.5 w-3.5" />
-              スパムとして報告
+            <DropdownItem onClick={() => onStatusChange(conversation.id, "pending")}>
+              <Clock className="h-3.5 w-3.5" /> 保留にする
             </DropdownItem>
-            <DropdownItem
-              className="text-destructive"
-              onClick={() => onRequestDelete(conversation.id)}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-              完全に削除
+            <DropdownItem onClick={() => onMarkSpam(conversation.id)}>
+              <Ban className="h-3.5 w-3.5" /> スパムとして報告
+            </DropdownItem>
+            <DropdownItem className="text-destructive" onClick={() => onRequestDelete(conversation.id)}>
+              <Trash2 className="h-3.5 w-3.5" /> 完全に削除
             </DropdownItem>
           </Dropdown>
         </div>
       </header>
 
-      {/* Messages */}
+      {/* Messages + inline reply */}
       <div className="flex-1 overflow-y-auto px-5 py-5">
         <div className="mx-auto max-w-2xl space-y-4">
           {conversation.messages.map((message) => (
-            <MessageBubble
-              key={message.id}
-              message={message}
-              channel={conversation.channel}
-            />
+            <MessageBubble key={message.id} message={message} channel={conversation.channel} />
           ))}
+
+          {/* Inline reply input - after last message */}
+          <div ref={messagesEndRef} />
+
+          {/* Email header fields */}
+          {isEmail && (
+            <div className="space-y-1 rounded-lg border bg-accent/20 px-3 py-2">
+              <div className="flex items-center gap-2 text-[13px]">
+                <span className="w-10 shrink-0 text-right font-medium text-muted-foreground">From</span>
+                <input value={emailFrom} onChange={(e) => setEmailFrom(e.target.value)} className="flex-1 bg-transparent outline-none text-[13px]" />
+              </div>
+              <div className="flex items-center gap-2 text-[13px]">
+                <span className="w-10 shrink-0 text-right font-medium text-muted-foreground">To</span>
+                <input value={emailTo} onChange={(e) => setEmailTo(e.target.value)} className="flex-1 bg-transparent outline-none text-[13px]" />
+              </div>
+              <div className="flex items-center gap-2 text-[13px]">
+                <span className="w-10 shrink-0 text-right font-medium text-muted-foreground">CC</span>
+                <input value={emailCc} onChange={(e) => setEmailCc(e.target.value)} className="flex-1 bg-transparent outline-none text-[13px]" placeholder="任意" />
+              </div>
+              <div className="flex items-center gap-2 text-[13px]">
+                <span className="w-10 shrink-0 text-right font-medium text-muted-foreground">BCC</span>
+                <input value={emailBcc} onChange={(e) => setEmailBcc(e.target.value)} className="flex-1 bg-transparent outline-none text-[13px]" placeholder="任意" />
+              </div>
+              <div className="flex items-center gap-2 text-[13px]">
+                <span className="w-10 shrink-0 text-right font-medium text-muted-foreground">件名</span>
+                <input value={emailSubject} onChange={(e) => setEmailSubject(e.target.value)} className="flex-1 bg-transparent outline-none text-[13px]" />
+              </div>
+            </div>
+          )}
+
+          {/* Reply input */}
+          <div className="rounded-lg border bg-background focus-within:border-brand/30">
+            <textarea value={replyText} onChange={(e) => handleReplyChange(e.target.value)}
+              placeholder="メッセージを入力..."
+              rows={3}
+              className="w-full resize-none bg-transparent px-3 pt-2.5 pb-0 text-[15px] leading-relaxed outline-none placeholder:text-muted-foreground/50"
+              onInput={(e) => {
+                const el = e.currentTarget;
+                el.style.height = "auto";
+                el.style.height = Math.min(el.scrollHeight, 160) + "px";
+              }} />
+            <div className="flex items-center justify-between px-3 pb-2">
+              <Tooltip content="ファイルを添付" side="top">
+                <Button variant="ghost" size="icon-sm" className="h-8 w-8 text-muted-foreground">
+                  <Paperclip className="h-4 w-4" />
+                </Button>
+              </Tooltip>
+              <Button size="sm" className="h-8 rounded-md bg-brand hover:bg-brand/90 px-4 text-[13px]"
+                disabled={!replyText.trim()} onClick={handleSendReply}>
+                <Send className="h-3 w-3 mr-1" /> 送信
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Reply + Memo area */}
-      <div className="border-t">
-        {/* Input control overlay */}
-        {!isSelfAssigned && (
-          <div className="relative">
-            <div className="absolute inset-0 z-10 flex items-center justify-center bg-brand-light/60 backdrop-blur-[1px] rounded-t-lg">
-              <div className="flex items-center gap-2">
-                <Button
-                  size="sm"
-                  className="h-9 gap-1.5 bg-brand hover:bg-brand/90 text-[13px] px-4"
-                  onClick={() => onAssigneeChange(conversation.id, currentUser.id)}
-                >
-                  <Stamp className="h-3.5 w-3.5" />
-                  自分にアサイン
-                </Button>
-                <Dropdown
-                  align="right"
-                  trigger={
-                    <Button variant="outline" size="sm" className="h-9 text-[13px] px-4 bg-white">
-                      他の人をアサイン
-                      <ChevronDown className="h-3 w-3 ml-1" />
-                    </Button>
-                  }
-                >
-                  {teamMembers.filter((m) => m.id !== currentUser.id).map((m) => (
-                    <DropdownItem
-                      key={m.id}
-                      onClick={() => onAssigneeChange(conversation.id, m.id)}
-                    >
-                      <Avatar
-                        src={m.avatar}
-                        fallback={m.name}
-                        size="sm"
-                        className="h-4 w-4 text-[6px]"
-                      />
-                      {m.name}
-                    </DropdownItem>
-                  ))}
-                </Dropdown>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <div className="px-5 py-3">
-          <div className="mx-auto max-w-2xl space-y-2">
-            {/* Email header fields */}
-            {isEmail && isSelfAssigned && (
-              <div className="space-y-1 rounded-lg border bg-accent/20 px-3 py-2">
-                <div className="flex items-center gap-2 text-[11px]">
-                  <span className="w-10 shrink-0 text-right font-medium text-muted-foreground">From</span>
-                  <input value={emailFrom} onChange={(e) => setEmailFrom(e.target.value)} className="flex-1 bg-transparent outline-none text-[11px]" />
-                </div>
-                <div className="flex items-center gap-2 text-[11px]">
-                  <span className="w-10 shrink-0 text-right font-medium text-muted-foreground">To</span>
-                  <input value={emailTo} onChange={(e) => setEmailTo(e.target.value)} className="flex-1 bg-transparent outline-none text-[11px]" />
-                </div>
-                <div className="flex items-center gap-2 text-[11px]">
-                  <span className="w-10 shrink-0 text-right font-medium text-muted-foreground">CC</span>
-                  <input value={emailCc} onChange={(e) => setEmailCc(e.target.value)} className="flex-1 bg-transparent outline-none text-[11px]" placeholder="任意" />
-                </div>
-                <div className="flex items-center gap-2 text-[11px]">
-                  <span className="w-10 shrink-0 text-right font-medium text-muted-foreground">BCC</span>
-                  <input value={emailBcc} onChange={(e) => setEmailBcc(e.target.value)} className="flex-1 bg-transparent outline-none text-[11px]" placeholder="任意" />
-                </div>
-                <div className="flex items-center gap-2 text-[11px]">
-                  <span className="w-10 shrink-0 text-right font-medium text-muted-foreground">件名</span>
-                  <input value={emailSubject} onChange={(e) => setEmailSubject(e.target.value)} className="flex-1 bg-transparent outline-none text-[11px]" />
-                </div>
-              </div>
-            )}
-
-            {/* Reply input - Slack style */}
-            <div className="rounded-lg border bg-background focus-within:border-brand/30">
-              <textarea
-                value={replyText}
-                onChange={(e) => setReplyText(e.target.value)}
-                placeholder="メッセージを入力..."
-                rows={3}
-                disabled={!isSelfAssigned}
-                className="w-full resize-none bg-transparent px-3 pt-2.5 pb-0 text-[13px] leading-relaxed outline-none placeholder:text-muted-foreground/50 disabled:opacity-40"
+      {/* Team memo */}
+      <div className="border-t px-5 py-3">
+        <div className="mx-auto max-w-2xl">
+          <div className="rounded-lg border border-amber-200/50 bg-amber-50/30">
+            <div className="flex items-start gap-2.5 px-3 pt-2.5 pb-0">
+              <MessageSquareText className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+              <textarea value={memoText} onChange={(e) => setMemoText(e.target.value)}
+                placeholder="チーム内メモを入力"
+                rows={1}
+                className="flex-1 resize-none bg-transparent text-[14px] leading-relaxed outline-none placeholder:text-amber-400/60"
                 onInput={(e) => {
                   const el = e.currentTarget;
                   el.style.height = "auto";
-                  el.style.height = Math.min(el.scrollHeight, 160) + "px";
-                }}
-              />
-              <div className="flex items-center justify-between px-3 pb-2">
-                <Tooltip content="ファイルを添付" side="top">
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    className="h-8 w-8 text-muted-foreground"
-                    disabled={!isSelfAssigned}
-                  >
-                    <Paperclip className="h-4 w-4" />
-                  </Button>
-                </Tooltip>
-                <Button
-                  size="sm"
-                  className="h-8 rounded-md bg-brand hover:bg-brand/90 px-4 text-[12px]"
-                  disabled={!replyText.trim() || !isSelfAssigned}
-                >
-                  <Send className="h-3 w-3 mr-1" />
-                  送信
-                </Button>
-              </div>
+                  el.style.height = Math.min(el.scrollHeight, 80) + "px";
+                }} />
             </div>
-
-            {/* Team memo input */}
-            <div className="rounded-lg border border-amber-200/50 bg-amber-50/30">
-              <div className="flex items-start gap-2.5 px-3 pt-2.5 pb-0">
-                <MessageSquareText className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
-                <textarea
-                  value={memoText}
-                  onChange={(e) => setMemoText(e.target.value)}
-                  placeholder="チーム内メモを入力"
-                  rows={1}
-                  className="flex-1 resize-none bg-transparent text-[12px] leading-relaxed outline-none placeholder:text-amber-400/60"
-                  onInput={(e) => {
-                    const el = e.currentTarget;
-                    el.style.height = "auto";
-                    el.style.height = Math.min(el.scrollHeight, 80) + "px";
-                  }}
-                />
-              </div>
+            {memoText.trim() && (
               <div className="flex justify-end px-3 pb-2 pt-1">
-                <Button
-                  size="sm"
-                  className="h-7 rounded-md bg-amber-500 hover:bg-amber-600 px-3 text-[11px]"
-                  disabled={!memoText.trim()}
-                >
-                  <Send className="h-3 w-3 mr-1" />
-                  送信
+                <Button size="sm" className="h-7 rounded-md bg-amber-500 hover:bg-amber-600 px-3 text-[12px]"
+                  onClick={handleSendMemo}>
+                  <Send className="h-3 w-3 mr-1" /> 送信
                 </Button>
               </div>
-            </div>
+            )}
           </div>
         </div>
       </div>
@@ -1020,17 +853,13 @@ function ConversationDetail({
   );
 }
 
-/* ─── Message Bubble ─────────────────────────────────── */
+/* ─── Message Bubble ─────────────────────────────── */
 
-function MessageBubble({
-  message,
-  channel,
-}: {
-  message: Message;
-  channel: Channel;
-}) {
+function MessageBubble({ message, channel }: { message: Message; channel: Channel }) {
   const { content, timestamp, isInbound, senderName, isInternal, emailHeader } = message;
   const [headerExpanded, setHeaderExpanded] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editContent, setEditContent] = useState(content);
 
   if (isInternal) {
     return (
@@ -1039,95 +868,70 @@ function MessageBubble({
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-1.5">
               <MessageSquareText className="h-3 w-3 text-amber-500" />
-              <span className="text-[10px] font-medium text-amber-600">
-                チーム内メモ
-              </span>
+              <span className="text-[12px] font-medium text-amber-600">チーム内メモ</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <Avatar
-                src={teamMembers.find((m) => m.name === senderName)?.avatar}
-                fallback={senderName}
-                size="sm"
-                className="h-4 w-4 text-[5px]"
-              />
-              <span className="text-[10px] text-amber-600">{senderName}</span>
-              <span className="text-[10px] text-amber-400">{timestamp}</span>
+              <Avatar src={teamMembers.find((m) => m.name === senderName)?.avatar} fallback={senderName} size="sm" className="h-4 w-4 text-[5px]" />
+              <span className="text-[12px] text-amber-600">{senderName}</span>
+              <span className="text-[12px] text-amber-400">{timestamp}</span>
+              {senderName === currentUser.name && (
+                <button onClick={() => setEditing(!editing)}
+                  className="cursor-pointer ml-1 text-amber-400 hover:text-amber-600">
+                  <Pencil className="h-3 w-3" />
+                </button>
+              )}
             </div>
           </div>
-          <p className="mt-1.5 text-[12px] leading-relaxed text-amber-900/70">
-            {content}
-          </p>
+          {editing ? (
+            <div className="mt-1.5">
+              <textarea value={editContent} onChange={(e) => setEditContent(e.target.value)}
+                className="w-full resize-none rounded border bg-white px-2 py-1 text-[14px] outline-none" rows={2} />
+              <div className="flex justify-end gap-1 mt-1">
+                <button onClick={() => { setEditing(false); setEditContent(content); }}
+                  className="cursor-pointer text-[12px] text-muted-foreground hover:text-foreground px-2 py-0.5">キャンセル</button>
+                <button onClick={() => setEditing(false)}
+                  className="cursor-pointer text-[12px] text-amber-600 font-medium hover:text-amber-700 px-2 py-0.5">保存</button>
+              </div>
+            </div>
+          ) : (
+            <p className="mt-1.5 text-[14px] leading-relaxed text-amber-900/70">{editContent}</p>
+          )}
         </div>
       </div>
     );
   }
 
   return (
-    <div
-      className={cn(
-        "flex gap-2.5",
-        isInbound ? "justify-start" : "justify-end"
-      )}
-    >
-      <div
-        className={cn(
-          "max-w-[70%] space-y-1",
-          !isInbound && "items-end"
-        )}
-      >
-        <div
-          className={cn(
-            "flex items-center gap-1.5",
-            !isInbound && "justify-end"
-          )}
-        >
-          <span className="text-[10px] font-medium text-muted-foreground">
-            {senderName}
-          </span>
-          <span className="text-[10px] text-muted-foreground/50">
-            {timestamp}
-          </span>
+    <div className={cn("flex gap-2.5", isInbound ? "justify-start" : "justify-end")}>
+      <div className={cn("max-w-[70%] space-y-1", !isInbound && "items-end")}>
+        <div className={cn("flex items-center gap-1.5", !isInbound && "justify-end")}>
+          <span className="text-[12px] font-medium text-muted-foreground">{senderName}</span>
+          <span className="text-[12px] text-muted-foreground/50">{timestamp}</span>
         </div>
 
-        {/* Email header (collapsible) */}
         {channel === "email" && emailHeader && (
           <div className="mb-1">
-            <button
-              onClick={() => setHeaderExpanded(!headerExpanded)}
-              className="flex cursor-pointer items-center gap-1 text-[10px] text-muted-foreground/60 hover:text-muted-foreground transition-colors"
-            >
+            <button onClick={() => setHeaderExpanded(!headerExpanded)}
+              className="flex cursor-pointer items-center gap-1 text-[12px] text-muted-foreground/60 hover:text-muted-foreground transition-colors">
               <ChevronRight className={cn("h-3 w-3 transition-transform", headerExpanded && "rotate-90")} />
               <span className="font-medium">{emailHeader.subject}</span>
             </button>
             {headerExpanded && (
-              <div className="ml-4 mt-1 space-y-0.5 text-[10px] text-muted-foreground/60">
-                {emailHeader.to && (
-                  <p><span className="font-medium">To:</span> {emailHeader.to}</p>
-                )}
-                {emailHeader.cc && (
-                  <p><span className="font-medium">CC:</span> {emailHeader.cc}</p>
-                )}
-                {emailHeader.bcc && (
-                  <p><span className="font-medium">BCC:</span> {emailHeader.bcc}</p>
-                )}
+              <div className="ml-4 mt-1 space-y-0.5 text-[12px] text-muted-foreground/60">
+                {emailHeader.to && <p><span className="font-medium">To:</span> {emailHeader.to}</p>}
+                {emailHeader.cc && <p><span className="font-medium">CC:</span> {emailHeader.cc}</p>}
+                {emailHeader.bcc && <p><span className="font-medium">BCC:</span> {emailHeader.bcc}</p>}
               </div>
             )}
           </div>
         )}
 
-        <div
-          className={cn(
-            "rounded-2xl px-3.5 py-2 text-[13px] leading-relaxed",
-            isInbound
-              ? "rounded-tl-sm bg-secondary text-secondary-foreground"
-              : "rounded-tr-sm bg-brand text-brand-foreground"
-          )}
-        >
+        <div className={cn(
+          "rounded-2xl px-3.5 py-2 text-[15px] leading-relaxed",
+          isInbound ? "rounded-tl-sm bg-secondary text-secondary-foreground" : "rounded-tr-sm bg-brand text-brand-foreground"
+        )}>
           {content.split("\n").map((line, i) => (
-            <span key={i}>
-              {line}
-              {i < content.split("\n").length - 1 && <br />}
-            </span>
+            <span key={i}>{line}{i < content.split("\n").length - 1 && <br />}</span>
           ))}
         </div>
       </div>
@@ -1135,72 +939,55 @@ function MessageBubble({
   );
 }
 
-/* ─── Contact Slide Panel (Layer 5) ──────────────────── */
+/* ─── Contact Slide Panel ────────────────────────── */
 
-function ContactSlidePanel({
-  contact,
-  onClose,
-}: {
-  contact: Contact;
-  onClose: () => void;
+function ContactSlidePanel({ contact, onClose, onNavigateToContact }: {
+  contact: Contact; onClose: () => void; onNavigateToContact: (id: string) => void;
 }) {
   const contactConversations = allConversations.filter((c) =>
     contact.conversationIds.includes(c.id)
   );
-
   const memberGroups = contactGroups.filter(
-    (g) => g.id !== "grp-all" && g.contactIds.includes(contact.id)
+    (g) => g.contactIds.includes(contact.id)
   );
 
   return (
     <div className="flex h-full w-[320px] min-w-[260px] max-w-[400px] shrink-0 flex-col border-l bg-background animate-slide-in-right">
-      {/* Header */}
       <div className="flex items-center justify-between border-b px-4 py-3">
-        <h3 className="text-[14px] font-semibold">連絡先詳細</h3>
+        <h3 className="text-[16px] font-semibold">連絡先詳細</h3>
         <div className="flex items-center gap-1">
-          <Dropdown
-            align="right"
-            trigger={
-              <button className="cursor-pointer rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground">
-                <MoreHorizontal className="h-4 w-4" />
-              </button>
-            }
-          >
-            <DropdownItem className="text-destructive">
-              <Trash2 className="h-3.5 w-3.5" />
-              削除
-            </DropdownItem>
-          </Dropdown>
-          <button
-            onClick={onClose}
-            className="cursor-pointer rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
-          >
+          <Button variant="outline" size="sm" className="h-7 text-[13px] px-3"
+            onClick={() => { onClose(); onNavigateToContact(contact.id); }}>
+            編集
+          </Button>
+          <button onClick={onClose}
+            className="cursor-pointer rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground">
             <X className="h-4 w-4" />
           </button>
         </div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-4">
-        {/* Profile */}
-        <div className="mb-5 flex items-center gap-3">
-          <Avatar fallback={contact.name} size="lg" />
-          <div>
-            <p className="text-[15px] font-semibold">{contact.name}</p>
-            {contact.email && (
-              <p className="text-[11px] text-muted-foreground truncate max-w-[180px]">
-                {contact.email}
-              </p>
-            )}
-          </div>
-        </div>
-
-        {/* Basic info */}
         <div className="space-y-4">
+          {/* Name */}
           <section>
-            <h4 className="mb-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-              基本情報
-            </h4>
-            <div className="space-y-1.5 text-[12px]">
+            <h4 className="mb-1.5 text-[12px] font-medium uppercase tracking-wider text-muted-foreground">氏名</h4>
+            <p className="text-[16px] font-semibold">{contact.name}</p>
+            {contact.nameFurigana && <p className="text-[13px] text-muted-foreground">{contact.nameFurigana}</p>}
+          </section>
+
+          {/* Company */}
+          {contact.company && (
+            <section>
+              <h4 className="mb-1.5 text-[12px] font-medium uppercase tracking-wider text-muted-foreground">会社名</h4>
+              <p className="text-[15px] font-medium">{contact.company}</p>
+            </section>
+          )}
+
+          {/* Contact info */}
+          <section>
+            <h4 className="mb-1.5 text-[12px] font-medium uppercase tracking-wider text-muted-foreground">連絡先</h4>
+            <div className="space-y-1.5 text-[14px]">
               {contact.email && (
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground">メール</span>
@@ -1213,7 +1000,7 @@ function ContactSlidePanel({
                   <span>{contact.phone}</span>
                 </div>
               )}
-              {contact.channels.map((ch) => (
+              {contact.channels.filter((ch) => ch.channel !== "email").map((ch) => (
                 <div key={ch.channel} className="flex items-center justify-between">
                   <span className="text-muted-foreground capitalize">{ch.channel}</span>
                   <span className="truncate max-w-[150px]">{ch.handle}</span>
@@ -1222,64 +1009,41 @@ function ContactSlidePanel({
             </div>
           </section>
 
+          <section>
+            <h4 className="mb-1.5 text-[12px] font-medium uppercase tracking-wider text-muted-foreground">ID</h4>
+            <p className="text-[13px] text-muted-foreground/60">{contact.id}</p>
+          </section>
+
           {/* Groups */}
           <section>
-            <h4 className="mb-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-              所属グループ
-            </h4>
+            <h4 className="mb-1.5 text-[12px] font-medium uppercase tracking-wider text-muted-foreground">グループ</h4>
             {memberGroups.length === 0 ? (
-              <p className="text-[11px] text-muted-foreground/60">所属グループなし</p>
+              <p className="text-[13px] text-muted-foreground/60">なし</p>
             ) : (
               <div className="flex flex-wrap gap-1">
                 {memberGroups.map((g) => (
-                  <span
-                    key={g.id}
-                    className="rounded-full bg-accent px-2 py-0.5 text-[10px] font-medium text-foreground/70"
-                  >
-                    {g.name}
-                  </span>
+                  <span key={g.id} className="rounded-full bg-accent px-2.5 py-0.5 text-[13px] font-medium text-foreground/70">{g.name}</span>
                 ))}
               </div>
             )}
           </section>
 
-          {/* Conversation history */}
+          {/* Message history */}
           <section>
-            <h4 className="mb-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-              過去の会話
-            </h4>
+            <h4 className="mb-1.5 text-[12px] font-medium uppercase tracking-wider text-muted-foreground">メッセージ履歴</h4>
             <div className="space-y-1.5">
               {contactConversations.map((conv) => {
                 const CIcon = channelIcons[conv.channel];
                 const s = channelStyles[conv.channel];
-                const accName = getAccountName(conv.accountId);
                 return (
-                  <div
-                    key={conv.id}
-                    className="flex items-start gap-2.5 rounded-md border px-3 py-2"
-                  >
-                    <div
-                      className={cn(
-                        "flex h-6 w-6 shrink-0 items-center justify-center rounded-full mt-0.5",
-                        s.bg
-                      )}
-                    >
+                  <div key={conv.id} className="flex items-start gap-2.5 rounded-md border px-3 py-2">
+                    <div className={cn("flex h-6 w-6 shrink-0 items-center justify-center rounded-full mt-0.5", s.bg)}>
                       <CIcon className={cn("h-3 w-3", s.text)} />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-[11px] font-medium">
-                        {conv.subject || conv.lastMessage}
-                      </p>
-                      <p className="text-[10px] text-muted-foreground/60">
-                        To: {accName}
-                      </p>
-                      <p className="text-[10px] text-muted-foreground">
-                        {conv.lastMessageAt}
-                      </p>
+                      <p className="truncate text-[13px] font-medium">{conv.subject || conv.lastMessage}</p>
+                      <p className="text-[12px] text-muted-foreground">{conv.lastMessageAt}</p>
                     </div>
-                    <Badge variant={conv.status} className="text-[9px] px-1.5 py-0 shrink-0">
-                      {conv.status === "open" ? "未対応" : conv.status === "pending" ? "保留" : "完了"}
-                    </Badge>
                   </div>
                 );
               })}
@@ -1287,16 +1051,10 @@ function ContactSlidePanel({
           </section>
 
           {/* Notes */}
-          {contact.note && (
-            <section>
-              <h4 className="mb-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                メモ
-              </h4>
-              <p className="text-[12px] text-muted-foreground leading-relaxed">
-                {contact.note}
-              </p>
-            </section>
-          )}
+          <section>
+            <h4 className="mb-1.5 text-[12px] font-medium uppercase tracking-wider text-muted-foreground">メモ</h4>
+            <p className="text-[14px] text-muted-foreground leading-relaxed">{contact.note || "なし"}</p>
+          </section>
         </div>
       </div>
     </div>

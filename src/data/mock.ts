@@ -1,9 +1,10 @@
-import type { Account, Contact, ContactGroup, Conversation, TeamMember } from "./types";
+import type { Account, Contact, ContactGroup, Conversation, TeamMember, MemberPermissions } from "./types";
 
 export const currentUser: TeamMember = {
   id: "u1",
   name: "田中 美咲",
   avatar: "https://api.dicebear.com/9.x/notionists/svg?seed=Misaki&backgroundColor=e8f5e9",
+  role: "admin",
 };
 
 export const teamMembers: TeamMember[] = [
@@ -12,11 +13,13 @@ export const teamMembers: TeamMember[] = [
     id: "u2",
     name: "佐藤 健太",
     avatar: "https://api.dicebear.com/9.x/notionists/svg?seed=Kenta&backgroundColor=e8f5e9",
+    role: "member",
   },
   {
     id: "u3",
     name: "鈴木 花",
     avatar: "https://api.dicebear.com/9.x/notionists/svg?seed=Hana&backgroundColor=e8f5e9",
+    role: "member",
   },
 ];
 
@@ -43,27 +46,21 @@ export const accounts: Account[] = [
 
 export const contactGroups: ContactGroup[] = [
   {
-    id: "grp-all",
-    name: "すべてのグループ",
-    description: "全顧客を表示",
-    contactIds: ["ct1", "ct2", "ct3", "ct4", "ct5", "ct6", "ct7", "ct8", "ct9", "ct10"],
-  },
-  {
     id: "grp-vip",
     name: "VIP顧客",
     description: "重要顧客",
     contactIds: ["ct3", "ct5", "ct7"],
   },
   {
-    id: "grp-conf",
-    name: "今年のカンファレンス協賛企業",
-    description: "2025年カンファレンス関連",
+    id: "grp-sponsor",
+    name: "イベントスポンサー",
+    description: "イベント協賛企業",
     contactIds: ["ct1", "ct9"],
   },
   {
-    id: "grp-lead",
-    name: "リード",
-    description: "見込み顧客",
+    id: "grp-recruit",
+    name: "採用候補",
+    description: "採用候補者",
     contactIds: ["ct2", "ct4", "ct8"],
   },
 ];
@@ -72,41 +69,52 @@ export const contacts: Contact[] = [
   {
     id: "ct1",
     name: "山田 太郎",
+    nameFurigana: "ヤマダ タロウ",
+    company: "山田商事株式会社",
+    companyFurigana: "ヤマダショウジカブシキガイシャ",
     email: "yamada@example.com",
-    channels: [{ channel: "instagram", handle: "@yamada_t" }],
+    channels: [{ channel: "instagram", handle: "@yamada_t", isAutoLinked: true }],
     conversationIds: ["c8"],
     createdAt: "2024-12-01",
   },
   {
     id: "ct2",
     name: "佐々木 リナ",
+    nameFurigana: "ササキ リナ",
     phone: "090-1234-5678",
-    channels: [{ channel: "line", handle: "rina_sasaki" }],
+    channels: [{ channel: "line", handle: "rina_sasaki", isAutoLinked: true }],
     conversationIds: ["c5"],
     createdAt: "2024-11-15",
   },
   {
     id: "ct3",
     name: "鈴木 一郎",
+    nameFurigana: "スズキ イチロウ",
+    company: "株式会社スズキ商事",
+    companyFurigana: "カブシキガイシャスズキショウジ",
     email: "ichiro.suzuki@example.com",
-    channels: [{ channel: "email", handle: "ichiro.suzuki@example.com" }],
+    channels: [{ channel: "email", handle: "ichiro.suzuki@example.com", isAutoLinked: true }],
     conversationIds: ["c1"],
     createdAt: "2024-10-20",
   },
   {
     id: "ct4",
     name: "高橋 あいり",
-    channels: [{ channel: "instagram", handle: "@airi_takahashi" }],
+    nameFurigana: "タカハシ アイリ",
+    channels: [{ channel: "instagram", handle: "@airi_takahashi", isAutoLinked: true }],
     conversationIds: ["c9"],
     createdAt: "2024-09-10",
   },
   {
     id: "ct5",
     name: "中村 健二",
+    nameFurigana: "ナカムラ ケンジ",
+    company: "中村デザイン事務所",
+    companyFurigana: "ナカムラデザインジムショ",
     email: "kenji.n@example.com",
     channels: [
-      { channel: "email", handle: "kenji.n@example.com" },
-      { channel: "instagram", handle: "@kenji_nakamura" },
+      { channel: "email", handle: "kenji.n@example.com", isAutoLinked: true },
+      { channel: "instagram", handle: "@kenji_nakamura", isAutoLinked: true },
     ],
     conversationIds: ["c4", "c11"],
     createdAt: "2024-08-05",
@@ -114,41 +122,77 @@ export const contacts: Contact[] = [
   {
     id: "ct6",
     name: "木村 さくら",
+    nameFurigana: "キムラ サクラ",
     phone: "080-9876-5432",
-    channels: [{ channel: "line", handle: "sakura_kimura" }],
+    channels: [{ channel: "line", handle: "sakura_kimura", isAutoLinked: true }],
     conversationIds: ["c6"],
     createdAt: "2024-11-01",
   },
   {
     id: "ct7",
     name: "渡辺 大輔",
+    nameFurigana: "ワタナベ ダイスケ",
+    company: "渡辺コンサルティング",
+    companyFurigana: "ワタナベコンサルティング",
     email: "d.watanabe@example.com",
-    channels: [{ channel: "email", handle: "d.watanabe@example.com" }],
+    channels: [{ channel: "email", handle: "d.watanabe@example.com", isAutoLinked: true }],
     conversationIds: ["c2"],
     createdAt: "2024-07-15",
   },
   {
     id: "ct8",
     name: "伊藤 まり",
-    channels: [{ channel: "instagram", handle: "@mari_ito" }],
+    nameFurigana: "イトウ マリ",
+    channels: [{ channel: "instagram", handle: "@mari_ito", isAutoLinked: true }],
     conversationIds: ["c10"],
     createdAt: "2024-12-10",
   },
   {
     id: "ct9",
     name: "松本 真一",
+    nameFurigana: "マツモト シンイチ",
+    company: "松本商店",
+    companyFurigana: "マツモトショウテン",
     email: "s.matsumoto@example.com",
-    channels: [{ channel: "email", handle: "s.matsumoto@example.com" }],
+    channels: [{ channel: "email", handle: "s.matsumoto@example.com", isAutoLinked: true }],
     conversationIds: ["c3"],
     createdAt: "2025-01-05",
   },
   {
     id: "ct10",
     name: "小林 あやか",
+    nameFurigana: "コバヤシ アヤカ",
     phone: "070-1111-2222",
-    channels: [{ channel: "line", handle: "ayaka_kobayashi" }],
+    channels: [{ channel: "line", handle: "ayaka_kobayashi", isAutoLinked: true }],
     conversationIds: ["c7"],
     createdAt: "2025-01-20",
+  },
+];
+
+export const memberPermissions: MemberPermissions[] = [
+  {
+    memberId: "u1",
+    permissions: [
+      { accountId: "acc-email", canView: true, canReply: true },
+      { accountId: "acc-line", canView: true, canReply: true },
+      { accountId: "acc-ig", canView: true, canReply: true },
+    ],
+  },
+  {
+    memberId: "u2",
+    permissions: [
+      { accountId: "acc-email", canView: true, canReply: true },
+      { accountId: "acc-line", canView: true, canReply: true },
+      { accountId: "acc-ig", canView: true, canReply: false },
+    ],
+  },
+  {
+    memberId: "u3",
+    permissions: [
+      { accountId: "acc-email", canView: false, canReply: false },
+      { accountId: "acc-line", canView: true, canReply: false },
+      { accountId: "acc-ig", canView: true, canReply: true },
+    ],
   },
 ];
 
@@ -167,6 +211,8 @@ export const conversations: Conversation[] = [
       "先月分の請求書を再発行していただくことは可能でしょうか。経理処理の都合上、宛名を変更したいです。",
     lastMessageAt: "1時間前",
     unreadCount: 0,
+    isRead: true,
+    needsAction: true,
     messages: [
       {
         id: "m1",
@@ -203,6 +249,7 @@ export const conversations: Conversation[] = [
       "弊社とのコラボレーション企画についてご提案させていただきたく、ご連絡いたしました。",
     lastMessageAt: "昨日",
     unreadCount: 1,
+    isRead: false,
     messages: [
       {
         id: "m3",
@@ -231,6 +278,8 @@ export const conversations: Conversation[] = [
       "今月末でサービスを解約したいのですが、手続き方法を教えてください。",
     lastMessageAt: "昨日",
     unreadCount: 1,
+    isRead: false,
+    needsAction: true,
     messages: [
       {
         id: "m4",
@@ -282,6 +331,7 @@ export const conversations: Conversation[] = [
     lastMessage: "資料のご送付ありがとうございました。社内で検討いたします。",
     lastMessageAt: "3日前",
     unreadCount: 0,
+    isRead: true,
     messages: [
       {
         id: "m7",
@@ -335,6 +385,8 @@ export const conversations: Conversation[] = [
       "予約の変更をお願いしたいのですが、来週の水曜日は空いていますか？",
     lastMessageAt: "15分前",
     unreadCount: 1,
+    isRead: false,
+    needsAction: true,
     messages: [
       {
         id: "m10",
@@ -372,6 +424,7 @@ export const conversations: Conversation[] = [
     lastMessage: "来月もよろしくお願いします！",
     lastMessageAt: "昨日",
     unreadCount: 0,
+    isRead: true,
     messages: [
       {
         id: "m13",
@@ -408,6 +461,8 @@ export const conversations: Conversation[] = [
     lastMessage: "ポイントカードの残高を確認したいです。",
     lastMessageAt: "2時間前",
     unreadCount: 2,
+    isRead: false,
+    needsAction: true,
     messages: [
       {
         id: "m16",
@@ -446,6 +501,8 @@ export const conversations: Conversation[] = [
     lastMessage: "商品の在庫状況について教えていただけますか？",
     lastMessageAt: "2分前",
     unreadCount: 2,
+    isRead: false,
+    needsAction: true,
     messages: [
       {
         id: "m19",
@@ -490,6 +547,7 @@ export const conversations: Conversation[] = [
     lastMessage: "ありがとうございます！助かりました",
     lastMessageAt: "3時間前",
     unreadCount: 0,
+    isRead: true,
     messages: [
       {
         id: "m23",
@@ -526,6 +584,8 @@ export const conversations: Conversation[] = [
     lastMessage: "返品の手続きはどうすればいいですか？写真を送ります。",
     lastMessageAt: "昨日",
     unreadCount: 0,
+    isRead: true,
+    needsAction: true,
     messages: [
       {
         id: "m26",
@@ -562,6 +622,7 @@ export const conversations: Conversation[] = [
     lastMessage: "DMで質問いいですか？商品の素材について教えてください。",
     lastMessageAt: "4時間前",
     unreadCount: 1,
+    isRead: false,
     messages: [
       {
         id: "m29",
@@ -585,6 +646,7 @@ export const conversations: Conversation[] = [
     lastMessage: "送料について質問があります。北海道への送料はいくらですか？",
     lastMessageAt: "30分前",
     unreadCount: 1,
+    isRead: false,
     messages: [
       {
         id: "m30",
@@ -606,6 +668,7 @@ export const conversations: Conversation[] = [
     lastMessage: "10台分の見積書を作成していただけないでしょうか。",
     lastMessageAt: "45分前",
     unreadCount: 1,
+    isRead: false,
     messages: [
       {
         id: "m31",
@@ -630,6 +693,7 @@ export const conversations: Conversation[] = [
     lastMessage: "新作のワンピースはいつ発売ですか？すごく楽しみにしています！",
     lastMessageAt: "1時間前",
     unreadCount: 1,
+    isRead: false,
     messages: [
       {
         id: "m32",
@@ -650,6 +714,7 @@ export const conversations: Conversation[] = [
     lastMessage: "来月の予約を入れたいのですが、空き状況を教えてください。",
     lastMessageAt: "1時間前",
     unreadCount: 1,
+    isRead: false,
     messages: [
       {
         id: "m33",
@@ -671,6 +736,7 @@ export const conversations: Conversation[] = [
     lastMessage: "先月の支払い分の領収書を発行していただけますか。",
     lastMessageAt: "2時間前",
     unreadCount: 1,
+    isRead: false,
     messages: [
       {
         id: "m34",
@@ -695,6 +761,7 @@ export const conversations: Conversation[] = [
     lastMessage: "ギフトラッピングは対応していますか？プレゼント用に購入したいです。",
     lastMessageAt: "3時間前",
     unreadCount: 1,
+    isRead: false,
     messages: [
       {
         id: "m35",
@@ -715,6 +782,7 @@ export const conversations: Conversation[] = [
     lastMessage: "セールはいつまでですか？まだ間に合いますか？",
     lastMessageAt: "3時間前",
     unreadCount: 1,
+    isRead: false,
     messages: [
       {
         id: "m36",
