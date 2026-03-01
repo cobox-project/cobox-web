@@ -28,7 +28,6 @@ import {
   MessageSquareText,
   ChevronDown,
   Search,
-  Check,
   User,
   Inbox,
 } from "lucide-react";
@@ -63,27 +62,39 @@ const statusConfig: Record<
   resolved: { label: "完了", icon: CheckCircle2 },
 };
 
+type FolderFilter = "all" | "open" | "pending" | "resolved" | "mine" | string;
+
 export default function MessagesPage() {
   const [conversations, setConversations] = useState(allConversations);
   const [selectedId, setSelectedId] = useState<string | null>(
     allConversations[0]?.id ?? null
   );
-  const [statusFilter, setStatusFilter] = useState<Status | "all">("all");
-  const [channelFilter, setChannelFilter] = useState<Channel | "all">("all");
-  const [onlyMine, setOnlyMine] = useState(false);
+  const [folderFilter, setFolderFilter] = useState<FolderFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
 
   const filtered = useMemo(() => {
     let list = conversations;
-    if (statusFilter !== "all") {
-      list = list.filter((c) => c.status === statusFilter);
+
+    switch (folderFilter) {
+      case "all":
+        break;
+      case "open":
+        list = list.filter((c) => c.status === "open");
+        break;
+      case "pending":
+        list = list.filter((c) => c.status === "pending");
+        break;
+      case "resolved":
+        list = list.filter((c) => c.status === "resolved");
+        break;
+      case "mine":
+        list = list.filter((c) => c.assignee?.id === currentUser.id);
+        break;
+      default:
+        list = list.filter((c) => c.accountId === folderFilter);
+        break;
     }
-    if (channelFilter !== "all") {
-      list = list.filter((c) => c.channel === channelFilter);
-    }
-    if (onlyMine) {
-      list = list.filter((c) => c.assignee?.id === currentUser.id);
-    }
+
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       list = list.filter(
@@ -93,8 +104,9 @@ export default function MessagesPage() {
           (c.subject && c.subject.toLowerCase().includes(q))
       );
     }
+
     return list;
-  }, [conversations, statusFilter, channelFilter, onlyMine, searchQuery]);
+  }, [conversations, folderFilter, searchQuery]);
 
   const selectedConversation = useMemo(
     () => conversations.find((c) => c.id === selectedId) ?? null,
@@ -126,142 +138,123 @@ export default function MessagesPage() {
   );
 
   const counts = useMemo(() => {
-    let base = conversations;
-    if (channelFilter !== "all") {
-      base = base.filter((c) => c.channel === channelFilter);
-    }
-    if (onlyMine) {
-      base = base.filter((c) => c.assignee?.id === currentUser.id);
-    }
     return {
-      all: base.length,
-      open: base.filter((c) => c.status === "open").length,
-      pending: base.filter((c) => c.status === "pending").length,
-      resolved: base.filter((c) => c.status === "resolved").length,
+      all: conversations.length,
+      open: conversations.filter((c) => c.status === "open").length,
+      pending: conversations.filter((c) => c.status === "pending").length,
+      resolved: conversations.filter((c) => c.status === "resolved").length,
+      mine: conversations.filter((c) => c.assignee?.id === currentUser.id)
+        .length,
     };
-  }, [conversations, channelFilter, onlyMine]);
+  }, [conversations]);
 
-  // Unique channels from accounts
-  const availableChannels = useMemo(() => {
-    const channels = [...new Set(accounts.map((a) => a.channel))];
-    return channels;
-  }, []);
+  const accountCounts = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const acc of accounts) {
+      map[acc.id] = conversations.filter((c) => c.accountId === acc.id).length;
+    }
+    return map;
+  }, [conversations]);
 
   return (
     <div className="flex h-full">
-      {/* ── Second column: Conversation list ── */}
-      <div className="flex h-full w-[340px] shrink-0 flex-col border-r bg-background">
-        {/* Header */}
-        <div className="shrink-0 px-4 pt-4 pb-2">
-          <h1 className="text-[15px] font-semibold text-foreground">
-            メッセージ
-          </h1>
+      {/* ── Layer 2: Folders / Accounts (220px) ── */}
+      <div className="flex h-full w-[220px] shrink-0 flex-col border-r bg-background">
+        <div className="shrink-0 px-3 pt-4 pb-2">
+          <h2 className="px-2 text-[13px] font-semibold text-foreground">
+            受信トレイ
+          </h2>
         </div>
 
-        {/* Filters */}
-        <div className="shrink-0 border-b px-3 pb-2.5 space-y-2">
-          {/* Status tabs */}
-          <div className="flex gap-1">
-            {(["all", "open", "pending", "resolved"] as const).map((s) => {
-              const isActive = statusFilter === s;
-              const label = s === "all" ? "すべて" : statusConfig[s].label;
-              const count = counts[s];
-              return (
-                <button
-                  key={s}
-                  onClick={() => setStatusFilter(s)}
-                  className={cn(
-                    "rounded-md px-2 py-1 text-[11px] font-medium transition-colors cursor-pointer",
-                    isActive
-                      ? "bg-foreground text-background"
-                      : "text-muted-foreground hover:bg-accent hover:text-foreground"
-                  )}
-                >
-                  {label}
-                  {count > 0 && (
-                    <span className="ml-1 opacity-70">{count}</span>
-                  )}
-                </button>
-              );
-            })}
+        <nav className="flex-1 overflow-y-auto px-2">
+          {/* Status folders */}
+          <div className="space-y-0.5">
+            <FolderItem
+              icon={Inbox}
+              label="すべて"
+              count={counts.all}
+              isActive={folderFilter === "all"}
+              onClick={() => setFolderFilter("all")}
+            />
+            <FolderItem
+              icon={CircleDot}
+              label="未対応"
+              count={counts.open}
+              isActive={folderFilter === "open"}
+              onClick={() => setFolderFilter("open")}
+              iconColor="text-status-open"
+            />
+            <FolderItem
+              icon={Clock}
+              label="保留中"
+              count={counts.pending}
+              isActive={folderFilter === "pending"}
+              onClick={() => setFolderFilter("pending")}
+              iconColor="text-status-pending"
+            />
+            <FolderItem
+              icon={CheckCircle2}
+              label="完了"
+              count={counts.resolved}
+              isActive={folderFilter === "resolved"}
+              onClick={() => setFolderFilter("resolved")}
+              iconColor="text-status-resolved"
+            />
+            <FolderItem
+              icon={User}
+              label="自分の担当"
+              count={counts.mine}
+              isActive={folderFilter === "mine"}
+              onClick={() => setFolderFilter("mine")}
+            />
           </div>
 
-          {/* Channel filter + my assignments + search */}
-          <div className="flex items-center gap-2">
-            {/* Channel filter */}
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => setChannelFilter("all")}
-                className={cn(
-                  "rounded-md px-1.5 py-0.5 text-[10px] font-medium transition-colors cursor-pointer",
-                  channelFilter === "all"
-                    ? "bg-accent text-foreground"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                全Ch
-              </button>
-              {availableChannels.map((ch) => {
-                const Icon = channelIcons[ch];
-                const style = channelStyles[ch];
-                const isActive = channelFilter === ch;
+          {/* Accounts section */}
+          <div className="mt-5">
+            <h3 className="mb-1 px-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+              アカウント
+            </h3>
+            <div className="space-y-0.5">
+              {accounts.map((account) => {
+                const Icon = channelIcons[account.channel];
                 return (
-                  <button
-                    key={ch}
-                    onClick={() => setChannelFilter(ch)}
-                    title={channelLabels[ch]}
-                    className={cn(
-                      "flex h-5 w-5 items-center justify-center rounded transition-colors cursor-pointer",
-                      isActive
-                        ? cn(style.bg, style.text)
-                        : "text-muted-foreground/50 hover:text-muted-foreground"
-                    )}
-                  >
-                    <Icon className="h-3 w-3" />
-                  </button>
+                  <FolderItem
+                    key={account.id}
+                    icon={Icon}
+                    label={account.name}
+                    count={accountCounts[account.id]}
+                    isActive={folderFilter === account.id}
+                    onClick={() => setFolderFilter(account.id)}
+                    iconColor={channelStyles[account.channel].text}
+                  />
                 );
               })}
             </div>
+          </div>
+        </nav>
+      </div>
 
-            <div className="h-3 w-px bg-border" />
-
-            {/* My assignments */}
-            <label className="flex items-center gap-1 cursor-pointer select-none">
-              <button
-                onClick={() => setOnlyMine(!onlyMine)}
-                className={cn(
-                  "flex h-3.5 w-3.5 items-center justify-center rounded border transition-colors cursor-pointer",
-                  onlyMine
-                    ? "bg-foreground border-foreground"
-                    : "border-input hover:border-foreground/30"
-                )}
-              >
-                {onlyMine && (
-                  <Check className="h-2.5 w-2.5 text-background" />
-                )}
-              </button>
-              <span className="text-[10px] text-muted-foreground">自分</span>
-            </label>
-
-            {/* Search */}
-            <div className="ml-auto flex items-center gap-1.5 rounded-md border px-2 py-1">
-              <Search className="h-3 w-3 text-muted-foreground" />
-              <input
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="検索"
-                className="w-16 bg-transparent text-[11px] outline-none placeholder:text-muted-foreground/50"
-              />
-            </div>
+      {/* ── Layer 3: Thread list (320px) ── */}
+      <div className="flex h-full w-[320px] shrink-0 flex-col border-r bg-background">
+        {/* Search */}
+        <div className="shrink-0 px-3 pt-3 pb-2">
+          <div className="flex items-center gap-2 rounded-md border px-2.5 py-1.5">
+            <Search className="h-3.5 w-3.5 text-muted-foreground" />
+            <input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="スレッドを検索..."
+              className="flex-1 bg-transparent text-[12px] outline-none placeholder:text-muted-foreground/50"
+            />
           </div>
         </div>
 
-        {/* Conversation list */}
+        {/* Thread list */}
         <div className="flex-1 overflow-y-auto">
           {filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-              <Inbox className="h-8 w-8 mb-2 opacity-30" />
-              <p className="text-[12px]">該当する会話がありません</p>
+              <Inbox className="mb-2 h-8 w-8 opacity-30" />
+              <p className="text-[12px]">該当するスレッドがありません</p>
             </div>
           ) : (
             filtered.map((conv) => (
@@ -276,7 +269,7 @@ export default function MessagesPage() {
         </div>
       </div>
 
-      {/* ── Third column: Conversation detail ── */}
+      {/* ── Layer 4: Thread detail ── */}
       {selectedConversation ? (
         <ConversationDetail
           conversation={selectedConversation}
@@ -286,12 +279,60 @@ export default function MessagesPage() {
       ) : (
         <div className="flex flex-1 items-center justify-center text-muted-foreground">
           <div className="text-center">
-            <Inbox className="mx-auto h-10 w-10 mb-3 opacity-20" />
-            <p className="text-[13px]">会話を選択してください</p>
+            <Inbox className="mx-auto mb-3 h-10 w-10 opacity-20" />
+            <p className="text-[13px]">スレッドを選択してください</p>
           </div>
         </div>
       )}
     </div>
+  );
+}
+
+/* ─── Folder Item ─────────────────────────────────────── */
+
+function FolderItem({
+  icon: Icon,
+  label,
+  count,
+  isActive,
+  onClick,
+  iconColor,
+}: {
+  icon: React.ElementType;
+  label: string;
+  count: number;
+  isActive: boolean;
+  onClick: () => void;
+  iconColor?: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "flex w-full items-center gap-2.5 rounded-md px-2.5 py-[7px] text-[13px] font-medium transition-colors cursor-pointer",
+        isActive
+          ? "bg-foreground text-background"
+          : "text-muted-foreground hover:bg-accent hover:text-foreground"
+      )}
+    >
+      <Icon
+        className={cn(
+          "h-4 w-4 shrink-0",
+          isActive ? "text-background" : iconColor
+        )}
+      />
+      <span className="flex-1 truncate text-left">{label}</span>
+      {count > 0 && (
+        <span
+          className={cn(
+            "text-[11px] tabular-nums",
+            isActive ? "text-background/70" : "text-muted-foreground/60"
+          )}
+        >
+          {count}
+        </span>
+      )}
+    </button>
   );
 }
 
@@ -336,11 +377,11 @@ function ConversationItem({
           style.bg
         )}
       >
-        <Icon className={cn("h-3.5 w-3.5", style.text)} />
+        <Icon className={cn("h-4 w-4", style.text)} />
       </div>
 
       {/* Content */}
-      <div className="flex-1 min-w-0">
+      <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
           <span
             className={cn(
@@ -358,7 +399,7 @@ function ConversationItem({
         </div>
 
         {subject && (
-          <p className="truncate text-[11px] font-medium text-foreground/70 mt-0.5">
+          <p className="mt-0.5 truncate text-[11px] font-medium text-foreground/70">
             {subject}
           </p>
         )}
@@ -371,7 +412,7 @@ function ConversationItem({
         <div className="mt-1.5 flex items-center gap-1.5">
           <Badge
             variant={status}
-            className="text-[9px] px-1.5 py-0 leading-4"
+            className="px-1.5 py-0 text-[9px] leading-4"
           >
             {statusConfig[status].label}
           </Badge>
@@ -385,7 +426,7 @@ function ConversationItem({
             </span>
           )}
           {unreadCount > 0 && (
-            <span className="ml-auto flex h-4 min-w-4 items-center justify-center rounded-full bg-foreground px-1 text-[9px] font-bold text-background">
+            <span className="ml-auto flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">
               {unreadCount}
             </span>
           )}
@@ -416,14 +457,14 @@ function ConversationDetail({
     <div className="flex h-full flex-1 flex-col bg-background">
       {/* Header */}
       <header className="flex h-13 shrink-0 items-center justify-between border-b px-5">
-        <div className="flex items-center gap-3 min-w-0">
+        <div className="flex min-w-0 items-center gap-3">
           <div
             className={cn(
               "flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
               style.bg
             )}
           >
-            <Icon className={cn("h-3.5 w-3.5", style.text)} />
+            <Icon className={cn("h-4 w-4", style.text)} />
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
@@ -456,7 +497,7 @@ function ConversationDetail({
               <Button
                 variant="outline"
                 size="sm"
-                className="gap-1.5 text-[11px] h-7"
+                className="h-7 gap-1.5 text-[11px]"
               >
                 {(() => {
                   const s = statusConfig[conversation.status];
@@ -495,7 +536,7 @@ function ConversationDetail({
               <Button
                 variant="ghost"
                 size="sm"
-                className="gap-1.5 text-[11px] h-7"
+                className="h-7 gap-1.5 text-[11px]"
               >
                 <User className="h-3 w-3" />
                 {conversation.assignee
@@ -518,9 +559,7 @@ function ConversationDetail({
                 active={conversation.assignee?.id === m.id}
                 onClick={() => onAssigneeChange(conversation.id, m.id)}
               >
-                <div className="flex h-4 w-4 items-center justify-center rounded-full bg-secondary text-[8px] font-medium">
-                  {m.name.charAt(0)}
-                </div>
+                <User className="h-3.5 w-3.5" />
                 {m.name}
               </DropdownItem>
             ))}
@@ -557,7 +596,7 @@ function ConversationDetail({
             <button
               onClick={() => setIsInternal(false)}
               className={cn(
-                "rounded-md px-2 py-0.5 text-[11px] font-medium transition-colors cursor-pointer",
+                "cursor-pointer rounded-md px-2 py-0.5 text-[11px] font-medium transition-colors",
                 !isInternal
                   ? "bg-foreground text-background"
                   : "text-muted-foreground hover:text-foreground"
@@ -568,7 +607,7 @@ function ConversationDetail({
             <button
               onClick={() => setIsInternal(true)}
               className={cn(
-                "flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium transition-colors cursor-pointer",
+                "flex cursor-pointer items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium transition-colors",
                 isInternal
                   ? "bg-amber-500/10 text-amber-600"
                   : "text-muted-foreground hover:text-foreground"
@@ -662,12 +701,6 @@ function MessageBubble({ message }: { message: Message }) {
         isInbound ? "justify-start" : "justify-end"
       )}
     >
-      {isInbound && (
-        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-secondary text-[10px] font-medium text-secondary-foreground mt-5">
-          {senderName.charAt(0)}
-        </div>
-      )}
-
       <div
         className={cn(
           "max-w-[70%] space-y-1",
@@ -703,12 +736,6 @@ function MessageBubble({ message }: { message: Message }) {
           ))}
         </div>
       </div>
-
-      {!isInbound && (
-        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-foreground text-[10px] font-medium text-background mt-5">
-          {senderName.charAt(0)}
-        </div>
-      )}
     </div>
   );
 }

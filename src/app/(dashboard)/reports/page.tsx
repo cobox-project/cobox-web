@@ -12,6 +12,7 @@ import {
   Clock,
   CheckCircle2,
   MessageSquare,
+  User,
 } from "lucide-react";
 
 const channelIcons: Record<Channel, React.ElementType> = {
@@ -46,7 +47,7 @@ export default function ReportsPage() {
         </div>
 
         {/* Summary cards */}
-        <div className="grid grid-cols-4 gap-3 mb-8">
+        <div className="mb-8 grid grid-cols-4 gap-3">
           <StatCard
             label="全会話"
             value={total}
@@ -75,7 +76,7 @@ export default function ReportsPage() {
 
         {/* By channel */}
         <section className="mb-8">
-          <h2 className="text-[13px] font-semibold mb-3">アカウント別</h2>
+          <h2 className="mb-3 text-[13px] font-semibold">アカウント別</h2>
           <div className="rounded-lg border">
             <div className="grid grid-cols-5 gap-4 border-b px-4 py-2 text-[11px] font-medium text-muted-foreground">
               <span className="col-span-2">アカウント</span>
@@ -92,7 +93,7 @@ export default function ReportsPage() {
               return (
                 <div
                   key={account.id}
-                  className="grid grid-cols-5 gap-4 border-b last:border-0 px-4 py-2.5 items-center"
+                  className="grid grid-cols-5 items-center gap-4 border-b px-4 py-2.5 last:border-0"
                 >
                   <div className="col-span-2 flex items-center gap-2.5">
                     <div
@@ -127,7 +128,7 @@ export default function ReportsPage() {
 
         {/* By member */}
         <section>
-          <h2 className="text-[13px] font-semibold mb-3">メンバー別</h2>
+          <h2 className="mb-3 text-[13px] font-semibold">メンバー別</h2>
           <div className="rounded-lg border">
             <div className="grid grid-cols-5 gap-4 border-b px-4 py-2 text-[11px] font-medium text-muted-foreground">
               <span className="col-span-2">メンバー</span>
@@ -142,11 +143,11 @@ export default function ReportsPage() {
               return (
                 <div
                   key={member.id}
-                  className="grid grid-cols-5 gap-4 border-b last:border-0 px-4 py-2.5 items-center"
+                  className="grid grid-cols-5 items-center gap-4 border-b px-4 py-2.5 last:border-0"
                 >
                   <div className="col-span-2 flex items-center gap-2.5">
-                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-secondary text-[10px] font-medium">
-                      {member.name.charAt(0)}
+                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-secondary">
+                      <User className="h-3.5 w-3.5 text-muted-foreground" />
                     </div>
                     <span className="text-[13px] font-medium">
                       {member.name}
@@ -164,7 +165,7 @@ export default function ReportsPage() {
                 </div>
               );
             })}
-            <div className="grid grid-cols-5 gap-4 px-4 py-2.5 items-center bg-accent/30">
+            <div className="grid grid-cols-5 items-center gap-4 px-4 py-2.5 bg-accent/30">
               <div className="col-span-2 flex items-center gap-2.5">
                 <div className="flex h-7 w-7 items-center justify-center rounded-full border border-dashed text-[10px] text-muted-foreground">
                   ?
@@ -211,7 +212,7 @@ function StatCard({
 }) {
   return (
     <div className="rounded-lg border px-4 py-3">
-      <div className="flex items-center justify-between mb-1.5">
+      <div className="mb-1.5 flex items-center justify-between">
         <span className="text-[11px] text-muted-foreground">{label}</span>
         <Icon className={cn("h-3.5 w-3.5", color)} />
       </div>

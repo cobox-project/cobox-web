@@ -17,6 +17,7 @@ import {
   Plus,
   Trash2,
   Shield,
+  User,
 } from "lucide-react";
 
 const tabs = [
@@ -54,9 +55,9 @@ export default function SettingsPage() {
 
   return (
     <div className="flex h-full">
-      {/* Settings nav (second column) */}
-      <div className="w-[200px] shrink-0 border-r bg-background px-3 py-4">
-        <h1 className="px-2.5 text-[15px] font-semibold mb-4">設定</h1>
+      {/* Layer 2: Settings nav (220px) */}
+      <div className="w-[220px] shrink-0 border-r bg-background px-3 py-4">
+        <h1 className="mb-4 px-2.5 text-[15px] font-semibold">設定</h1>
         <nav className="space-y-0.5">
           {tabs.map((tab) => {
             const Icon = tab.icon;
@@ -67,8 +68,8 @@ export default function SettingsPage() {
                 className={cn(
                   "flex w-full items-center gap-2.5 rounded-md px-2.5 py-[7px] text-[13px] font-medium transition-colors cursor-pointer",
                   activeTab === tab.id
-                    ? "bg-accent text-foreground"
-                    : "text-muted-foreground hover:bg-accent/60 hover:text-foreground"
+                    ? "bg-foreground text-background"
+                    : "text-muted-foreground hover:bg-accent hover:text-foreground"
                 )}
               >
                 <Icon className="h-[15px] w-[15px] shrink-0" />
@@ -79,7 +80,7 @@ export default function SettingsPage() {
         </nav>
       </div>
 
-      {/* Settings content (third column) */}
+      {/* Settings content */}
       <div className="flex-1 overflow-y-auto">
         <div className="mx-auto max-w-xl px-8 py-6">
           {activeTab === "accounts" && <AccountsSettings />}
@@ -95,14 +96,14 @@ export default function SettingsPage() {
 function AccountsSettings() {
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
+      <div className="mb-4 flex items-center justify-between">
         <div>
           <h2 className="text-[15px] font-semibold">アカウント接続</h2>
-          <p className="text-[12px] text-muted-foreground mt-0.5">
+          <p className="mt-0.5 text-[12px] text-muted-foreground">
             メッセージを受信するアカウントを管理
           </p>
         </div>
-        <Button size="sm" className="gap-1.5 text-[12px] h-7">
+        <Button size="sm" className="h-7 gap-1.5 text-[12px]">
           <Plus className="h-3 w-3" />
           追加
         </Button>
@@ -149,7 +150,7 @@ function AccountsSettings() {
       </div>
 
       <div className="mt-6">
-        <p className="text-[11px] font-medium text-muted-foreground mb-2">
+        <p className="mb-2 text-[11px] font-medium text-muted-foreground">
           追加可能
         </p>
         <div className="space-y-1.5">
@@ -178,7 +179,7 @@ function AccountsSettings() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="text-[11px] h-7"
+                  className="h-7 text-[11px]"
                 >
                   接続する
                 </Button>
@@ -194,14 +195,14 @@ function AccountsSettings() {
 function TeamSettings() {
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
+      <div className="mb-4 flex items-center justify-between">
         <div>
           <h2 className="text-[15px] font-semibold">チーム</h2>
-          <p className="text-[12px] text-muted-foreground mt-0.5">
+          <p className="mt-0.5 text-[12px] text-muted-foreground">
             チームメンバーと権限を管理
           </p>
         </div>
-        <Button size="sm" className="gap-1.5 text-[12px] h-7">
+        <Button size="sm" className="h-7 gap-1.5 text-[12px]">
           <Plus className="h-3 w-3" />
           招待
         </Button>
@@ -216,8 +217,8 @@ function TeamSettings() {
               i < teamMembers.length - 1 && "border-b"
             )}
           >
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary text-[11px] font-medium">
-              {member.name.charAt(0)}
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary">
+              <User className="h-4 w-4 text-muted-foreground" />
             </div>
             <div className="flex-1">
               <p className="text-[13px] font-medium">{member.name}</p>
@@ -244,7 +245,7 @@ function NotificationsSettings() {
   return (
     <div>
       <h2 className="text-[15px] font-semibold mb-1">通知</h2>
-      <p className="text-[12px] text-muted-foreground mb-4">
+      <p className="mb-4 text-[12px] text-muted-foreground">
         通知の受信方法を設定
       </p>
 
@@ -283,7 +284,7 @@ function GeneralSettings() {
   return (
     <div>
       <h2 className="text-[15px] font-semibold mb-1">全般</h2>
-      <p className="text-[12px] text-muted-foreground mb-4">
+      <p className="mb-4 text-[12px] text-muted-foreground">
         アプリケーション全般の設定
       </p>
 
@@ -318,13 +319,13 @@ function ToggleSwitch({ defaultOn = false }: { defaultOn?: boolean }) {
     <button
       onClick={() => setOn(!on)}
       className={cn(
-        "relative h-5 w-9 rounded-full transition-colors cursor-pointer",
+        "relative h-5 w-9 cursor-pointer rounded-full transition-colors",
         on ? "bg-foreground" : "bg-input"
       )}
     >
       <div
         className={cn(
-          "absolute top-0.5 h-4 w-4 rounded-full bg-background transition-transform shadow-sm",
+          "absolute top-0.5 h-4 w-4 rounded-full bg-background shadow-sm transition-transform",
           on ? "translate-x-4" : "translate-x-0.5"
         )}
       />

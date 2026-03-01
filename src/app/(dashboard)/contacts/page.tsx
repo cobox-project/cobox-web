@@ -53,10 +53,10 @@ export default function ContactsPage() {
 
   return (
     <div className="flex h-full">
-      {/* Contact list */}
-      <div className="flex h-full w-[300px] shrink-0 flex-col border-r bg-background">
-        <div className="shrink-0 px-4 pt-4 pb-2">
-          <h1 className="text-[15px] font-semibold mb-2">連絡先</h1>
+      {/* Layer 2: Contact list (220px) */}
+      <div className="flex h-full w-[220px] shrink-0 flex-col border-r bg-background">
+        <div className="shrink-0 px-3 pt-4 pb-2">
+          <h2 className="mb-2 px-2 text-[13px] font-semibold">顧客</h2>
           <div className="flex items-center gap-2 rounded-md border px-2.5 py-1.5">
             <Search className="h-3.5 w-3.5 text-muted-foreground" />
             <input
@@ -76,16 +76,13 @@ export default function ContactsPage() {
                 key={contact.id}
                 onClick={() => setSelectedId(contact.id)}
                 className={cn(
-                  "flex w-full items-center gap-3 border-b px-4 py-3 text-left transition-colors cursor-pointer",
+                  "flex w-full items-center gap-2.5 border-b px-4 py-3 text-left transition-colors cursor-pointer",
                   selectedId === contact.id
                     ? "bg-accent/70"
                     : "hover:bg-accent/40"
                 )}
               >
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-secondary text-[11px] font-medium">
-                  {contact.name.charAt(0)}
-                </div>
-                <div className="flex-1 min-w-0">
+                <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between">
                     <span className="truncate text-[13px] font-medium">
                       {contact.name}
@@ -129,8 +126,8 @@ export default function ContactsPage() {
       ) : (
         <div className="flex flex-1 items-center justify-center text-muted-foreground">
           <div className="text-center">
-            <Users className="mx-auto h-10 w-10 mb-3 opacity-20" />
-            <p className="text-[13px]">連絡先を選択してください</p>
+            <Users className="mx-auto mb-3 h-10 w-10 opacity-20" />
+            <p className="text-[13px]">顧客を選択してください</p>
           </div>
         </div>
       )}
@@ -147,22 +144,17 @@ function ContactDetail({ contact }: { contact: Contact }) {
     <div className="flex-1 overflow-y-auto">
       <div className="mx-auto max-w-xl px-8 py-8">
         {/* Profile */}
-        <div className="flex items-center gap-4 mb-6">
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-secondary text-lg font-medium">
-            {contact.name.charAt(0)}
-          </div>
-          <div>
-            <h2 className="text-[18px] font-semibold">{contact.name}</h2>
-            <p className="text-[12px] text-muted-foreground">
-              登録日: {contact.createdAt}
-            </p>
-          </div>
+        <div className="mb-6">
+          <h2 className="text-[18px] font-semibold">{contact.name}</h2>
+          <p className="mt-0.5 text-[12px] text-muted-foreground">
+            登録日: {contact.createdAt}
+          </p>
         </div>
 
         {/* Contact info */}
         <div className="space-y-4">
           <section>
-            <h3 className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground mb-2">
+            <h3 className="mb-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
               連絡先情報
             </h3>
             <div className="space-y-2">
@@ -183,7 +175,7 @@ function ContactDetail({ contact }: { contact: Contact }) {
 
           {/* Channels */}
           <section>
-            <h3 className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground mb-2">
+            <h3 className="mb-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
               チャネル
             </h3>
             <div className="space-y-1.5">
@@ -212,7 +204,7 @@ function ContactDetail({ contact }: { contact: Contact }) {
 
           {/* Conversation history */}
           <section>
-            <h3 className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground mb-2">
+            <h3 className="mb-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
               会話履歴
             </h3>
             {contactConversations.length === 0 ? (
@@ -237,7 +229,7 @@ function ContactDetail({ contact }: { contact: Contact }) {
                       >
                         <Icon className={cn("h-3 w-3", s.text)} />
                       </div>
-                      <div className="flex-1 min-w-0">
+                      <div className="min-w-0 flex-1">
                         <p className="truncate text-[12px] font-medium">
                           {conv.subject || conv.lastMessage}
                         </p>
@@ -271,14 +263,14 @@ function ContactDetail({ contact }: { contact: Contact }) {
 
           {/* Notes */}
           <section>
-            <h3 className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground mb-2">
+            <h3 className="mb-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
               メモ
             </h3>
             <textarea
               defaultValue={contact.note || ""}
-              placeholder="この連絡先についてのメモを追加..."
+              placeholder="この顧客についてのメモを追加..."
               rows={3}
-              className="w-full rounded-md border bg-background px-3 py-2 text-[13px] outline-none placeholder:text-muted-foreground/50 focus:border-foreground/20 resize-none"
+              className="w-full resize-none rounded-md border bg-background px-3 py-2 text-[13px] outline-none placeholder:text-muted-foreground/50 focus:border-foreground/20"
             />
           </section>
         </div>

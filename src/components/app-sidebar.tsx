@@ -6,14 +6,15 @@ import { cn } from "@/lib/utils";
 import { conversations } from "@/data/mock";
 import {
   Inbox,
-  BookUser,
+  Users,
   BarChart3,
   Settings,
+  User,
 } from "lucide-react";
 
 const navItems = [
   { href: "/messages", icon: Inbox, label: "メッセージ" },
-  { href: "/contacts", icon: BookUser, label: "連絡先" },
+  { href: "/contacts", icon: Users, label: "顧客" },
   { href: "/reports", icon: BarChart3, label: "レポート" },
   { href: "/settings", icon: Settings, label: "設定" },
 ];
@@ -23,15 +24,12 @@ export function AppSidebar() {
   const totalUnread = conversations.reduce((sum, c) => sum + c.unreadCount, 0);
 
   return (
-    <aside className="flex h-full w-[60px] shrink-0 flex-col items-center border-r bg-sidebar py-3">
+    <aside className="flex h-full w-[60px] shrink-0 flex-col items-center bg-[#111] py-3">
       {/* Logo */}
-      <div className="mb-4 flex flex-col items-center gap-0.5">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-foreground">
-          <span className="text-[10px] font-bold tracking-tight text-background">
-            Co
-          </span>
-        </div>
-        <span className="text-[8px] text-muted-foreground">v0.1</span>
+      <div className="mb-6 flex h-8 w-8 items-center justify-center rounded-lg bg-white">
+        <span className="text-[10px] font-bold tracking-tight text-[#111]">
+          Co
+        </span>
       </div>
 
       {/* Navigation */}
@@ -45,29 +43,33 @@ export function AppSidebar() {
             <Link
               key={item.href}
               href={item.href}
-              title={item.label}
               className={cn(
-                "relative flex h-10 w-10 items-center justify-center rounded-lg transition-colors",
+                "relative flex w-[52px] flex-col items-center gap-0.5 rounded-lg py-2 transition-colors",
                 isActive
-                  ? "bg-sidebar-accent text-foreground"
-                  : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground"
+                  ? "bg-white/15 text-white"
+                  : "text-white/50 hover:bg-white/10 hover:text-white/80"
               )}
             >
-              <Icon className="h-[18px] w-[18px]" />
-              {showBadge && (
-                <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-foreground px-1 text-[8px] font-bold text-background">
-                  {totalUnread}
-                </span>
-              )}
+              <div className="relative">
+                <Icon className="h-[18px] w-[18px]" />
+                {showBadge && (
+                  <span className="absolute -top-1.5 -right-2.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[8px] font-bold text-white">
+                    {totalUnread}
+                  </span>
+                )}
+              </div>
+              <span className="text-[9px] font-medium leading-tight">
+                {item.label}
+              </span>
             </Link>
           );
         })}
       </nav>
 
-      {/* User avatar */}
+      {/* User */}
       <div className="mt-auto">
-        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-foreground text-[9px] font-semibold text-background">
-          田
+        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/20">
+          <User className="h-4 w-4 text-white/70" />
         </div>
       </div>
     </aside>
