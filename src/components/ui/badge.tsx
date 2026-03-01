@@ -13,9 +13,9 @@ const badgeVariants = cva(
         line: "bg-channel-line/10 text-channel-line",
         email: "bg-channel-email/10 text-channel-email",
         facebook: "bg-channel-facebook/10 text-channel-facebook",
-        open: "bg-status-open/10 text-status-open",
-        pending: "bg-status-pending/10 text-status-pending",
-        resolved: "bg-status-resolved/10 text-status-resolved",
+        open: "bg-foreground/8 text-foreground/70",
+        pending: "bg-foreground/6 text-foreground/50",
+        resolved: "bg-foreground/5 text-foreground/40",
       },
     },
     defaultVariants: {

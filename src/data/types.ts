@@ -14,6 +14,13 @@ export interface TeamMember {
   avatar?: string;
 }
 
+export interface ContactGroup {
+  id: string;
+  name: string;
+  description?: string;
+  contactIds: string[];
+}
+
 export interface Contact {
   id: string;
   name: string;
@@ -25,6 +32,13 @@ export interface Contact {
   createdAt: string;
 }
 
+export interface EmailHeader {
+  subject: string;
+  to?: string;
+  cc?: string;
+  bcc?: string;
+}
+
 export interface Message {
   id: string;
   content: string;
@@ -32,6 +46,7 @@ export interface Message {
   isInbound: boolean;
   senderName: string;
   isInternal?: boolean;
+  emailHeader?: EmailHeader;
 }
 
 export interface Conversation {

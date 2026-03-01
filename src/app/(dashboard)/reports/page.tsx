@@ -3,6 +3,7 @@
 import { cn } from "@/lib/utils";
 import { conversations, accounts, teamMembers } from "@/data/mock";
 import type { Channel } from "@/data/types";
+import { Avatar } from "@/components/ui/avatar";
 import {
   Instagram,
   MessageCircle,
@@ -12,7 +13,6 @@ import {
   Clock,
   CheckCircle2,
   MessageSquare,
-  User,
 } from "lucide-react";
 
 const channelIcons: Record<Channel, React.ElementType> = {
@@ -58,19 +58,19 @@ export default function ReportsPage() {
             label="未対応"
             value={open}
             icon={TrendingUp}
-            color="text-status-open"
+            color="text-foreground/70"
           />
           <StatCard
             label="保留中"
             value={pending}
             icon={Clock}
-            color="text-status-pending"
+            color="text-foreground/55"
           />
           <StatCard
             label="完了"
             value={resolved}
             icon={CheckCircle2}
-            color="text-status-resolved"
+            color="text-foreground/40"
           />
         </div>
 
@@ -111,13 +111,13 @@ export default function ReportsPage() {
                       </p>
                     </div>
                   </div>
-                  <span className="text-center text-[13px] font-medium text-status-open">
+                  <span className="text-center text-[13px] font-medium text-foreground/70">
                     {convs.filter((c) => c.status === "open").length}
                   </span>
-                  <span className="text-center text-[13px] font-medium text-status-pending">
+                  <span className="text-center text-[13px] font-medium text-foreground/55">
                     {convs.filter((c) => c.status === "pending").length}
                   </span>
-                  <span className="text-center text-[13px] font-medium text-status-resolved">
+                  <span className="text-center text-[13px] font-medium text-foreground/40">
                     {convs.filter((c) => c.status === "resolved").length}
                   </span>
                 </div>
@@ -146,9 +146,12 @@ export default function ReportsPage() {
                   className="grid grid-cols-5 items-center gap-4 border-b px-4 py-2.5 last:border-0"
                 >
                   <div className="col-span-2 flex items-center gap-2.5">
-                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-secondary">
-                      <User className="h-3.5 w-3.5 text-muted-foreground" />
-                    </div>
+                    <Avatar
+                      src={member.avatar}
+                      fallback={member.name}
+                      size="sm"
+                      className="h-7 w-7"
+                    />
                     <span className="text-[13px] font-medium">
                       {member.name}
                     </span>
@@ -156,10 +159,10 @@ export default function ReportsPage() {
                   <span className="text-center text-[13px] font-medium">
                     {assigned.length}
                   </span>
-                  <span className="text-center text-[13px] font-medium text-status-open">
+                  <span className="text-center text-[13px] font-medium text-foreground/70">
                     {assigned.filter((c) => c.status === "open").length}
                   </span>
-                  <span className="text-center text-[13px] font-medium text-status-resolved">
+                  <span className="text-center text-[13px] font-medium text-foreground/40">
                     {assigned.filter((c) => c.status === "resolved").length}
                   </span>
                 </div>
@@ -177,14 +180,14 @@ export default function ReportsPage() {
               <span className="text-center text-[13px] font-medium">
                 {unassigned}
               </span>
-              <span className="text-center text-[13px] font-medium text-status-open">
+              <span className="text-center text-[13px] font-medium text-foreground/70">
                 {
                   conversations.filter(
                     (c) => !c.assignee && c.status === "open"
                   ).length
                 }
               </span>
-              <span className="text-center text-[13px] font-medium text-status-resolved">
+              <span className="text-center text-[13px] font-medium text-foreground/40">
                 {
                   conversations.filter(
                     (c) => !c.assignee && c.status === "resolved"

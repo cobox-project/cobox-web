@@ -7,12 +7,14 @@ import {
   conversations as allConversations,
   teamMembers,
   currentUser,
+  contacts,
 } from "@/data/mock";
-import type { Conversation, Message, Status, Channel } from "@/data/types";
+import type { Conversation, Message, Status, Channel, Contact } from "@/data/types";
 import { Dropdown, DropdownItem } from "@/components/ui/dropdown";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip } from "@/components/ui/tooltip";
+import { Avatar } from "@/components/ui/avatar";
 import {
   Instagram,
   MessageCircle,
@@ -27,9 +29,12 @@ import {
   CircleDot,
   MessageSquareText,
   ChevronDown,
+  ChevronRight,
   Search,
   User,
   Inbox,
+  SlidersHorizontal,
+  X,
 } from "lucide-react";
 
 const channelIcons: Record<Channel, React.ElementType> = {
@@ -37,13 +42,6 @@ const channelIcons: Record<Channel, React.ElementType> = {
   line: MessageCircle,
   email: Mail,
   facebook: Facebook,
-};
-
-const channelLabels: Record<Channel, string> = {
-  instagram: "Instagram",
-  line: "LINE",
-  email: "Email",
-  facebook: "Facebook",
 };
 
 const channelStyles: Record<Channel, { bg: string; text: string }> = {
@@ -64,6 +62,13 @@ const statusConfig: Record<
 
 type FolderFilter = "all" | "open" | "pending" | "resolved" | "mine" | string;
 
+function getContactHandle(conversation: Conversation): string | null {
+  const contact = contacts.find((c) => c.id === conversation.contactId);
+  if (!contact) return null;
+  const ch = contact.channels.find((c) => c.channel === conversation.channel);
+  return ch?.handle ?? null;
+}
+
 export default function MessagesPage() {
   const [conversations, setConversations] = useState(allConversations);
   const [selectedId, setSelectedId] = useState<string | null>(
@@ -71,6 +76,7 @@ export default function MessagesPage() {
   );
   const [folderFilter, setFolderFilter] = useState<FolderFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [detailContactId, setDetailContactId] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     let list = conversations;
@@ -156,6 +162,10 @@ export default function MessagesPage() {
     return map;
   }, [conversations]);
 
+  const detailContact = detailContactId
+    ? contacts.find((c) => c.id === detailContactId) ?? null
+    : null;
+
   return (
     <div className="flex h-full">
       {/* ── Layer 2: Folders / Accounts (220px) ── */}
@@ -182,7 +192,6 @@ export default function MessagesPage() {
               count={counts.open}
               isActive={folderFilter === "open"}
               onClick={() => setFolderFilter("open")}
-              iconColor="text-status-open"
             />
             <FolderItem
               icon={Clock}
@@ -190,7 +199,6 @@ export default function MessagesPage() {
               count={counts.pending}
               isActive={folderFilter === "pending"}
               onClick={() => setFolderFilter("pending")}
-              iconColor="text-status-pending"
             />
             <FolderItem
               icon={CheckCircle2}
@@ -198,7 +206,6 @@ export default function MessagesPage() {
               count={counts.resolved}
               isActive={folderFilter === "resolved"}
               onClick={() => setFolderFilter("resolved")}
-              iconColor="text-status-resolved"
             />
             <FolderItem
               icon={User}
@@ -246,6 +253,9 @@ export default function MessagesPage() {
               placeholder="スレッドを検索..."
               className="flex-1 bg-transparent text-[12px] outline-none placeholder:text-muted-foreground/50"
             />
+            <button className="cursor-pointer rounded p-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">
+              <SlidersHorizontal className="h-3.5 w-3.5" />
+            </button>
           </div>
         </div>
 
@@ -275,6 +285,7 @@ export default function MessagesPage() {
           conversation={selectedConversation}
           onStatusChange={handleStatusChange}
           onAssigneeChange={handleAssigneeChange}
+          onOpenContactDetail={(contactId) => setDetailContactId(contactId)}
         />
       ) : (
         <div className="flex flex-1 items-center justify-center text-muted-foreground">
@@ -283,6 +294,14 @@ export default function MessagesPage() {
             <p className="text-[13px]">スレッドを選択してください</p>
           </div>
         </div>
+      )}
+
+      {/* ── Layer 5: Contact detail slide panel ── */}
+      {detailContact && (
+        <ContactSlidePanel
+          contact={detailContact}
+          onClose={() => setDetailContactId(null)}
+        />
       )}
     </div>
   );
@@ -311,14 +330,14 @@ function FolderItem({
       className={cn(
         "flex w-full items-center gap-2.5 rounded-md px-2.5 py-[7px] text-[13px] font-medium transition-colors cursor-pointer",
         isActive
-          ? "bg-foreground text-background"
+          ? "bg-brand/10 text-brand"
           : "text-muted-foreground hover:bg-accent hover:text-foreground"
       )}
     >
       <Icon
         className={cn(
-          "h-4 w-4 shrink-0",
-          isActive ? "text-background" : iconColor
+          "h-[18px] w-[18px] shrink-0",
+          isActive ? "text-brand" : iconColor
         )}
       />
       <span className="flex-1 truncate text-left">{label}</span>
@@ -326,7 +345,7 @@ function FolderItem({
         <span
           className={cn(
             "text-[11px] tabular-nums",
-            isActive ? "text-background/70" : "text-muted-foreground/60"
+            isActive ? "text-brand/70" : "text-muted-foreground/60"
           )}
         >
           {count}
@@ -360,24 +379,25 @@ function ConversationItem({
 
   const Icon = channelIcons[channel];
   const style = channelStyles[channel];
+  const handle = getContactHandle(conversation);
 
   return (
     <button
       onClick={onSelect}
       className={cn(
         "flex w-full gap-3 border-b px-4 py-3 text-left transition-colors cursor-pointer",
-        isSelected ? "bg-accent/70" : "hover:bg-accent/40",
+        isSelected ? "bg-brand/8" : "hover:bg-accent/40",
         unreadCount > 0 && !isSelected && "bg-accent/25"
       )}
     >
       {/* Channel icon */}
       <div
         className={cn(
-          "flex h-8 w-8 shrink-0 items-center justify-center rounded-full mt-0.5",
+          "flex h-9 w-9 shrink-0 items-center justify-center rounded-full mt-0.5",
           style.bg
         )}
       >
-        <Icon className={cn("h-4 w-4", style.text)} />
+        <Icon className={cn("h-[18px] w-[18px]", style.text)} />
       </div>
 
       {/* Content */}
@@ -398,6 +418,13 @@ function ConversationItem({
           </span>
         </div>
 
+        {/* Channel handle (ID) instead of channel label text */}
+        {handle && (
+          <p className="mt-0.5 truncate text-[10px] text-muted-foreground/70">
+            {handle}
+          </p>
+        )}
+
         {subject && (
           <p className="mt-0.5 truncate text-[11px] font-medium text-foreground/70">
             {subject}
@@ -417,17 +444,18 @@ function ConversationItem({
             {statusConfig[status].label}
           </Badge>
           {assignee ? (
-            <span className="truncate text-[10px] text-muted-foreground">
+            <span className="flex items-center gap-1 truncate text-[10px] text-muted-foreground">
+              <Avatar
+                src={assignee.avatar}
+                fallback={assignee.name}
+                size="sm"
+                className="h-4 w-4 text-[6px]"
+              />
               {assignee.name}
             </span>
           ) : (
-            <span className="text-[10px] font-medium text-status-pending">
+            <span className="text-[10px] font-medium text-muted-foreground/60">
               未アサイン
-            </span>
-          )}
-          {unreadCount > 0 && (
-            <span className="ml-auto flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">
-              {unreadCount}
             </span>
           )}
         </div>
@@ -442,16 +470,19 @@ function ConversationDetail({
   conversation,
   onStatusChange,
   onAssigneeChange,
+  onOpenContactDetail,
 }: {
   conversation: Conversation;
   onStatusChange: (id: string, status: Status) => void;
   onAssigneeChange: (id: string, assigneeId: string | null) => void;
+  onOpenContactDetail: (contactId: string) => void;
 }) {
   const [replyText, setReplyText] = useState("");
-  const [isInternal, setIsInternal] = useState(false);
+  const [memoText, setMemoText] = useState("");
 
   const Icon = channelIcons[conversation.channel];
   const style = channelStyles[conversation.channel];
+  const handle = getContactHandle(conversation);
 
   return (
     <div className="flex h-full flex-1 flex-col bg-background">
@@ -468,22 +499,17 @@ function ConversationDetail({
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h3 className="truncate text-[14px] font-semibold">
-                {conversation.contactName}
-              </h3>
-              <span
-                className={cn(
-                  "rounded-full px-1.5 py-px text-[9px] font-medium",
-                  style.bg,
-                  style.text
-                )}
+              <button
+                onClick={() => onOpenContactDetail(conversation.contactId)}
+                className="cursor-pointer truncate text-[14px] font-semibold hover:text-brand transition-colors"
               >
-                {channelLabels[conversation.channel]}
-              </span>
+                {conversation.contactName}
+              </button>
             </div>
-            {conversation.subject && (
+            {/* Show handle/ID instead of channel label */}
+            {handle && (
               <p className="truncate text-[11px] text-muted-foreground">
-                {conversation.subject}
+                {handle}
               </p>
             )}
           </div>
@@ -529,19 +555,31 @@ function ConversationDetail({
             })}
           </Dropdown>
 
-          {/* Assignee dropdown */}
+          {/* Assignee dropdown - same outline style as status */}
           <Dropdown
             align="right"
             trigger={
               <Button
-                variant="ghost"
+                variant="outline"
                 size="sm"
                 className="h-7 gap-1.5 text-[11px]"
               >
-                <User className="h-3 w-3" />
-                {conversation.assignee
-                  ? conversation.assignee.name
-                  : "未アサイン"}
+                {conversation.assignee ? (
+                  <>
+                    <Avatar
+                      src={conversation.assignee.avatar}
+                      fallback={conversation.assignee.name}
+                      size="sm"
+                      className="h-4 w-4 text-[6px]"
+                    />
+                    {conversation.assignee.name}
+                  </>
+                ) : (
+                  <>
+                    <User className="h-3 w-3" />
+                    未アサイン
+                  </>
+                )}
                 <ChevronDown className="h-2.5 w-2.5 text-muted-foreground" />
               </Button>
             }
@@ -559,7 +597,12 @@ function ConversationDetail({
                 active={conversation.assignee?.id === m.id}
                 onClick={() => onAssigneeChange(conversation.id, m.id)}
               >
-                <User className="h-3.5 w-3.5" />
+                <Avatar
+                  src={m.avatar}
+                  fallback={m.name}
+                  size="sm"
+                  className="h-4 w-4 text-[6px]"
+                />
                 {m.name}
               </DropdownItem>
             ))}
@@ -574,7 +617,9 @@ function ConversationDetail({
               </Button>
             }
           >
-            <DropdownItem>連絡先を表示</DropdownItem>
+            <DropdownItem onClick={() => onOpenContactDetail(conversation.contactId)}>
+              連絡先を表示
+            </DropdownItem>
             <DropdownItem>会話をアーカイブ</DropdownItem>
           </Dropdown>
         </div>
@@ -584,56 +629,24 @@ function ConversationDetail({
       <div className="flex-1 overflow-y-auto px-5 py-5">
         <div className="mx-auto max-w-2xl space-y-4">
           {conversation.messages.map((message) => (
-            <MessageBubble key={message.id} message={message} />
+            <MessageBubble
+              key={message.id}
+              message={message}
+              channel={conversation.channel}
+            />
           ))}
         </div>
       </div>
 
-      {/* Reply */}
+      {/* Reply area (top) + Internal memo area (bottom) - Trengo/Front style */}
       <div className="border-t px-5 py-3">
-        <div className="mx-auto max-w-2xl">
-          <div className="mb-2 flex items-center gap-1.5">
-            <button
-              onClick={() => setIsInternal(false)}
-              className={cn(
-                "cursor-pointer rounded-md px-2 py-0.5 text-[11px] font-medium transition-colors",
-                !isInternal
-                  ? "bg-foreground text-background"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              返信
-            </button>
-            <button
-              onClick={() => setIsInternal(true)}
-              className={cn(
-                "flex cursor-pointer items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium transition-colors",
-                isInternal
-                  ? "bg-amber-500/10 text-amber-600"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              <MessageSquareText className="h-3 w-3" />
-              社内メモ
-            </button>
-          </div>
-
-          <div
-            className={cn(
-              "flex items-end gap-2 rounded-lg border px-3 py-2 transition-colors",
-              isInternal
-                ? "border-amber-300/50 bg-amber-50/40"
-                : "bg-background focus-within:border-foreground/20"
-            )}
-          >
+        <div className="mx-auto max-w-2xl space-y-2">
+          {/* Reply input */}
+          <div className="flex items-end gap-2 rounded-lg border px-3 py-2 bg-background focus-within:border-brand/30">
             <textarea
               value={replyText}
               onChange={(e) => setReplyText(e.target.value)}
-              placeholder={
-                isInternal
-                  ? "チームへのメモを入力..."
-                  : "メッセージを入力..."
-              }
+              placeholder="メッセージを入力..."
               rows={1}
               className="flex-1 resize-none bg-transparent py-1 text-[13px] leading-relaxed outline-none placeholder:text-muted-foreground/50"
               onInput={(e) => {
@@ -654,15 +667,39 @@ function ConversationDetail({
               </Tooltip>
               <Button
                 size="icon-sm"
-                className={cn(
-                  "rounded-md",
-                  isInternal && "bg-amber-500 hover:bg-amber-600"
-                )}
+                className="rounded-md bg-brand hover:bg-brand/90"
                 disabled={!replyText.trim()}
               >
                 <Send className="h-3.5 w-3.5" />
               </Button>
             </div>
+          </div>
+
+          {/* Internal memo input */}
+          <div className="flex items-end gap-2 rounded-lg border border-amber-200/50 bg-amber-50/30 px-3 py-2">
+            <div className="flex items-center gap-1 py-1 shrink-0">
+              <MessageSquareText className="h-3 w-3 text-amber-500" />
+              <span className="text-[10px] font-medium text-amber-600">メモ</span>
+            </div>
+            <textarea
+              value={memoText}
+              onChange={(e) => setMemoText(e.target.value)}
+              placeholder="社内メモを入力..."
+              rows={1}
+              className="flex-1 resize-none bg-transparent py-1 text-[12px] leading-relaxed outline-none placeholder:text-amber-400/60"
+              onInput={(e) => {
+                const el = e.currentTarget;
+                el.style.height = "auto";
+                el.style.height = Math.min(el.scrollHeight, 80) + "px";
+              }}
+            />
+            <Button
+              size="icon-sm"
+              className="rounded-md bg-amber-500 hover:bg-amber-600 mb-0.5"
+              disabled={!memoText.trim()}
+            >
+              <Send className="h-3 w-3" />
+            </Button>
           </div>
         </div>
       </div>
@@ -672,8 +709,15 @@ function ConversationDetail({
 
 /* ─── Message Bubble ─────────────────────────────────── */
 
-function MessageBubble({ message }: { message: Message }) {
-  const { content, timestamp, isInbound, senderName, isInternal } = message;
+function MessageBubble({
+  message,
+  channel,
+}: {
+  message: Message;
+  channel: Channel;
+}) {
+  const { content, timestamp, isInbound, senderName, isInternal, emailHeader } = message;
+  const [headerExpanded, setHeaderExpanded] = useState(false);
 
   if (isInternal) {
     return (
@@ -720,12 +764,45 @@ function MessageBubble({ message }: { message: Message }) {
             {timestamp}
           </span>
         </div>
+
+        {/* Email header (collapsible) */}
+        {channel === "email" && emailHeader && (
+          <div className="mb-1">
+            <button
+              onClick={() => setHeaderExpanded(!headerExpanded)}
+              className="flex cursor-pointer items-center gap-1 text-[10px] text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+            >
+              <ChevronRight className={cn("h-3 w-3 transition-transform", headerExpanded && "rotate-90")} />
+              <span className="font-medium">{emailHeader.subject}</span>
+            </button>
+            {headerExpanded && (
+              <div className="ml-4 mt-1 space-y-0.5 text-[10px] text-muted-foreground/60">
+                {emailHeader.to && (
+                  <p>
+                    <span className="font-medium">To:</span> {emailHeader.to}
+                  </p>
+                )}
+                {emailHeader.cc && (
+                  <p>
+                    <span className="font-medium">CC:</span> {emailHeader.cc}
+                  </p>
+                )}
+                {emailHeader.bcc && (
+                  <p>
+                    <span className="font-medium">BCC:</span> {emailHeader.bcc}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         <div
           className={cn(
             "rounded-2xl px-3.5 py-2 text-[13px] leading-relaxed",
             isInbound
               ? "rounded-tl-sm bg-secondary text-secondary-foreground"
-              : "rounded-tr-sm bg-foreground text-background"
+              : "rounded-tr-sm bg-brand text-brand-foreground"
           )}
         >
           {content.split("\n").map((line, i) => (
@@ -734,6 +811,130 @@ function MessageBubble({ message }: { message: Message }) {
               {i < content.split("\n").length - 1 && <br />}
             </span>
           ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Contact Slide Panel (Layer 5) ──────────────────── */
+
+function ContactSlidePanel({
+  contact,
+  onClose,
+}: {
+  contact: Contact;
+  onClose: () => void;
+}) {
+  const contactConversations = allConversations.filter((c) =>
+    contact.conversationIds.includes(c.id)
+  );
+
+  return (
+    <div className="flex h-full w-[360px] shrink-0 flex-col border-l bg-background animate-slide-in-right">
+      {/* Header */}
+      <div className="flex items-center justify-between border-b px-4 py-3">
+        <h3 className="text-[14px] font-semibold">連絡先詳細</h3>
+        <button
+          onClick={onClose}
+          className="cursor-pointer rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-4 py-4">
+        {/* Profile */}
+        <div className="mb-5 flex items-center gap-3">
+          <Avatar fallback={contact.name} size="lg" />
+          <div>
+            <p className="text-[15px] font-semibold">{contact.name}</p>
+            {contact.email && (
+              <p className="text-[11px] text-muted-foreground">
+                {contact.email}
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* Basic info */}
+        <div className="space-y-4">
+          <section>
+            <h4 className="mb-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+              基本情報
+            </h4>
+            <div className="space-y-1.5 text-[12px]">
+              {contact.email && (
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">メール</span>
+                  <span>{contact.email}</span>
+                </div>
+              )}
+              {contact.phone && (
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">電話番号</span>
+                  <span>{contact.phone}</span>
+                </div>
+              )}
+              {contact.channels.map((ch) => (
+                <div key={ch.channel} className="flex items-center justify-between">
+                  <span className="text-muted-foreground capitalize">{ch.channel}</span>
+                  <span>{ch.handle}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {/* Conversation history */}
+          <section>
+            <h4 className="mb-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+              過去の会話
+            </h4>
+            <div className="space-y-1.5">
+              {contactConversations.map((conv) => {
+                const CIcon = channelIcons[conv.channel];
+                const s = channelStyles[conv.channel];
+                return (
+                  <div
+                    key={conv.id}
+                    className="flex items-center gap-2.5 rounded-md border px-3 py-2"
+                  >
+                    <div
+                      className={cn(
+                        "flex h-6 w-6 shrink-0 items-center justify-center rounded-full",
+                        s.bg
+                      )}
+                    >
+                      <CIcon className={cn("h-3 w-3", s.text)} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[11px] font-medium">
+                        {conv.subject || conv.lastMessage}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground">
+                        {conv.lastMessageAt}
+                      </p>
+                    </div>
+                    <Badge variant={conv.status} className="text-[9px] px-1.5 py-0">
+                      {statusConfig[conv.status].label}
+                    </Badge>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+
+          {/* Notes */}
+          {contact.note && (
+            <section>
+              <h4 className="mb-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                メモ
+              </h4>
+              <p className="text-[12px] text-muted-foreground leading-relaxed">
+                {contact.note}
+              </p>
+            </section>
+          )}
         </div>
       </div>
     </div>

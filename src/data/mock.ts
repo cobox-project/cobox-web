@@ -1,11 +1,23 @@
-import type { Account, Contact, Conversation, TeamMember } from "./types";
+import type { Account, Contact, ContactGroup, Conversation, TeamMember } from "./types";
 
-export const currentUser: TeamMember = { id: "u1", name: "田中 美咲" };
+export const currentUser: TeamMember = {
+  id: "u1",
+  name: "田中 美咲",
+  avatar: "https://api.dicebear.com/9.x/notionists/svg?seed=Misaki&backgroundColor=e8f5e9",
+};
 
 export const teamMembers: TeamMember[] = [
   currentUser,
-  { id: "u2", name: "佐藤 健太" },
-  { id: "u3", name: "鈴木 花" },
+  {
+    id: "u2",
+    name: "佐藤 健太",
+    avatar: "https://api.dicebear.com/9.x/notionists/svg?seed=Kenta&backgroundColor=e8f5e9",
+  },
+  {
+    id: "u3",
+    name: "鈴木 花",
+    avatar: "https://api.dicebear.com/9.x/notionists/svg?seed=Hana&backgroundColor=e8f5e9",
+  },
 ];
 
 export const accounts: Account[] = [
@@ -26,6 +38,33 @@ export const accounts: Account[] = [
     channel: "instagram",
     name: "@myshop.style",
     description: "ショップ公式",
+  },
+];
+
+export const contactGroups: ContactGroup[] = [
+  {
+    id: "grp-all",
+    name: "すべてのグループ",
+    description: "全顧客を表示",
+    contactIds: ["ct1", "ct2", "ct3", "ct4", "ct5", "ct6", "ct7", "ct8", "ct9", "ct10"],
+  },
+  {
+    id: "grp-vip",
+    name: "VIP顧客",
+    description: "重要顧客",
+    contactIds: ["ct3", "ct5", "ct7"],
+  },
+  {
+    id: "grp-conf",
+    name: "今年のカンファレンス協賛企業",
+    description: "2025年カンファレンス関連",
+    contactIds: ["ct1", "ct9"],
+  },
+  {
+    id: "grp-lead",
+    name: "リード",
+    description: "見込み顧客",
+    contactIds: ["ct2", "ct4", "ct8"],
   },
 ];
 
@@ -136,6 +175,11 @@ export const conversations: Conversation[] = [
         timestamp: "今日 12:30",
         isInbound: true,
         senderName: "鈴木 一郎",
+        emailHeader: {
+          subject: "請求書の再発行について",
+          to: "info@myshop.jp",
+          cc: "keiri@suzuki-shoji.co.jp",
+        },
       },
       {
         id: "m2",
@@ -167,6 +211,10 @@ export const conversations: Conversation[] = [
         timestamp: "昨日 11:30",
         isInbound: true,
         senderName: "渡辺 大輔",
+        emailHeader: {
+          subject: "コラボレーション提案",
+          to: "info@myshop.jp",
+        },
       },
     ],
   },
@@ -191,6 +239,10 @@ export const conversations: Conversation[] = [
         timestamp: "昨日 15:20",
         isInbound: true,
         senderName: "松本 真一",
+        emailHeader: {
+          subject: "サービス解約の手続き",
+          to: "info@myshop.jp",
+        },
       },
       {
         id: "m5",
@@ -199,6 +251,10 @@ export const conversations: Conversation[] = [
         timestamp: "昨日 16:00",
         isInbound: false,
         senderName: "佐藤 健太",
+        emailHeader: {
+          subject: "Re: サービス解約の手続き",
+          to: "s.matsumoto@example.com",
+        },
       },
       {
         id: "m6",
@@ -207,6 +263,10 @@ export const conversations: Conversation[] = [
         timestamp: "昨日 17:30",
         isInbound: true,
         senderName: "松本 真一",
+        emailHeader: {
+          subject: "Re: サービス解約の手続き",
+          to: "info@myshop.jp",
+        },
       },
     ],
   },
@@ -230,6 +290,10 @@ export const conversations: Conversation[] = [
         timestamp: "3日前 10:00",
         isInbound: true,
         senderName: "中村 健二",
+        emailHeader: {
+          subject: "サービス資料のご送付",
+          to: "info@myshop.jp",
+        },
       },
       {
         id: "m8",
@@ -238,6 +302,10 @@ export const conversations: Conversation[] = [
         timestamp: "3日前 10:30",
         isInbound: false,
         senderName: "田中 美咲",
+        emailHeader: {
+          subject: "Re: サービス資料のご送付",
+          to: "kenji.n@example.com",
+        },
       },
       {
         id: "m9",
@@ -246,6 +314,10 @@ export const conversations: Conversation[] = [
         timestamp: "3日前 11:00",
         isInbound: true,
         senderName: "中村 健二",
+        emailHeader: {
+          subject: "Re: サービス資料のご送付",
+          to: "info@myshop.jp",
+        },
       },
     ],
   },

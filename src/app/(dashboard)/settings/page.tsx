@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { accounts, teamMembers } from "@/data/mock";
 import type { Channel } from "@/data/types";
 import { Button } from "@/components/ui/button";
+import { Avatar } from "@/components/ui/avatar";
 import {
   Instagram,
   MessageCircle,
@@ -17,7 +18,6 @@ import {
   Plus,
   Trash2,
   Shield,
-  User,
 } from "lucide-react";
 
 const tabs = [
@@ -68,11 +68,11 @@ export default function SettingsPage() {
                 className={cn(
                   "flex w-full items-center gap-2.5 rounded-md px-2.5 py-[7px] text-[13px] font-medium transition-colors cursor-pointer",
                   activeTab === tab.id
-                    ? "bg-foreground text-background"
+                    ? "bg-brand/10 text-brand"
                     : "text-muted-foreground hover:bg-accent hover:text-foreground"
                 )}
               >
-                <Icon className="h-[15px] w-[15px] shrink-0" />
+                <Icon className={cn("h-[15px] w-[15px] shrink-0", activeTab === tab.id && "text-brand")} />
                 {tab.label}
               </button>
             );
@@ -103,7 +103,7 @@ function AccountsSettings() {
             メッセージを受信するアカウントを管理
           </p>
         </div>
-        <Button size="sm" className="h-7 gap-1.5 text-[12px]">
+        <Button size="sm" className="h-7 gap-1.5 text-[12px] bg-brand hover:bg-brand/90">
           <Plus className="h-3 w-3" />
           追加
         </Button>
@@ -133,7 +133,7 @@ function AccountsSettings() {
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                <span className="rounded-full bg-status-resolved/10 px-2 py-0.5 text-[10px] font-medium text-status-resolved">
+                <span className="rounded-full bg-brand/10 px-2 py-0.5 text-[10px] font-medium text-brand">
                   接続中
                 </span>
                 <Button
@@ -202,7 +202,7 @@ function TeamSettings() {
             チームメンバーと権限を管理
           </p>
         </div>
-        <Button size="sm" className="h-7 gap-1.5 text-[12px]">
+        <Button size="sm" className="h-7 gap-1.5 text-[12px] bg-brand hover:bg-brand/90">
           <Plus className="h-3 w-3" />
           招待
         </Button>
@@ -217,15 +217,18 @@ function TeamSettings() {
               i < teamMembers.length - 1 && "border-b"
             )}
           >
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary">
-              <User className="h-4 w-4 text-muted-foreground" />
-            </div>
+            <Avatar
+              src={member.avatar}
+              fallback={member.name}
+              size="sm"
+              className="h-8 w-8"
+            />
             <div className="flex-1">
               <p className="text-[13px] font-medium">{member.name}</p>
             </div>
             <div className="flex items-center gap-2">
               {member.id === "u1" && (
-                <span className="flex items-center gap-1 rounded-full bg-foreground/5 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                <span className="flex items-center gap-1 rounded-full bg-brand/10 px-2 py-0.5 text-[10px] font-medium text-brand">
                   <Shield className="h-2.5 w-2.5" />
                   管理者
                 </span>
@@ -295,7 +298,7 @@ function GeneralSettings() {
           </label>
           <input
             defaultValue="My Shop"
-            className="mt-1 w-full rounded-md border px-3 py-2 text-[13px] outline-none focus:border-foreground/20"
+            className="mt-1 w-full rounded-md border px-3 py-2 text-[13px] outline-none focus:border-brand/30"
           />
         </div>
         <div>
@@ -320,7 +323,7 @@ function ToggleSwitch({ defaultOn = false }: { defaultOn?: boolean }) {
       onClick={() => setOn(!on)}
       className={cn(
         "relative h-5 w-9 cursor-pointer rounded-full transition-colors",
-        on ? "bg-foreground" : "bg-input"
+        on ? "bg-brand" : "bg-input"
       )}
     >
       <div
