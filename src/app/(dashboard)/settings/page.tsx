@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { accounts, teamMembers } from "@/data/mock";
+import { accounts, teamMembers, currentUser } from "@/data/mock";
 import type { Channel } from "@/data/types";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
@@ -13,18 +13,18 @@ import {
   Facebook,
   Link2,
   Users,
-  Bell,
-  Sliders,
+  User,
   Plus,
   Trash2,
   Shield,
+  Pencil,
+  Camera,
 } from "lucide-react";
 
 const tabs = [
+  { id: "profile", label: "プロフィール", icon: User },
   { id: "accounts", label: "アカウント接続", icon: Link2 },
   { id: "team", label: "チーム", icon: Users },
-  { id: "notifications", label: "通知", icon: Bell },
-  { id: "general", label: "全般", icon: Sliders },
 ] as const;
 
 type TabId = (typeof tabs)[number]["id"];
@@ -51,43 +51,134 @@ const channelStyles: Record<Channel, { bg: string; text: string }> = {
 };
 
 export default function SettingsPage() {
-  const [activeTab, setActiveTab] = useState<TabId>("accounts");
+  const [activeTab, setActiveTab] = useState<TabId>("profile");
 
   return (
     <div className="flex h-full">
       {/* Layer 2: Settings nav (220px) */}
       <div className="w-[220px] shrink-0 border-r bg-background px-3 py-4">
         <h1 className="mb-4 px-2.5 text-[15px] font-semibold">設定</h1>
-        <nav className="space-y-0.5">
-          {tabs.map((tab) => {
-            const Icon = tab.icon;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={cn(
-                  "flex w-full items-center gap-2.5 rounded-md px-2.5 py-[7px] text-[13px] font-medium transition-colors cursor-pointer",
-                  activeTab === tab.id
-                    ? "bg-brand/10 text-brand"
-                    : "text-muted-foreground hover:bg-accent hover:text-foreground"
-                )}
-              >
-                <Icon className={cn("h-[15px] w-[15px] shrink-0", activeTab === tab.id && "text-brand")} />
-                {tab.label}
-              </button>
-            );
-          })}
-        </nav>
+
+        <div className="mb-3">
+          <p className="mb-1 px-2.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+            個人
+          </p>
+          <nav className="space-y-0.5">
+            {tabs.filter((t) => t.id === "profile").map((tab) => {
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={cn(
+                    "flex w-full items-center gap-2.5 rounded-md px-2.5 py-[7px] text-[13px] font-medium transition-colors cursor-pointer",
+                    activeTab === tab.id
+                      ? "bg-accent text-foreground"
+                      : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                  )}
+                >
+                  <Icon className="h-[15px] w-[15px] shrink-0" />
+                  {tab.label}
+                </button>
+              );
+            })}
+          </nav>
+        </div>
+
+        <div>
+          <p className="mb-1 px-2.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+            チーム
+          </p>
+          <nav className="space-y-0.5">
+            {tabs.filter((t) => t.id !== "profile").map((tab) => {
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={cn(
+                    "flex w-full items-center gap-2.5 rounded-md px-2.5 py-[7px] text-[13px] font-medium transition-colors cursor-pointer",
+                    activeTab === tab.id
+                      ? "bg-accent text-foreground"
+                      : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                  )}
+                >
+                  <Icon className="h-[15px] w-[15px] shrink-0" />
+                  {tab.label}
+                </button>
+              );
+            })}
+          </nav>
+        </div>
       </div>
 
       {/* Settings content */}
       <div className="flex-1 overflow-y-auto">
         <div className="mx-auto max-w-xl px-8 py-6">
+          {activeTab === "profile" && <ProfileSettings />}
           {activeTab === "accounts" && <AccountsSettings />}
           {activeTab === "team" && <TeamSettings />}
-          {activeTab === "notifications" && <NotificationsSettings />}
-          {activeTab === "general" && <GeneralSettings />}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function ProfileSettings() {
+  return (
+    <div>
+      <h2 className="text-[15px] font-semibold mb-1">プロフィール</h2>
+      <p className="mb-5 text-[12px] text-muted-foreground">
+        個人情報を管理
+      </p>
+
+      {/* Avatar */}
+      <div className="mb-6 flex items-center gap-4">
+        <div className="relative">
+          <Avatar
+            src={currentUser.avatar}
+            fallback={currentUser.name}
+            size="lg"
+            className="h-16 w-16"
+          />
+          <button className="absolute -right-1 -bottom-1 flex h-6 w-6 cursor-pointer items-center justify-center rounded-full bg-brand text-white shadow-sm">
+            <Camera className="h-3 w-3" />
+          </button>
+        </div>
+        <div>
+          <p className="text-[14px] font-semibold">{currentUser.name}</p>
+          <p className="text-[12px] text-muted-foreground">管理者</p>
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        <div>
+          <label className="mb-1 block text-[12px] font-medium text-muted-foreground">名前</label>
+          <input
+            defaultValue={currentUser.name}
+            className="w-full rounded-md border px-3 py-2 text-[13px] outline-none focus:border-brand/40"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-[12px] font-medium text-muted-foreground">メールアドレス</label>
+          <input
+            defaultValue="misaki.tanaka@myshop.jp"
+            className="w-full rounded-md border px-3 py-2 text-[13px] outline-none focus:border-brand/40"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-[12px] font-medium text-muted-foreground">表示名</label>
+          <input
+            defaultValue="美咲"
+            className="w-full rounded-md border px-3 py-2 text-[13px] outline-none focus:border-brand/40"
+          />
+        </div>
+      </div>
+
+      <div className="mt-6">
+        <Button className="bg-brand hover:bg-brand/90 text-[13px]">
+          保存
+        </Button>
       </div>
     </div>
   );
@@ -129,7 +220,7 @@ function AccountsSettings() {
               <div className="flex-1">
                 <p className="text-[13px] font-medium">{account.name}</p>
                 <p className="text-[11px] text-muted-foreground">
-                  {channelLabels[account.channel]} ・ {account.description}
+                  {channelLabels[account.channel]} · {account.description}
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -193,15 +284,34 @@ function AccountsSettings() {
 }
 
 function TeamSettings() {
+  const [teamName, setTeamName] = useState("My Shop");
+  const [editingMember, setEditingMember] = useState<string | null>(null);
+
   return (
     <div>
-      <div className="mb-4 flex items-center justify-between">
-        <div>
-          <h2 className="text-[15px] font-semibold">チーム</h2>
-          <p className="mt-0.5 text-[12px] text-muted-foreground">
-            チームメンバーと権限を管理
-          </p>
+      <h2 className="text-[15px] font-semibold mb-1">チーム設定</h2>
+      <p className="mb-5 text-[12px] text-muted-foreground">
+        チーム名とメンバーを管理
+      </p>
+
+      {/* Team name */}
+      <div className="mb-6">
+        <label className="mb-1 block text-[12px] font-medium text-muted-foreground">チーム名</label>
+        <div className="flex gap-2">
+          <input
+            value={teamName}
+            onChange={(e) => setTeamName(e.target.value)}
+            className="flex-1 rounded-md border px-3 py-2 text-[13px] outline-none focus:border-brand/40"
+          />
+          <Button className="bg-brand hover:bg-brand/90 text-[12px] h-9">
+            保存
+          </Button>
         </div>
+      </div>
+
+      {/* Members */}
+      <div className="mb-4 flex items-center justify-between">
+        <h3 className="text-[13px] font-semibold">メンバー</h3>
         <Button size="sm" className="h-7 gap-1.5 text-[12px] bg-brand hover:bg-brand/90">
           <Plus className="h-3 w-3" />
           招待
@@ -236,102 +346,16 @@ function TeamSettings() {
               <span className="rounded-full bg-accent px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
                 メンバー
               </span>
+              <button
+                onClick={() => setEditingMember(member.id === editingMember ? null : member.id)}
+                className="cursor-pointer rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+              >
+                <Pencil className="h-3 w-3" />
+              </button>
             </div>
           </div>
         ))}
       </div>
     </div>
-  );
-}
-
-function NotificationsSettings() {
-  return (
-    <div>
-      <h2 className="text-[15px] font-semibold mb-1">通知</h2>
-      <p className="mb-4 text-[12px] text-muted-foreground">
-        通知の受信方法を設定
-      </p>
-
-      <div className="space-y-3">
-        {[
-          {
-            title: "新着メッセージ",
-            desc: "新しいメッセージを受信したとき",
-          },
-          {
-            title: "アサイン通知",
-            desc: "会話が自分にアサインされたとき",
-          },
-          {
-            title: "社内メモ",
-            desc: "担当会話に社内メモが追加されたとき",
-          },
-        ].map((item) => (
-          <div
-            key={item.title}
-            className="flex items-center justify-between rounded-lg border px-4 py-3"
-          >
-            <div>
-              <p className="text-[13px] font-medium">{item.title}</p>
-              <p className="text-[11px] text-muted-foreground">{item.desc}</p>
-            </div>
-            <ToggleSwitch defaultOn />
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function GeneralSettings() {
-  return (
-    <div>
-      <h2 className="text-[15px] font-semibold mb-1">全般</h2>
-      <p className="mb-4 text-[12px] text-muted-foreground">
-        アプリケーション全般の設定
-      </p>
-
-      <div className="space-y-4">
-        <div>
-          <label className="text-[12px] font-medium text-muted-foreground">
-            ワークスペース名
-          </label>
-          <input
-            defaultValue="My Shop"
-            className="mt-1 w-full rounded-md border px-3 py-2 text-[13px] outline-none focus:border-brand/30"
-          />
-        </div>
-        <div>
-          <label className="text-[12px] font-medium text-muted-foreground">
-            タイムゾーン
-          </label>
-          <input
-            defaultValue="Asia/Tokyo (UTC+9)"
-            disabled
-            className="mt-1 w-full rounded-md border bg-accent/30 px-3 py-2 text-[13px] text-muted-foreground"
-          />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ToggleSwitch({ defaultOn = false }: { defaultOn?: boolean }) {
-  const [on, setOn] = useState(defaultOn);
-  return (
-    <button
-      onClick={() => setOn(!on)}
-      className={cn(
-        "relative h-5 w-9 cursor-pointer rounded-full transition-colors",
-        on ? "bg-brand" : "bg-input"
-      )}
-    >
-      <div
-        className={cn(
-          "absolute top-0.5 h-4 w-4 rounded-full bg-background shadow-sm transition-transform",
-          on ? "translate-x-4" : "translate-x-0.5"
-        )}
-      />
-    </button>
   );
 }

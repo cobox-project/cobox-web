@@ -13,6 +13,8 @@ import {
   Clock,
   CheckCircle2,
   MessageSquare,
+  BarChart3,
+  Percent,
 } from "lucide-react";
 
 const channelIcons: Record<Channel, React.ElementType> = {
@@ -29,54 +31,139 @@ const channelStyles: Record<Channel, { bg: string; text: string }> = {
   facebook: { bg: "bg-channel-facebook/10", text: "text-channel-facebook" },
 };
 
+const channelLabels: Record<Channel, string> = {
+  instagram: "Instagram",
+  line: "LINE",
+  email: "Email",
+  facebook: "Facebook",
+};
+
 export default function ReportsPage() {
   const total = conversations.length;
   const open = conversations.filter((c) => c.status === "open").length;
   const pending = conversations.filter((c) => c.status === "pending").length;
   const resolved = conversations.filter((c) => c.status === "resolved").length;
   const unassigned = conversations.filter((c) => !c.assignee).length;
+  const replyRate = Math.round(
+    (conversations.filter((c) => c.messages.some((m) => !m.isInbound)).length /
+      total) *
+      100
+  );
+  const completionRate = Math.round((resolved / total) * 100);
+
+  // Hourly distribution mock
+  const hourlyData = [0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 3, 2, 3, 4, 5, 3, 2, 3, 2, 1, 1, 0, 0, 0];
+  const maxHourly = Math.max(...hourlyData);
+
+  // By account
+  const accountData = accounts.map((acc) => ({
+    account: acc,
+    count: conversations.filter((c) => c.accountId === acc.id).length,
+  }));
+  const maxAccountCount = Math.max(...accountData.map((a) => a.count));
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-3xl px-8 py-8">
+      <div className="mx-auto max-w-4xl px-8 py-8">
         <div className="mb-6">
-          <h1 className="text-[18px] font-semibold">レポート</h1>
+          <h1 className="text-[18px] font-semibold">ダッシュボード</h1>
           <p className="mt-1 text-[13px] text-muted-foreground">
-            対応状況の概要
+            対応状況の概要とパフォーマンス
           </p>
         </div>
 
         {/* Summary cards */}
-        <div className="mb-8 grid grid-cols-4 gap-3">
+        <div className="mb-6 grid grid-cols-6 gap-3">
           <StatCard
             label="全会話"
-            value={total}
+            value={String(total)}
             icon={MessageSquare}
             color="text-foreground"
           />
           <StatCard
             label="未対応"
-            value={open}
+            value={String(open)}
             icon={TrendingUp}
             color="text-foreground/70"
           />
           <StatCard
             label="保留中"
-            value={pending}
+            value={String(pending)}
             icon={Clock}
             color="text-foreground/55"
           />
           <StatCard
             label="完了"
-            value={resolved}
+            value={String(resolved)}
             icon={CheckCircle2}
             color="text-foreground/40"
           />
+          <StatCard
+            label="返信率"
+            value={`${replyRate}%`}
+            icon={Percent}
+            color="text-brand"
+          />
+          <StatCard
+            label="完了率"
+            value={`${completionRate}%`}
+            icon={BarChart3}
+            color="text-brand"
+          />
         </div>
 
-        {/* By channel */}
-        <section className="mb-8">
-          <h2 className="mb-3 text-[13px] font-semibold">アカウント別</h2>
+        <div className="mb-6 grid grid-cols-2 gap-4">
+          {/* Hourly inquiries chart */}
+          <section className="rounded-lg border p-4">
+            <h2 className="mb-4 text-[13px] font-semibold">時間別問い合わせ数</h2>
+            <div className="flex items-end gap-[3px] h-24">
+              {hourlyData.map((val, i) => (
+                <div key={i} className="flex-1 flex flex-col items-center gap-0.5">
+                  <div
+                    className="w-full rounded-t bg-brand/60 transition-all"
+                    style={{
+                      height: maxHourly > 0 ? `${(val / maxHourly) * 80}px` : "0px",
+                      minHeight: val > 0 ? "4px" : "0px",
+                    }}
+                  />
+                  {i % 4 === 0 && (
+                    <span className="text-[8px] text-muted-foreground">{i}時</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {/* By account chart */}
+          <section className="rounded-lg border p-4">
+            <h2 className="mb-4 text-[13px] font-semibold">アカウント別問い合わせ数</h2>
+            <div className="space-y-3">
+              {accountData.map(({ account, count }) => {
+                const Icon = channelIcons[account.channel];
+                const s = channelStyles[account.channel];
+                return (
+                  <div key={account.id} className="flex items-center gap-3">
+                    <div className={cn("flex h-6 w-6 shrink-0 items-center justify-center rounded-md", s.bg)}>
+                      <Icon className={cn("h-3.5 w-3.5", s.text)} />
+                    </div>
+                    <span className="w-20 truncate text-[11px] font-medium">{channelLabels[account.channel]}</span>
+                    <div className="flex-1 h-4 bg-accent/30 rounded overflow-hidden">
+                      <div
+                        className={cn("h-full rounded", s.bg.replace("/10", "/40"))}
+                        style={{ width: maxAccountCount > 0 ? `${(count / maxAccountCount) * 100}%` : "0%" }}
+                      />
+                    </div>
+                    <span className="w-6 text-right text-[12px] font-medium tabular-nums">{count}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        </div>
+
+        {/* By channel table */}
+        <section className="mb-6">
+          <h2 className="mb-3 text-[13px] font-semibold">アカウント別詳細</h2>
           <div className="rounded-lg border">
             <div className="grid grid-cols-5 gap-4 border-b px-4 py-2 text-[11px] font-medium text-muted-foreground">
               <span className="col-span-2">アカウント</span>
@@ -181,18 +268,10 @@ export default function ReportsPage() {
                 {unassigned}
               </span>
               <span className="text-center text-[13px] font-medium text-foreground/70">
-                {
-                  conversations.filter(
-                    (c) => !c.assignee && c.status === "open"
-                  ).length
-                }
+                {conversations.filter((c) => !c.assignee && c.status === "open").length}
               </span>
               <span className="text-center text-[13px] font-medium text-foreground/40">
-                {
-                  conversations.filter(
-                    (c) => !c.assignee && c.status === "resolved"
-                  ).length
-                }
+                {conversations.filter((c) => !c.assignee && c.status === "resolved").length}
               </span>
             </div>
           </div>
@@ -209,7 +288,7 @@ function StatCard({
   color,
 }: {
   label: string;
-  value: number;
+  value: string;
   icon: React.ElementType;
   color: string;
 }) {
