@@ -234,15 +234,19 @@ export default function MessagesPage() {
     );
   }, []);
 
-  // Mark as read on select
+  // Track which conversation was viewed, mark as read when navigating away
+  const prevSelectedRef = useRef<string | null>(null);
   useEffect(() => {
-    if (selectedId) {
+    // Mark the previously viewed conversation as read when selection changes
+    if (prevSelectedRef.current && prevSelectedRef.current !== selectedId) {
+      const prevId = prevSelectedRef.current;
       setConversations((prev) =>
         prev.map((c) =>
-          c.id === selectedId ? { ...c, isRead: true, unreadCount: 0 } : c
+          c.id === prevId ? { ...c, isRead: true, unreadCount: 0 } : c
         )
       );
     }
+    prevSelectedRef.current = selectedId;
   }, [selectedId]);
 
   const counts = useMemo(() => {
@@ -610,6 +614,9 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
   const isSelfAssigned = conversation.assignee?.id === currentUser.id;
 
   const contactObj = contacts.find((c) => c.id === conversation.contactId);
+  const accountObj = accounts.find((a) => a.id === conversation.accountId);
+  const channelLabel = conversation.channel === "email" ? "メール" : conversation.channel === "line" ? "LINE" : conversation.channel === "instagram" ? "Instagram" : "Facebook";
+  const accountName = accountObj?.name ?? "";
 
   useEffect(() => {
     if (isEmail) {
@@ -657,14 +664,9 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
           </div>
           <div className="min-w-0 text-left">
             <p className="truncate text-[16px] font-semibold leading-tight">{conversation.contactName}</p>
-            <div className="flex items-center gap-2">
-              {contactObj?.company && (
-                <p className="truncate text-[13px] leading-tight text-muted-foreground">{contactObj.company}</p>
-              )}
-              {contactObj?.email && (
-                <p className="truncate text-[13px] leading-tight text-muted-foreground">{contactObj.email}</p>
-              )}
-            </div>
+            {contactObj?.company && (
+              <p className="truncate text-[13px] leading-tight text-muted-foreground">{contactObj.company}</p>
+            )}
           </div>
         </button>
 
@@ -681,15 +683,14 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
           {/* Assign */}
           <div className="flex items-center rounded-lg border">
             <Button variant="ghost" size="sm"
-              className={cn("h-9 gap-1.5 rounded-r-none border-r text-[13px] px-3",
-                isSelfAssigned && "opacity-50 cursor-not-allowed")}
-              disabled={isSelfAssigned}
-              onClick={() => onAssigneeChange(conversation.id, currentUser.id)}>
-              自分にアサイン
+              className={cn("h-9 gap-1.5 rounded-r-none border-r text-[14px] px-3",
+                isSelfAssigned && "text-destructive hover:text-destructive")}
+              onClick={() => onAssigneeChange(conversation.id, isSelfAssigned ? null : currentUser.id)}>
+              {isSelfAssigned ? "アサインを解除" : "自分にアサイン"}
             </Button>
             <Dropdown align="right"
               trigger={
-                <Button variant="ghost" size="sm" className="h-9 gap-1 rounded-l-none text-[13px] px-3">
+                <Button variant="ghost" size="sm" className="h-9 gap-1 rounded-l-none text-[14px] px-3">
                   {conversation.assignee ? (
                     <>
                       <Avatar src={conversation.assignee.avatar} fallback={conversation.assignee.name} size="sm" className="h-4 w-4 text-[6px]" />
@@ -718,27 +719,39 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
           </div>
 
           {/* Needs action / Resolve */}
-          <Dropdown align="right"
-            trigger={
-              <Button size="sm"
-                className={cn("h-9 gap-1.5 text-[13px] px-4",
-                  conversation.needsAction
-                    ? "bg-amber-500 hover:bg-amber-600"
-                    : conversation.status === "resolved"
-                      ? "bg-foreground/10 text-foreground hover:bg-foreground/15"
-                      : "bg-brand hover:bg-brand/90"
-                )}>
-                {conversation.needsAction ? "要対応" : conversation.status === "resolved" ? "完了済み" : "対応する"}
-                <ChevronDown className="h-3 w-3" />
-              </Button>
-            }>
-            <DropdownItem onClick={() => onToggleNeedsAction(conversation.id)}>
-              {conversation.needsAction ? "要対応を解除" : "要対応にする"}
-            </DropdownItem>
-            <DropdownItem onClick={() => onStatusChange(conversation.id, conversation.status === "resolved" ? "open" : "resolved")}>
-              {conversation.status === "resolved" ? "再開する" : "完了にする"}
-            </DropdownItem>
-          </Dropdown>
+          {conversation.needsAction ? (
+            <Dropdown align="right"
+              trigger={
+                <Button size="sm"
+                  className="h-9 gap-1.5 text-[14px] px-4 bg-amber-500 hover:bg-amber-600">
+                  要対応
+                  <ChevronDown className="h-3 w-3" />
+                </Button>
+              }>
+              <DropdownItem onClick={() => onToggleNeedsAction(conversation.id)}>
+                要対応を解除する
+              </DropdownItem>
+              <DropdownItem onClick={() => { onStatusChange(conversation.id, "resolved"); }}>
+                完了にする
+              </DropdownItem>
+            </Dropdown>
+          ) : (
+            <Button size="sm"
+              className={cn("h-9 gap-1.5 text-[14px] px-4",
+                conversation.status === "resolved"
+                  ? "bg-foreground/10 text-foreground hover:bg-foreground/15"
+                  : "bg-brand hover:bg-brand/90"
+              )}
+              onClick={() => {
+                if (conversation.status === "resolved") {
+                  onStatusChange(conversation.id, "open");
+                } else {
+                  onToggleNeedsAction(conversation.id);
+                }
+              }}>
+              {conversation.status === "resolved" ? "再開する" : "要対応にする"}
+            </Button>
+          )}
 
           {/* More options */}
           <Dropdown align="right"
@@ -769,24 +782,31 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
           {/* Inline reply input - after last message */}
           <div ref={messagesEndRef} />
 
-          {/* Email header fields - collapsible, subtle */}
-          {isEmail && (
-            <EmailReplyHeader
-              emailFrom={emailFrom} setEmailFrom={setEmailFrom}
-              emailTo={emailTo} setEmailTo={setEmailTo}
-              emailCc={emailCc} setEmailCc={setEmailCc}
-              emailBcc={emailBcc} setEmailBcc={setEmailBcc}
-              emailSubject={emailSubject} setEmailSubject={setEmailSubject}
-            />
-          )}
-
-          {/* Reply input - right-aligned, same max-width as outbound messages */}
+          {/* Reply input - right-aligned, with channel header attached */}
           <div className="flex justify-end">
-            <div className="w-[70%] rounded-lg border bg-background focus-within:border-brand/30">
+            <div className="w-[70%] rounded-lg border bg-background focus-within:border-brand/30 overflow-hidden">
+              {/* Channel reply header */}
+              <ReplyHeader
+                channel={conversation.channel}
+                channelLabel={channelLabel}
+                accountName={accountName}
+                isEmail={isEmail}
+                emailFrom={emailFrom} setEmailFrom={setEmailFrom}
+                emailTo={emailTo} setEmailTo={setEmailTo}
+                emailCc={emailCc} setEmailCc={setEmailCc}
+                emailBcc={emailBcc} setEmailBcc={setEmailBcc}
+                emailSubject={emailSubject} setEmailSubject={setEmailSubject}
+              />
               <textarea value={replyText} onChange={(e) => handleReplyChange(e.target.value)}
                 placeholder="メッセージを入力..."
                 rows={3}
                 className="w-full resize-none bg-transparent px-3 pt-2.5 pb-0 text-[15px] leading-relaxed outline-none placeholder:text-muted-foreground/50"
+                onKeyDown={(e) => {
+                  if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                    e.preventDefault();
+                    handleSendReply();
+                  }
+                }}
                 onInput={(e) => {
                   const el = e.currentTarget;
                   el.style.height = "auto";
@@ -798,7 +818,7 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
                     <Paperclip className="h-4 w-4" />
                   </Button>
                 </Tooltip>
-                <Button size="sm" className="h-8 rounded-md bg-brand hover:bg-brand/90 px-4 text-[13px]"
+                <Button size="sm" className="h-8 rounded-md bg-brand hover:bg-brand/90 px-4 text-[14px]"
                   disabled={!replyText.trim()} onClick={handleSendReply}>
                   <Send className="h-3 w-3 mr-1" /> 送信
                 </Button>
@@ -818,6 +838,12 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
                 placeholder="チーム内メモを入力"
                 rows={1}
                 className="flex-1 resize-none bg-transparent text-[14px] leading-normal outline-none placeholder:text-amber-400/60"
+                onKeyDown={(e) => {
+                  if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                    e.preventDefault();
+                    handleSendMemo();
+                  }
+                }}
                 onInput={(e) => {
                   const el = e.currentTarget;
                   el.style.height = "auto";
@@ -826,9 +852,9 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
             </div>
             {memoText.trim() && (
               <div className="flex justify-end px-3 pb-2.5">
-                <Button size="sm" className="h-7 rounded-md bg-amber-500 hover:bg-amber-600 px-3 text-[12px]"
+                <Button size="sm" className="h-7 rounded-md bg-amber-500 hover:bg-amber-600 px-3 text-[14px]"
                   onClick={handleSendMemo}>
-                  <Send className="h-3 w-3 mr-1" /> 送信
+                  保存
                 </Button>
               </div>
             )}
@@ -850,7 +876,7 @@ function MessageBubble({ message, channel }: { message: Message; channel: Channe
   if (isInternal) {
     return (
       <div className="flex justify-center">
-        <div className="max-w-md rounded-lg border border-amber-200/60 bg-amber-50/40 px-4 py-2.5">
+        <div className="min-w-[340px] max-w-md rounded-lg border border-amber-200/60 bg-amber-50/40 px-4 py-2.5">
           <div className="flex items-center gap-1.5 mb-1.5">
             <MessageSquareText className="h-3 w-3 text-amber-500" />
             <span className="text-[12px] font-medium text-amber-600">チーム内メモ</span>
@@ -870,19 +896,20 @@ function MessageBubble({ message, channel }: { message: Message; channel: Channe
     <div className={cn("flex gap-2.5", isInbound ? "justify-start" : "justify-end")}>
       <div className={cn("max-w-[70%] space-y-1", !isInbound && "items-end")}>
         <div className={cn("flex items-center gap-1.5", !isInbound && "justify-end")}>
-          <span className="text-[12px] font-medium text-muted-foreground">{senderName}</span>
-          <span className="text-[12px] text-muted-foreground/50">{timestamp}</span>
+          <span className="text-[13px] font-medium text-muted-foreground">{senderName}</span>
+          <span className="text-[13px] text-muted-foreground/50">{timestamp}</span>
         </div>
 
         {channel === "email" && emailHeader && (
           <div className="mb-1">
             <button onClick={() => setHeaderExpanded(!headerExpanded)}
-              className="flex cursor-pointer items-center gap-1 text-[12px] text-muted-foreground/60 hover:text-muted-foreground transition-colors">
-              <ChevronRight className={cn("h-3 w-3 transition-transform", headerExpanded && "rotate-90")} />
+              className="flex cursor-pointer items-center gap-1 text-[14px] text-muted-foreground/60 hover:text-muted-foreground transition-colors">
+              <ChevronRight className={cn("h-3.5 w-3.5 transition-transform", headerExpanded && "rotate-90")} />
               <span className="font-medium">{emailHeader.subject}</span>
             </button>
             {headerExpanded && (
-              <div className="ml-4 mt-1 space-y-0.5 text-[12px] text-muted-foreground/60">
+              <div className="ml-5 mt-1 space-y-0.5 text-[14px] text-muted-foreground/60">
+                {senderName && isInbound && <p><span className="font-medium">From:</span> {senderName}</p>}
                 {emailHeader.to && <p><span className="font-medium">To:</span> {emailHeader.to}</p>}
                 {emailHeader.cc && <p><span className="font-medium">CC:</span> {emailHeader.cc}</p>}
                 {emailHeader.bcc && <p><span className="font-medium">BCC:</span> {emailHeader.bcc}</p>}
@@ -904,10 +931,12 @@ function MessageBubble({ message, channel }: { message: Message; channel: Channe
   );
 }
 
-/* ─── Email Reply Header (collapsible, subtle) ───── */
+/* ─── Reply Header (channel-aware, attached to input) ── */
 
-function EmailReplyHeader({ emailFrom, setEmailFrom, emailTo, setEmailTo,
+function ReplyHeader({ channel, channelLabel, accountName, isEmail,
+  emailFrom, setEmailFrom, emailTo, setEmailTo,
   emailCc, setEmailCc, emailBcc, setEmailBcc, emailSubject, setEmailSubject }: {
+  channel: Channel; channelLabel: string; accountName: string; isEmail: boolean;
   emailFrom: string; setEmailFrom: (v: string) => void;
   emailTo: string; setEmailTo: (v: string) => void;
   emailCc: string; setEmailCc: (v: string) => void;
@@ -915,45 +944,49 @@ function EmailReplyHeader({ emailFrom, setEmailFrom, emailTo, setEmailTo,
   emailSubject: string; setEmailSubject: (v: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const CIcon = channelIcons[channel];
+  const cStyle = channelStyles[channel];
+
   return (
-    <div className="flex justify-end">
-      <div className="w-[70%]">
-        <button onClick={() => setExpanded(!expanded)}
-          className="flex cursor-pointer items-center gap-1 text-[12px] text-muted-foreground/60 hover:text-muted-foreground transition-colors mb-1">
-          <ChevronRight className={cn("h-3 w-3 transition-transform", expanded && "rotate-90")} />
-          <span className="font-medium">{emailSubject || "Re:"}</span>
-          <span className="ml-1">→ {emailTo}</span>
-        </button>
-        {expanded && (
-          <div className="mb-2 space-y-0.5 text-[12px] text-muted-foreground/60">
-            <div className="flex items-center gap-1.5">
-              <span className="w-8 shrink-0 text-right font-medium">From</span>
-              <input value={emailFrom} onChange={(e) => setEmailFrom(e.target.value)}
-                className="flex-1 bg-transparent outline-none text-[12px] hover:text-muted-foreground focus:text-foreground transition-colors" />
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-8 shrink-0 text-right font-medium">To</span>
-              <input value={emailTo} onChange={(e) => setEmailTo(e.target.value)}
-                className="flex-1 bg-transparent outline-none text-[12px] hover:text-muted-foreground focus:text-foreground transition-colors" />
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-8 shrink-0 text-right font-medium">CC</span>
-              <input value={emailCc} onChange={(e) => setEmailCc(e.target.value)} placeholder="任意"
-                className="flex-1 bg-transparent outline-none text-[12px] hover:text-muted-foreground focus:text-foreground transition-colors placeholder:text-muted-foreground/30" />
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-8 shrink-0 text-right font-medium">BCC</span>
-              <input value={emailBcc} onChange={(e) => setEmailBcc(e.target.value)} placeholder="任意"
-                className="flex-1 bg-transparent outline-none text-[12px] hover:text-muted-foreground focus:text-foreground transition-colors placeholder:text-muted-foreground/30" />
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-8 shrink-0 text-right font-medium">件名</span>
-              <input value={emailSubject} onChange={(e) => setEmailSubject(e.target.value)}
-                className="flex-1 bg-transparent outline-none text-[12px] hover:text-muted-foreground focus:text-foreground transition-colors" />
-            </div>
+    <div className="border-b bg-accent/20 px-3 py-2">
+      <button onClick={() => isEmail ? setExpanded(!expanded) : undefined}
+        className={cn(
+          "flex items-center gap-2 text-[14px] text-muted-foreground",
+          isEmail && "cursor-pointer hover:text-foreground transition-colors"
+        )}>
+        <CIcon className={cn("h-4 w-4", cStyle.text)} />
+        <span className="font-medium">{channelLabel} {accountName} として返信</span>
+        {isEmail && <ChevronRight className={cn("h-3.5 w-3.5 transition-transform", expanded && "rotate-90")} />}
+      </button>
+      {isEmail && expanded && (
+        <div className="mt-2 space-y-1 text-[14px] text-muted-foreground">
+          <div className="flex items-center gap-2">
+            <span className="w-10 shrink-0 text-right font-medium text-[13px]">From</span>
+            <input value={emailFrom} onChange={(e) => setEmailFrom(e.target.value)}
+              className="flex-1 rounded bg-transparent px-1.5 py-0.5 outline-none text-[14px] hover:text-muted-foreground focus:text-foreground transition-colors" />
           </div>
-        )}
-      </div>
+          <div className="flex items-center gap-2">
+            <span className="w-10 shrink-0 text-right font-medium text-[13px]">To</span>
+            <input value={emailTo} onChange={(e) => setEmailTo(e.target.value)}
+              className="flex-1 rounded bg-transparent px-1.5 py-0.5 outline-none text-[14px] hover:text-muted-foreground focus:text-foreground transition-colors" />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="w-10 shrink-0 text-right font-medium text-[13px]">CC</span>
+            <input value={emailCc} onChange={(e) => setEmailCc(e.target.value)} placeholder="任意"
+              className="flex-1 rounded bg-transparent px-1.5 py-0.5 outline-none text-[14px] hover:text-muted-foreground focus:text-foreground transition-colors placeholder:text-muted-foreground/30" />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="w-10 shrink-0 text-right font-medium text-[13px]">BCC</span>
+            <input value={emailBcc} onChange={(e) => setEmailBcc(e.target.value)} placeholder="任意"
+              className="flex-1 rounded bg-transparent px-1.5 py-0.5 outline-none text-[14px] hover:text-muted-foreground focus:text-foreground transition-colors placeholder:text-muted-foreground/30" />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="w-10 shrink-0 text-right font-medium text-[13px]">件名</span>
+            <input value={emailSubject} onChange={(e) => setEmailSubject(e.target.value)}
+              className="flex-1 rounded bg-transparent px-1.5 py-0.5 outline-none text-[14px] hover:text-muted-foreground focus:text-foreground transition-colors" />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -973,7 +1006,7 @@ function ContactSlidePanel({ contact, onClose, onNavigateToContact }: {
   return (
     <div className="flex h-full w-[320px] min-w-[260px] max-w-[400px] shrink-0 flex-col border-l bg-background animate-slide-in-right">
       <div className="flex items-center justify-between border-b px-4 py-3">
-        <h3 className="text-[16px] font-semibold">連絡先詳細</h3>
+        <h3 className="text-[16px] font-semibold">連絡先</h3>
         <button onClick={onClose}
           className="cursor-pointer rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground">
           <X className="h-4 w-4" />
@@ -1002,21 +1035,21 @@ function ContactSlidePanel({ contact, onClose, onNavigateToContact }: {
             <h4 className="mb-1.5 text-[12px] font-medium uppercase tracking-wider text-muted-foreground">連絡先</h4>
             <div className="space-y-1.5 text-[14px]">
               {contact.email && (
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">メール</span>
-                  <span className="truncate max-w-[150px]">{contact.email}</span>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-muted-foreground shrink-0">メール</span>
+                  <span className="text-right break-all">{contact.email}</span>
                 </div>
               )}
               {contact.phone && (
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">電話番号</span>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-muted-foreground shrink-0">電話番号</span>
                   <span>{contact.phone}</span>
                 </div>
               )}
               {contact.channels.filter((ch) => ch.channel !== "email").map((ch) => (
-                <div key={ch.channel} className="flex items-center justify-between">
-                  <span className="text-muted-foreground capitalize">{ch.channel}</span>
-                  <span className="truncate max-w-[150px]">{ch.handle}</span>
+                <div key={ch.channel} className="flex items-center justify-between gap-2">
+                  <span className="text-muted-foreground capitalize shrink-0">{ch.channel}</span>
+                  <span className="text-right break-all">{ch.handle}</span>
                 </div>
               ))}
             </div>
@@ -1069,12 +1102,13 @@ function ContactSlidePanel({ contact, onClose, onNavigateToContact }: {
             <p className="text-[14px] text-muted-foreground leading-relaxed">{contact.note || "なし"}</p>
           </section>
 
-          {/* Edit button at bottom center */}
+          {/* Link to contact page */}
           <div className="pt-4 pb-2 flex justify-center">
-            <Button variant="outline" size="sm" className="h-9 text-[14px] px-6"
+            <button
+              className="text-[14px] text-brand hover:text-brand/80 underline underline-offset-2 cursor-pointer transition-colors"
               onClick={() => { onClose(); onNavigateToContact(contact.id); }}>
-              編集する
-            </Button>
+              この連絡先へ
+            </button>
           </div>
         </div>
       </div>

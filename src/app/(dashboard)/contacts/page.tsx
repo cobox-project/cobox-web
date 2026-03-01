@@ -274,6 +274,15 @@ export default function ContactsPage() {
           groups={groups}
           isEditing={isEditing}
           onStartEdit={() => setIsEditing(true)}
+          onCancelEdit={() => {
+            setIsEditing(false);
+            setHasUnsavedChanges(false);
+            // If it's a new empty contact, remove it
+            if (selected.isManuallyCreated && !selected.name) {
+              setContacts((prev) => prev.filter((c) => c.id !== selected.id));
+              setSelectedContactId(null);
+            }
+          }}
           onUpdateContact={(updated) => {
             setContacts((prev) =>
               prev.map((c) => (c.id === updated.id ? updated : c))
@@ -388,6 +397,7 @@ function ContactDetail({
   groups,
   isEditing,
   onStartEdit,
+  onCancelEdit,
   onUpdateContact,
   onUnsavedChange,
   onUpdateGroups,
@@ -398,6 +408,7 @@ function ContactDetail({
   groups: ContactGroup[];
   isEditing: boolean;
   onStartEdit: () => void;
+  onCancelEdit: () => void;
   onUpdateContact: (updated: Contact) => void;
   onUnsavedChange: () => void;
   onUpdateGroups: (groups: ContactGroup[]) => void;
@@ -572,8 +583,11 @@ function ContactDetail({
                 className="w-full resize-none rounded-md border px-3 py-2.5 text-[15px] outline-none focus:border-brand/40 placeholder:text-muted-foreground/50" />
             </section>
 
-            <div className="pt-4 pb-8">
-              <Button className="w-full h-12 bg-brand hover:bg-brand/90 text-[16px] font-medium" onClick={handleSave}>
+            <div className="pt-4 pb-8 flex gap-3">
+              <Button variant="outline" className="flex-1 h-12 text-[16px] font-medium" onClick={onCancelEdit}>
+                キャンセル
+              </Button>
+              <Button className="flex-1 h-12 bg-brand hover:bg-brand/90 text-[16px] font-medium" onClick={handleSave}>
                 保存
               </Button>
             </div>

@@ -108,7 +108,7 @@ export function AppSidebar() {
 
         {/* Profile popover */}
         {popoverOpen && (
-          <div className="absolute bottom-[calc(100%+12px)] left-1/2 -translate-x-1/2 z-[200] w-[240px] rounded-xl bg-background shadow-xl border">
+          <div className="absolute bottom-[calc(100%+12px)] left-0 z-[200] w-[240px] rounded-xl bg-background shadow-xl border">
             {/* User info */}
             <div className="flex items-center gap-3 border-b px-4 py-3">
               <Avatar

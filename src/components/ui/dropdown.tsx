@@ -73,7 +73,7 @@ export function DropdownItem({
         close();
       }}
       className={cn(
-        "flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-[12px] transition-colors cursor-pointer",
+        "flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-[14px] transition-colors cursor-pointer",
         active
           ? "bg-accent text-foreground font-medium"
           : "text-muted-foreground hover:bg-accent hover:text-foreground",
