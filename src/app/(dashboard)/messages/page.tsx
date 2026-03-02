@@ -303,7 +303,7 @@ export default function MessagesPage() {
             <FolderItem icon={Clock} label="保留" count={counts.pending}
               isActive={folderFilter === "pending"}
               onClick={() => { setFolderFilter("pending"); setAccountFilter(null); setGroupFilter(null); }} />
-            <FolderItem icon={Check} label="完了" count={counts.resolved}
+            <FolderItem icon={Check} label="解決済み" count={counts.resolved}
               isActive={folderFilter === "resolved"}
               onClick={() => { setFolderFilter("resolved"); setAccountFilter(null); setGroupFilter(null); }} />
             <FolderItem icon={Star} label="お気に入り" count={counts.favorite}
@@ -508,8 +508,21 @@ function ConversationItem({ conversation, isSelected, onSelect }: {
   const Icon = channelIcons[channel];
   const style = channelStyles[channel];
   const unread = isUnread(conversation);
-  // Priority: resolved (completed) > unread
+  // Priority: resolved > unread
   const isResolved = conversation.status === "resolved";
+
+  // Track when unread state changes to animate
+  const prevUnreadRef = useRef(unread);
+  const [justRead, setJustRead] = useState(false);
+
+  useEffect(() => {
+    if (prevUnreadRef.current && !unread) {
+      setJustRead(true);
+      const timer = setTimeout(() => setJustRead(false), 400);
+      return () => clearTimeout(timer);
+    }
+    prevUnreadRef.current = unread;
+  }, [unread]);
 
   // Display: subject only for email, lastMessage (1 line) for others
   const displayText = channel === "email" && subject ? subject : lastMessage;
@@ -517,7 +530,8 @@ function ConversationItem({ conversation, isSelected, onSelect }: {
   return (
     <button onClick={onSelect}
       className={cn(
-        "flex w-full gap-3 border-b px-4 py-3 text-left transition-colors cursor-pointer",
+        "flex w-full gap-3 border-b px-4 py-3 text-left transition-all duration-300 cursor-pointer",
+        justRead && "animate-read-fade",
         isSelected
           ? "bg-brand text-white"
           : isResolved
@@ -732,7 +746,7 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
                 要対応を解除する
               </DropdownItem>
               <DropdownItem onClick={() => { onStatusChange(conversation.id, "resolved"); }}>
-                完了にする
+                解決済みにする
               </DropdownItem>
             </Dropdown>
           ) : conversation.status === "resolved" ? (
@@ -740,7 +754,7 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
               trigger={
                 <Button size="sm"
                   className="h-9 gap-1.5 text-[14px] px-4 bg-foreground/10 text-foreground hover:bg-foreground/15">
-                  完了
+                  解決済み
                   <ChevronDown className="h-3 w-3" />
                 </Button>
               }>
@@ -844,16 +858,18 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
                 placeholder="チーム内メモを入力"
                 rows={1}
                 className="flex-1 resize-none bg-transparent text-[14px] leading-normal outline-none placeholder:text-amber-400/60"
+                style={{ height: "auto", minHeight: "24px", maxHeight: "80px", overflow: "auto" }}
                 onKeyDown={(e) => {
                   if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
                     e.preventDefault();
                     handleSendMemo();
                   }
                 }}
-                onInput={(e) => {
-                  const el = e.currentTarget;
-                  el.style.height = "auto";
-                  el.style.height = Math.min(el.scrollHeight, 80) + "px";
+                ref={(el) => {
+                  if (el) {
+                    el.style.height = "auto";
+                    el.style.height = Math.min(el.scrollHeight, 80) + "px";
+                  }
                 }} />
             </div>
             {memoText.trim() && (
@@ -906,53 +922,63 @@ function MessageBubble({ message, channel }: { message: Message; channel: Channe
           <span className="text-[13px] text-muted-foreground/50">{timestamp}</span>
         </div>
 
-        {channel === "email" && emailHeader && (
-          <div className="rounded-t-lg bg-accent/20 px-3 py-2">
-            <button onClick={() => setHeaderExpanded(!headerExpanded)}
-              className="flex cursor-pointer items-center gap-2 text-[14px] text-muted-foreground hover:text-foreground transition-colors">
-              <Mail className="h-4 w-4 text-channel-email" />
-              <span className="font-medium">{emailHeader.subject}</span>
-              <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", headerExpanded && "rotate-180")} />
-            </button>
-            {headerExpanded && (
-              <div className="mt-2 space-y-1 text-[14px] text-muted-foreground">
-                {senderName && isInbound && (
-                  <div className="flex items-center gap-2">
-                    <span className="w-10 shrink-0 text-right font-medium text-[13px]">From</span>
-                    <span>{senderName}</span>
-                  </div>
-                )}
-                {emailHeader.to && (
-                  <div className="flex items-center gap-2">
-                    <span className="w-10 shrink-0 text-right font-medium text-[13px]">To</span>
-                    <span>{emailHeader.to}</span>
-                  </div>
-                )}
-                {emailHeader.cc && (
-                  <div className="flex items-center gap-2">
-                    <span className="w-10 shrink-0 text-right font-medium text-[13px]">CC</span>
-                    <span>{emailHeader.cc}</span>
-                  </div>
-                )}
-                {emailHeader.bcc && (
-                  <div className="flex items-center gap-2">
-                    <span className="w-10 shrink-0 text-right font-medium text-[13px]">BCC</span>
-                    <span>{emailHeader.bcc}</span>
-                  </div>
-                )}
-              </div>
-            )}
+        {channel === "email" && emailHeader ? (
+          <div className={cn(
+            "overflow-hidden rounded-2xl border bg-background",
+            isInbound ? "rounded-tl-sm" : "rounded-tr-sm"
+          )}>
+            <div className="bg-accent/20 px-3 py-2">
+              <button onClick={() => setHeaderExpanded(!headerExpanded)}
+                className="flex cursor-pointer items-center gap-2 text-[14px] text-muted-foreground hover:text-foreground transition-colors">
+                <Mail className="h-4 w-4 text-channel-email" />
+                <span className="font-medium">{emailHeader.subject}</span>
+                <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", headerExpanded && "rotate-180")} />
+              </button>
+              {headerExpanded && (
+                <div className="mt-2 space-y-1 text-[14px] text-muted-foreground">
+                  {senderName && isInbound && (
+                    <div className="flex items-center gap-2">
+                      <span className="w-10 shrink-0 text-right font-medium text-[13px]">From</span>
+                      <span>{senderName}</span>
+                    </div>
+                  )}
+                  {emailHeader.to && (
+                    <div className="flex items-center gap-2">
+                      <span className="w-10 shrink-0 text-right font-medium text-[13px]">To</span>
+                      <span>{emailHeader.to}</span>
+                    </div>
+                  )}
+                  {emailHeader.cc && (
+                    <div className="flex items-center gap-2">
+                      <span className="w-10 shrink-0 text-right font-medium text-[13px]">CC</span>
+                      <span>{emailHeader.cc}</span>
+                    </div>
+                  )}
+                  {emailHeader.bcc && (
+                    <div className="flex items-center gap-2">
+                      <span className="w-10 shrink-0 text-right font-medium text-[13px]">BCC</span>
+                      <span>{emailHeader.bcc}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="px-3.5 py-2 text-[15px] leading-relaxed">
+              {content.split("\n").map((line, i) => (
+                <span key={i}>{line}{i < content.split("\n").length - 1 && <br />}</span>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className={cn(
+            "rounded-2xl px-3.5 py-2 text-[15px] leading-relaxed",
+            isInbound ? "rounded-tl-sm bg-secondary text-secondary-foreground" : "rounded-tr-sm bg-brand text-brand-foreground"
+          )}>
+            {content.split("\n").map((line, i) => (
+              <span key={i}>{line}{i < content.split("\n").length - 1 && <br />}</span>
+            ))}
           </div>
         )}
-
-        <div className={cn(
-          "rounded-2xl px-3.5 py-2 text-[15px] leading-relaxed",
-          isInbound ? "rounded-tl-sm bg-secondary text-secondary-foreground" : "rounded-tr-sm bg-brand text-brand-foreground"
-        )}>
-          {content.split("\n").map((line, i) => (
-            <span key={i}>{line}{i < content.split("\n").length - 1 && <br />}</span>
-          ))}
-        </div>
       </div>
     </div>
   );

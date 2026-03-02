@@ -17,13 +17,13 @@ import {
   Trash2,
   Shield,
   CreditCard,
-  Eye,
-  MessageSquare,
+  X,
+  Check,
 } from "lucide-react";
 
 const tabs = [
   { id: "accounts", label: "アカウント接続", icon: Link2 },
-  { id: "team", label: "チーム管理", icon: Users },
+  { id: "team", label: "チーム", icon: Users },
   { id: "billing", label: "支払い", icon: CreditCard },
 ] as const;
 
@@ -223,7 +223,7 @@ function TeamSettings() {
 
   return (
     <div>
-      <h2 className="text-[17px] font-semibold mb-1">チーム管理</h2>
+      <h2 className="text-[17px] font-semibold mb-1">チーム</h2>
       <p className="mb-5 text-[13px] text-muted-foreground">
         チームメンバーとアカウント権限を管理
       </p>
@@ -329,7 +329,6 @@ function TeamSettings() {
                                 }
                                 className="h-4 w-4 rounded accent-brand"
                               />
-                              <Eye className="h-3.5 w-3.5 text-muted-foreground" />
                               <span className="text-[13px] text-muted-foreground">閲覧</span>
                             </label>
                             <label className="flex items-center gap-1.5 cursor-pointer select-none">
@@ -342,7 +341,6 @@ function TeamSettings() {
                                 }
                                 className="h-4 w-4 rounded accent-brand disabled:opacity-30"
                               />
-                              <MessageSquare className="h-3.5 w-3.5 text-muted-foreground" />
                               <span className="text-[13px] text-muted-foreground">返信</span>
                             </label>
                           </div>
@@ -361,6 +359,17 @@ function TeamSettings() {
 }
 
 function BillingSettings() {
+  const [showPlanModal, setShowPlanModal] = useState(false);
+  const [currentPlan, setCurrentPlan] = useState("starter");
+
+  const plans = [
+    { id: "free", name: "フリープラン", price: "¥0", desc: "個人利用・お試し", members: "1人まで", features: ["1アカウント接続", "月100メッセージ"] },
+    { id: "starter", name: "スタータープラン", price: "¥3,980", desc: "小規模チーム向け", members: "3人まで", features: ["3アカウント接続", "無制限メッセージ", "レポート機能"] },
+    { id: "pro", name: "プロプラン", price: "¥9,800", desc: "成長中のチーム向け", members: "10人まで", features: ["無制限アカウント", "無制限メッセージ", "高度なレポート", "API連携", "優先サポート"] },
+  ];
+
+  const currentPlanData = plans.find((p) => p.id === currentPlan)!;
+
   return (
     <div>
       <h2 className="text-[17px] font-semibold mb-1">支払い</h2>
@@ -374,10 +383,10 @@ function BillingSettings() {
         <div className="rounded-lg border px-5 py-5">
           <div className="flex items-center justify-between mb-3">
             <div>
-              <p className="text-[17px] font-semibold">スタンダードプラン</p>
-              <p className="text-[13px] text-muted-foreground">月額 ¥3,980（税別）</p>
+              <p className="text-[17px] font-semibold">{currentPlanData.name}</p>
+              <p className="text-[13px] text-muted-foreground">月額 {currentPlanData.price}（税別）</p>
             </div>
-            <Button variant="outline" size="sm" className="h-9 text-[13px] px-4">
+            <Button variant="outline" size="sm" className="h-9 text-[13px] px-4" onClick={() => setShowPlanModal(true)}>
               プラン変更
             </Button>
           </div>
@@ -419,18 +428,19 @@ function BillingSettings() {
       <section>
         <h3 className="text-[15px] font-medium mb-3">請求履歴</h3>
         <div className="rounded-lg border">
-          <div className="grid grid-cols-4 gap-4 border-b px-4 py-2.5 text-[13px] font-medium text-muted-foreground">
+          <div className="grid grid-cols-5 gap-4 border-b px-4 py-2.5 text-[13px] font-medium text-muted-foreground">
             <span>日付</span>
             <span>内容</span>
             <span className="text-right">金額</span>
             <span className="text-right">ステータス</span>
+            <span className="text-right">領収書</span>
           </div>
           {[
-            { date: "2026-03-01", desc: "スタンダードプラン", amount: "¥4,378", status: "支払済" },
-            { date: "2026-02-01", desc: "スタンダードプラン", amount: "¥4,378", status: "支払済" },
-            { date: "2026-01-01", desc: "スタンダードプラン + メンバー追加×1", amount: "¥4,928", status: "支払済" },
+            { date: "2026-03-01", desc: "スタータープラン", amount: "¥4,378", status: "支払済" },
+            { date: "2026-02-01", desc: "スタータープラン", amount: "¥4,378", status: "支払済" },
+            { date: "2026-01-01", desc: "スタータープラン + メンバー追加×1", amount: "¥4,928", status: "支払済" },
           ].map((item, i) => (
-            <div key={i} className="grid grid-cols-4 gap-4 border-b last:border-0 px-4 py-3">
+            <div key={i} className="grid grid-cols-5 gap-4 border-b last:border-0 px-4 py-3 items-center">
               <span className="text-[14px]">{item.date}</span>
               <span className="text-[14px]">{item.desc}</span>
               <span className="text-[14px] text-right font-medium">{item.amount}</span>
@@ -439,10 +449,63 @@ function BillingSettings() {
                   {item.status}
                 </span>
               </span>
+              <span className="text-right">
+                <button className="text-[13px] text-brand hover:text-brand/80 underline underline-offset-2 cursor-pointer transition-colors">
+                  ダウンロード
+                </button>
+              </span>
             </div>
           ))}
         </div>
       </section>
+
+      {/* Plan selection modal */}
+      {showPlanModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/30" onClick={(e) => { if (e.target === e.currentTarget) setShowPlanModal(false); }}>
+          <div className="w-[720px] rounded-xl bg-background p-6 shadow-xl">
+            <div className="mb-5 flex items-center justify-between">
+              <h2 className="text-[19px] font-semibold">プランを選択</h2>
+              <button onClick={() => setShowPlanModal(false)} className="cursor-pointer rounded-md p-1.5 text-muted-foreground hover:bg-accent">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              {plans.map((plan) => (
+                <div key={plan.id} className={cn(
+                  "rounded-lg border-2 p-5 transition-colors",
+                  currentPlan === plan.id ? "border-brand bg-brand/5" : "border-border hover:border-brand/30"
+                )}>
+                  <p className="text-[16px] font-semibold">{plan.name}</p>
+                  <p className="mt-0.5 text-[13px] text-muted-foreground">{plan.desc}</p>
+                  <p className="mt-3 text-[24px] font-bold">{plan.price}<span className="text-[13px] font-normal text-muted-foreground">/月</span></p>
+                  <p className="mt-1 text-[13px] text-muted-foreground">{plan.members}</p>
+                  <ul className="mt-4 space-y-1.5">
+                    {plan.features.map((f) => (
+                      <li key={f} className="flex items-center gap-2 text-[13px]">
+                        <Check className="h-3.5 w-3.5 text-brand shrink-0" />
+                        {f}
+                      </li>
+                    ))}
+                  </ul>
+                  <Button
+                    className={cn(
+                      "mt-5 w-full h-10 text-[14px] font-medium",
+                      currentPlan === plan.id ? "bg-foreground/10 text-foreground hover:bg-foreground/15" : "bg-brand hover:bg-brand/90"
+                    )}
+                    onClick={() => {
+                      setCurrentPlan(plan.id);
+                      setShowPlanModal(false);
+                    }}
+                    disabled={currentPlan === plan.id}
+                  >
+                    {currentPlan === plan.id ? "現在のプラン" : "このプランにする"}
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

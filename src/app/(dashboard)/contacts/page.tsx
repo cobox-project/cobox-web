@@ -126,6 +126,20 @@ export default function ContactsPage() {
     );
   };
 
+  const handleDeleteGroup = (id: string) => {
+    setGroups((prev) => prev.filter((g) => g.id !== id));
+    if (selectedGroupId === id) setSelectedGroupId(null);
+  };
+
+  const handleReorderGroup = (fromIdx: number, toIdx: number) => {
+    setGroups((prev) => {
+      const updated = [...prev];
+      const [moved] = updated.splice(fromIdx, 1);
+      updated.splice(toIdx, 0, moved);
+      return updated;
+    });
+  };
+
   const handleDeleteContact = (contactId: string) => {
     const contact = contacts.find((c) => c.id === contactId);
     if (!contact) return;
@@ -181,10 +195,11 @@ export default function ContactsPage() {
               </button>
             </div>
             <div className="space-y-0.5">
-              {groups.map((group) => (
+              {groups.map((group, idx) => (
                 <GroupItem
                   key={group.id}
                   group={group}
+                  index={idx}
                   isActive={selectedGroupId === group.id}
                   onClick={() => {
                     setSelectedGroupId(group.id);
@@ -192,6 +207,8 @@ export default function ContactsPage() {
                     setIsEditing(false);
                   }}
                   onRename={(name) => handleUpdateGroupName(group.id, name)}
+                  onDelete={() => handleDeleteGroup(group.id)}
+                  onReorder={handleReorderGroup}
                 />
               ))}
             </div>
@@ -214,8 +231,9 @@ export default function ContactsPage() {
           {selectedGroupId === null && (
             <button
               onClick={handleAddContact}
-              className="mt-2 w-full rounded-xl border border-border/60 bg-accent/30 px-3 py-2.5 text-[14px] text-muted-foreground hover:bg-accent/60 transition-colors cursor-pointer text-center"
+              className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-xl border border-border/60 bg-accent/30 px-3 py-2.5 text-[14px] text-muted-foreground hover:bg-accent/60 transition-colors cursor-pointer"
             >
+              <Plus className="h-4 w-4" />
               連絡先を追加する
             </button>
           )}
@@ -321,18 +339,26 @@ export default function ContactsPage() {
 /* ─── Group Item ─────────────────────────── */
 function GroupItem({
   group,
+  index,
   isActive,
   onClick,
   onRename,
+  onDelete,
+  onReorder,
 }: {
   group: ContactGroup;
+  index: number;
   isActive: boolean;
   onClick: () => void;
   onRename: (name: string) => void;
+  onDelete: () => void;
+  onReorder: (from: number, to: number) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(group.name);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const contextRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (editing && inputRef.current) {
@@ -340,6 +366,17 @@ function GroupItem({
       inputRef.current.select();
     }
   }, [editing]);
+
+  useEffect(() => {
+    if (!contextMenu) return;
+    function handleClick(e: MouseEvent) {
+      if (contextRef.current && !contextRef.current.contains(e.target as Node)) {
+        setContextMenu(null);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [contextMenu]);
 
   if (editing) {
     return (
@@ -369,26 +406,73 @@ function GroupItem({
   }
 
   return (
-    <button
-      onClick={onClick}
-      onDoubleClick={() => {
-        setEditName(group.name);
-        setEditing(true);
-      }}
-      className={cn(
-        "group flex w-full items-center gap-2.5 rounded-md px-2.5 py-[8px] text-[15px] font-medium transition-colors cursor-pointer",
-        isActive
-          ? "bg-accent text-foreground"
-          : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+    <div className="relative">
+      <button
+        onClick={onClick}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          setContextMenu({ x: e.clientX, y: e.clientY });
+        }}
+        draggable
+        onDragStart={(e) => {
+          e.dataTransfer.setData("text/plain", String(index));
+          e.dataTransfer.effectAllowed = "move";
+        }}
+        onDragOver={(e) => {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "move";
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          const fromIdx = parseInt(e.dataTransfer.getData("text/plain"), 10);
+          if (!isNaN(fromIdx) && fromIdx !== index) {
+            onReorder(fromIdx, index);
+          }
+        }}
+        className={cn(
+          "group flex w-full items-center gap-2.5 rounded-md px-2.5 py-[8px] text-[15px] font-medium transition-colors cursor-grab active:cursor-grabbing",
+          isActive
+            ? "bg-accent text-foreground"
+            : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+        )}
+      >
+        <FolderOpen className="h-[16px] w-[16px] shrink-0" />
+        <span className="flex-1 truncate text-left">{group.name}</span>
+        <span className="text-[12px] tabular-nums text-muted-foreground/60">
+          {group.contactIds.length}
+        </span>
+      </button>
+
+      {/* Right-click context menu */}
+      {contextMenu && (
+        <div
+          ref={contextRef}
+          className="fixed z-[300] min-w-[160px] rounded-lg border bg-popover p-1 shadow-lg"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+        >
+          <button
+            onClick={() => {
+              setEditName(group.name);
+              setEditing(true);
+              setContextMenu(null);
+            }}
+            className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-[14px] text-foreground hover:bg-accent transition-colors cursor-pointer"
+          >
+            グループ名を変更
+          </button>
+          <button
+            onClick={() => {
+              onDelete();
+              setContextMenu(null);
+            }}
+            className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-[14px] text-destructive hover:bg-accent transition-colors cursor-pointer"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            グループを削除
+          </button>
+        </div>
       )}
-      title="ダブルクリックで名前を変更"
-    >
-      <FolderOpen className="h-[16px] w-[16px] shrink-0" />
-      <span className="flex-1 truncate text-left">{group.name}</span>
-      <span className="text-[12px] tabular-nums text-muted-foreground/60">
-        {group.contactIds.length}
-      </span>
-    </button>
+    </div>
   );
 }
 
@@ -484,6 +568,7 @@ function ContactDetail({
         {isEditing ? (
           <div className="space-y-10">
             <section>
+              <h3 className="mb-3 text-[13px] font-medium text-muted-foreground">氏名</h3>
               <div className="space-y-4">
                 <div>
                   <label className="mb-1 block text-[13px] text-muted-foreground">氏名</label>
@@ -499,6 +584,7 @@ function ContactDetail({
             </section>
 
             <section>
+              <h3 className="mb-3 text-[13px] font-medium text-muted-foreground">会社名</h3>
               <div className="space-y-4">
                 <div>
                   <label className="mb-1 block text-[13px] text-muted-foreground">会社名</label>
@@ -599,11 +685,13 @@ function ContactDetail({
         ) : (
           <div className="space-y-8">
             <section>
+              <h3 className="mb-2 text-[12px] font-medium uppercase tracking-wider text-muted-foreground">氏名</h3>
               <p className="text-[16px] font-medium">{contact.name}</p>
               {contact.nameFurigana && <p className="text-[13px] text-muted-foreground">{contact.nameFurigana}</p>}
             </section>
 
             <section>
+              <h3 className="mb-2 text-[12px] font-medium uppercase tracking-wider text-muted-foreground">会社名</h3>
               {contact.company ? (
                 <>
                   <p className="text-[16px] font-medium">{contact.company}</p>
@@ -684,7 +772,7 @@ function ContactDetail({
                           <p className="text-[12px] text-muted-foreground">{conv.lastMessageAt}</p>
                         </div>
                         <span className="rounded-full px-2 py-0.5 text-[11px] font-medium shrink-0 bg-foreground/6 text-foreground/50">
-                          {conv.status === "open" ? "未対応" : conv.status === "pending" ? "保留中" : "完了"}
+                          {conv.status === "open" ? "未対応" : conv.status === "pending" ? "保留中" : "解決済み"}
                         </span>
                       </button>
                     );

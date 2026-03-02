@@ -16,6 +16,7 @@ import {
   Bell,
   Globe,
   ChevronRight,
+  LifeBuoy,
 } from "lucide-react";
 
 const navItems = [
@@ -180,6 +181,13 @@ export function AppSidebar() {
                   </div>
                 )}
               </div>
+
+              <button
+                className="flex w-full items-center gap-3 px-4 py-2.5 text-[14px] text-foreground hover:bg-accent transition-colors cursor-pointer"
+              >
+                <LifeBuoy className="h-4 w-4 text-muted-foreground" />
+                サポート
+              </button>
             </div>
 
             {/* Logout */}
