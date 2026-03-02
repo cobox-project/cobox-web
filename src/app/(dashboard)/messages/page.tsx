@@ -735,21 +735,27 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
                 完了にする
               </DropdownItem>
             </Dropdown>
+          ) : conversation.status === "resolved" ? (
+            <Dropdown align="right"
+              trigger={
+                <Button size="sm"
+                  className="h-9 gap-1.5 text-[14px] px-4 bg-foreground/10 text-foreground hover:bg-foreground/15">
+                  完了
+                  <ChevronDown className="h-3 w-3" />
+                </Button>
+              }>
+              <DropdownItem onClick={() => onStatusChange(conversation.id, "open")}>
+                未対応にもどす
+              </DropdownItem>
+              <DropdownItem onClick={() => { onStatusChange(conversation.id, "open"); onToggleNeedsAction(conversation.id); }}>
+                要対応にする
+              </DropdownItem>
+            </Dropdown>
           ) : (
             <Button size="sm"
-              className={cn("h-9 gap-1.5 text-[14px] px-4",
-                conversation.status === "resolved"
-                  ? "bg-foreground/10 text-foreground hover:bg-foreground/15"
-                  : "bg-brand hover:bg-brand/90"
-              )}
-              onClick={() => {
-                if (conversation.status === "resolved") {
-                  onStatusChange(conversation.id, "open");
-                } else {
-                  onToggleNeedsAction(conversation.id);
-                }
-              }}>
-              {conversation.status === "resolved" ? "再開する" : "要対応にする"}
+              className="h-9 gap-1.5 text-[14px] px-4 bg-brand hover:bg-brand/90"
+              onClick={() => onToggleNeedsAction(conversation.id)}>
+              要対応にする
             </Button>
           )}
 
@@ -901,18 +907,39 @@ function MessageBubble({ message, channel }: { message: Message; channel: Channe
         </div>
 
         {channel === "email" && emailHeader && (
-          <div className="mb-1">
+          <div className="rounded-t-lg bg-accent/20 px-3 py-2">
             <button onClick={() => setHeaderExpanded(!headerExpanded)}
-              className="flex cursor-pointer items-center gap-1 text-[14px] text-muted-foreground/60 hover:text-muted-foreground transition-colors">
-              <ChevronRight className={cn("h-3.5 w-3.5 transition-transform", headerExpanded && "rotate-90")} />
+              className="flex cursor-pointer items-center gap-2 text-[14px] text-muted-foreground hover:text-foreground transition-colors">
+              <Mail className="h-4 w-4 text-channel-email" />
               <span className="font-medium">{emailHeader.subject}</span>
+              <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", headerExpanded && "rotate-180")} />
             </button>
             {headerExpanded && (
-              <div className="ml-5 mt-1 space-y-0.5 text-[14px] text-muted-foreground/60">
-                {senderName && isInbound && <p><span className="font-medium">From:</span> {senderName}</p>}
-                {emailHeader.to && <p><span className="font-medium">To:</span> {emailHeader.to}</p>}
-                {emailHeader.cc && <p><span className="font-medium">CC:</span> {emailHeader.cc}</p>}
-                {emailHeader.bcc && <p><span className="font-medium">BCC:</span> {emailHeader.bcc}</p>}
+              <div className="mt-2 space-y-1 text-[14px] text-muted-foreground">
+                {senderName && isInbound && (
+                  <div className="flex items-center gap-2">
+                    <span className="w-10 shrink-0 text-right font-medium text-[13px]">From</span>
+                    <span>{senderName}</span>
+                  </div>
+                )}
+                {emailHeader.to && (
+                  <div className="flex items-center gap-2">
+                    <span className="w-10 shrink-0 text-right font-medium text-[13px]">To</span>
+                    <span>{emailHeader.to}</span>
+                  </div>
+                )}
+                {emailHeader.cc && (
+                  <div className="flex items-center gap-2">
+                    <span className="w-10 shrink-0 text-right font-medium text-[13px]">CC</span>
+                    <span>{emailHeader.cc}</span>
+                  </div>
+                )}
+                {emailHeader.bcc && (
+                  <div className="flex items-center gap-2">
+                    <span className="w-10 shrink-0 text-right font-medium text-[13px]">BCC</span>
+                    <span>{emailHeader.bcc}</span>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -956,7 +983,7 @@ function ReplyHeader({ channel, channelLabel, accountName, isEmail,
         )}>
         <CIcon className={cn("h-4 w-4", cStyle.text)} />
         <span className="font-medium">{channelLabel} {accountName} として返信</span>
-        {isEmail && <ChevronRight className={cn("h-3.5 w-3.5 transition-transform", expanded && "rotate-90")} />}
+        {isEmail && <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", expanded && "rotate-180")} />}
       </button>
       {isEmail && expanded && (
         <div className="mt-2 space-y-1 text-[14px] text-muted-foreground">
@@ -1015,52 +1042,57 @@ function ContactSlidePanel({ contact, onClose, onNavigateToContact }: {
 
       <div className="flex-1 overflow-y-auto px-4 py-4">
         <div className="space-y-4">
-          {/* Name */}
+          {/* 氏名 */}
           <section>
-            <h4 className="mb-1.5 text-[12px] font-medium uppercase tracking-wider text-muted-foreground">氏名</h4>
             <p className="text-[16px] font-semibold">{contact.name}</p>
             {contact.nameFurigana && <p className="text-[13px] text-muted-foreground">{contact.nameFurigana}</p>}
           </section>
 
-          {/* Company */}
-          {contact.company && (
-            <section>
-              <h4 className="mb-1.5 text-[12px] font-medium uppercase tracking-wider text-muted-foreground">会社名</h4>
-              <p className="text-[15px] font-medium">{contact.company}</p>
-            </section>
-          )}
+          {/* 会社名 */}
+          <section>
+            {contact.company ? (
+              <>
+                <p className="text-[15px] font-medium">{contact.company}</p>
+                {contact.companyFurigana && <p className="text-[13px] text-muted-foreground">{contact.companyFurigana}</p>}
+              </>
+            ) : (
+              <p className="text-[14px] text-muted-foreground/60">なし</p>
+            )}
+          </section>
 
-          {/* Contact info */}
+          {/* 連絡先 */}
           <section>
             <h4 className="mb-1.5 text-[12px] font-medium uppercase tracking-wider text-muted-foreground">連絡先</h4>
             <div className="space-y-1.5 text-[14px]">
-              {contact.email && (
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-muted-foreground shrink-0">メール</span>
-                  <span className="text-right break-all">{contact.email}</span>
-                </div>
-              )}
               {contact.phone && (
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-muted-foreground shrink-0">電話番号</span>
                   <span>{contact.phone}</span>
                 </div>
               )}
-              {contact.channels.filter((ch) => ch.channel !== "email").map((ch) => (
-                <div key={ch.channel} className="flex items-center justify-between gap-2">
-                  <span className="text-muted-foreground capitalize shrink-0">{ch.channel}</span>
-                  <span className="text-right break-all">{ch.handle}</span>
+              {contact.email && (
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-muted-foreground shrink-0">メール</span>
+                  <span className="text-right break-all">{contact.email}</span>
                 </div>
-              ))}
+              )}
+              {contact.channels.filter((ch) => ch.channel !== "email").map((ch) => {
+                const CIcon = channelIcons[ch.channel];
+                const s = channelStyles[ch.channel];
+                return (
+                  <div key={ch.channel} className="flex items-center justify-between gap-2">
+                    <span className="text-muted-foreground shrink-0 flex items-center gap-1">
+                      <CIcon className={cn("h-3.5 w-3.5", s.text)} />
+                      {ch.channel === "instagram" ? "Instagram" : ch.channel === "line" ? "LINE" : "Facebook"}
+                    </span>
+                    <span className="text-right break-all">{ch.handle}</span>
+                  </div>
+                );
+              })}
             </div>
           </section>
 
-          <section>
-            <h4 className="mb-1.5 text-[12px] font-medium uppercase tracking-wider text-muted-foreground">ID</h4>
-            <p className="text-[13px] text-muted-foreground/60">{contact.id}</p>
-          </section>
-
-          {/* Groups */}
+          {/* グループ */}
           <section>
             <h4 className="mb-1.5 text-[12px] font-medium uppercase tracking-wider text-muted-foreground">グループ</h4>
             {memberGroups.length === 0 ? (
@@ -1074,29 +1106,33 @@ function ContactSlidePanel({ contact, onClose, onNavigateToContact }: {
             )}
           </section>
 
-          {/* Message history */}
+          {/* メッセージ履歴 */}
           <section>
             <h4 className="mb-1.5 text-[12px] font-medium uppercase tracking-wider text-muted-foreground">メッセージ履歴</h4>
-            <div className="space-y-1.5">
-              {contactConversations.map((conv) => {
-                const CIcon = channelIcons[conv.channel];
-                const s = channelStyles[conv.channel];
-                return (
-                  <div key={conv.id} className="flex items-start gap-2.5 rounded-md border px-3 py-2">
-                    <div className={cn("flex h-6 w-6 shrink-0 items-center justify-center rounded-full mt-0.5", s.bg)}>
-                      <CIcon className={cn("h-3 w-3", s.text)} />
+            {contactConversations.length === 0 ? (
+              <p className="text-[13px] text-muted-foreground/60">履歴はありません</p>
+            ) : (
+              <div className="space-y-1.5">
+                {contactConversations.map((conv) => {
+                  const CIcon = channelIcons[conv.channel];
+                  const s = channelStyles[conv.channel];
+                  return (
+                    <div key={conv.id} className="flex items-start gap-2.5 rounded-md border px-3 py-2">
+                      <div className={cn("flex h-6 w-6 shrink-0 items-center justify-center rounded-full mt-0.5", s.bg)}>
+                        <CIcon className={cn("h-3 w-3", s.text)} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[13px] font-medium">{conv.subject || conv.lastMessage}</p>
+                        <p className="text-[12px] text-muted-foreground">{conv.lastMessageAt}</p>
+                      </div>
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-[13px] font-medium">{conv.subject || conv.lastMessage}</p>
-                      <p className="text-[12px] text-muted-foreground">{conv.lastMessageAt}</p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </section>
 
-          {/* Notes */}
+          {/* メモ */}
           <section>
             <h4 className="mb-1.5 text-[12px] font-medium uppercase tracking-wider text-muted-foreground">メモ</h4>
             <p className="text-[14px] text-muted-foreground leading-relaxed">{contact.note || "なし"}</p>

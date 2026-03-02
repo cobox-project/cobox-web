@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback } from "react";
 import Link from "next/link";
+import { User, Bell } from "lucide-react";
 
 export default function NotificationsPage() {
   const saveTimeout = useRef<NodeJS.Timeout | null>(null);
@@ -50,12 +51,14 @@ export default function NotificationsPage() {
             href="/profile"
             className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-[7px] text-[15px] text-muted-foreground hover:bg-accent/50 transition-colors"
           >
+            <User className="h-[16px] w-[16px] shrink-0" />
             プロフィール
           </Link>
           <Link
             href="/notifications"
             className="flex w-full items-center gap-2.5 rounded-md bg-accent px-2.5 py-[7px] text-[15px] font-medium text-foreground"
           >
+            <Bell className="h-[16px] w-[16px] shrink-0" />
             通知
           </Link>
         </nav>

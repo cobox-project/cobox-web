@@ -4,7 +4,7 @@ import { useState, useRef, useCallback } from "react";
 import Link from "next/link";
 import { currentUser } from "@/data/mock";
 import { Avatar } from "@/components/ui/avatar";
-import { Camera } from "lucide-react";
+import { Camera, User, Bell } from "lucide-react";
 
 export default function ProfilePage() {
   const [name, setName] = useState(currentUser.name);
@@ -31,12 +31,14 @@ export default function ProfilePage() {
             href="/profile"
             className="flex w-full items-center gap-2.5 rounded-md bg-accent px-2.5 py-[7px] text-[15px] font-medium text-foreground"
           >
+            <User className="h-[16px] w-[16px] shrink-0" />
             プロフィール
           </Link>
           <Link
             href="/notifications"
             className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-[7px] text-[15px] text-muted-foreground hover:bg-accent/50 transition-colors"
           >
+            <Bell className="h-[16px] w-[16px] shrink-0" />
             通知
           </Link>
         </nav>
