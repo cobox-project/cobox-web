@@ -927,7 +927,7 @@ function MessageBubble({ message, channel }: { message: Message; channel: Channe
             "overflow-hidden rounded-2xl border bg-background",
             isInbound ? "rounded-tl-sm" : "rounded-tr-sm"
           )}>
-            <div className="bg-accent/20 px-3 py-2">
+            <div className="border-b bg-accent/20 px-3 py-2">
               <button onClick={() => setHeaderExpanded(!headerExpanded)}
                 className="flex cursor-pointer items-center gap-2 text-[14px] text-muted-foreground hover:text-foreground transition-colors">
                 <Mail className="h-4 w-4 text-channel-email" />
