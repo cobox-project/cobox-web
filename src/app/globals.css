@@ -131,16 +131,28 @@ body {
   animation: slide-in-right 0.25s ease-out;
 }
 
-/* Read fade animation */
-@keyframes read-fade {
+/* Read collapse animation */
+@keyframes read-collapse {
   0% {
-    background-color: oklch(0.52 0.17 155 / 0.04);
+    max-height: 120px;
+    opacity: 1;
+    padding-top: 0.75rem;
+    padding-bottom: 0.75rem;
+    border-bottom-width: 1px;
+  }
+  70% {
+    opacity: 0.3;
   }
   100% {
-    background-color: transparent;
+    max-height: 0;
+    opacity: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    border-bottom-width: 0;
+    overflow: hidden;
   }
 }
 
 .animate-read-fade {
-  animation: read-fade 0.4s ease-out forwards;
+  animation: read-collapse 0.6s ease-in-out forwards;
 }

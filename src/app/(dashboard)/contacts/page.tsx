@@ -55,15 +55,22 @@ export default function ContactsPage() {
   }, [selectedGroupId, contacts, groups]);
 
   const filtered = useMemo(() => {
-    if (!searchQuery.trim()) return groupContacts;
-    const q = searchQuery.toLowerCase();
-    return groupContacts.filter(
-      (c) =>
-        c.name.toLowerCase().includes(q) ||
-        c.email?.toLowerCase().includes(q) ||
-        c.phone?.includes(q) ||
-        c.company?.toLowerCase().includes(q)
-    );
+    let list = groupContacts;
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter(
+        (c) =>
+          c.name.toLowerCase().includes(q) ||
+          c.email?.toLowerCase().includes(q) ||
+          c.phone?.includes(q) ||
+          c.company?.toLowerCase().includes(q)
+      );
+    }
+    return [...list].sort((a, b) => {
+      const nameA = a.nameFurigana || a.name;
+      const nameB = b.nameFurigana || b.name;
+      return nameA.localeCompare(nameB, "ja");
+    });
   }, [searchQuery, groupContacts]);
 
   const selected = useMemo(
@@ -542,13 +549,16 @@ function ContactDetail({
 
   const markChanged = () => onUnsavedChange();
 
+  const isAddMode = isEditing && contact.isManuallyCreated && !contact.name;
+
   return (
-    <div className="flex-1 overflow-y-auto">
+    <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="flex-1 overflow-y-auto">
       <div className="mx-auto max-w-xl px-8 py-8">
-        <div className="mb-6 flex items-center justify-between">
+        <div className="mb-6 flex items-start justify-between">
           <div>
             <h2 className="text-[19px] font-semibold">
-              {isEditing ? "連絡先を編集" : (contact.name || "（新規連絡先）")}
+              {isEditing ? (contact.isManuallyCreated && !contact.name ? "連絡先を追加" : "連絡先を編集") : (contact.name || "（新規連絡先）")}
             </h2>
             {!isEditing && contact.nameFurigana && (
               <p className="mt-0.5 text-[13px] text-muted-foreground">{contact.nameFurigana}</p>
@@ -674,18 +684,10 @@ function ContactDetail({
                 className="w-full resize-none rounded-md border px-3 py-2.5 text-[15px] outline-none focus:border-brand/40 placeholder:text-muted-foreground/50" />
             </section>
 
-            <div className="pt-4 pb-8 flex gap-3">
-              <Button variant="outline" className="flex-1 h-12 text-[16px] font-medium" onClick={onCancelEdit}>
-                キャンセル
-              </Button>
-              <Button className="flex-1 h-12 bg-brand hover:bg-brand/90 text-[16px] font-medium" onClick={handleSave}>
-                保存
-              </Button>
-            </div>
           </div>
         ) : (
           <div className="space-y-8">
-            <section>
+            <section className="pb-2">
               <h3 className="mb-2 text-[13px] font-medium uppercase tracking-wider text-muted-foreground">会社名</h3>
               {contact.company ? (
                 <p className="text-[17px]">{contact.company}</p>
@@ -788,6 +790,21 @@ function ContactDetail({
           </div>
         )}
       </div>
+      </div>
+
+      {/* Fixed bottom bar for edit/add mode */}
+      {isEditing && (
+        <div className="shrink-0 border-t bg-background px-8 py-4">
+          <div className="mx-auto max-w-xl flex gap-3">
+            <Button variant="outline" className="flex-1 h-11 text-[15px] font-medium" onClick={onCancelEdit}>
+              キャンセル
+            </Button>
+            <Button className="flex-1 h-11 bg-brand hover:bg-brand/90 text-[15px] font-medium" onClick={handleSave}>
+              {isAddMode ? "追加" : "保存"}
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -306,14 +306,14 @@ export default function ReportsPage() {
                 })}
               </svg>
               {/* Bars */}
-              <div className="relative flex items-end gap-2 h-[180px]">
+              <div className="relative flex items-end justify-around h-[180px] px-4">
                 {stackedData.map((d, i) => {
                   const barTotal = d.instagram + d.line + d.email + d.facebook;
                   const height = maxStacked > 0 ? (barTotal / maxStacked) * 170 : 0;
                   return (
                     <div
                       key={i}
-                      className="flex-1 flex flex-col items-center"
+                      className="flex-1 flex flex-col items-center max-w-[36px]"
                       onMouseEnter={(e) => {
                         const rect = e.currentTarget.getBoundingClientRect();
                         setHoveredBar({ d, x: rect.left + rect.width / 2, y: rect.top });
@@ -337,9 +337,9 @@ export default function ReportsPage() {
                 })}
               </div>
               {/* Date + day labels below bars */}
-              <div className="flex gap-2 mt-1">
+              <div className="flex justify-around mt-1 px-4">
                 {stackedData.map((d, i) => (
-                  <div key={i} className="flex-1 text-center">
+                  <div key={i} className="flex-1 max-w-[36px] text-center">
                     <div className="text-[11px] text-muted-foreground leading-tight">{d.date}</div>
                     <div className="text-[10px] text-muted-foreground/60">{d.label}</div>
                   </div>

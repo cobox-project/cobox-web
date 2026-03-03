@@ -4,11 +4,13 @@ import { useState, useRef, useCallback } from "react";
 import Link from "next/link";
 import { currentUser } from "@/data/mock";
 import { Avatar } from "@/components/ui/avatar";
-import { Camera, User, Bell } from "lucide-react";
+import { Camera, User, Bell, Upload } from "lucide-react";
 
 export default function ProfilePage() {
   const [name, setName] = useState(currentUser.name);
   const [email, setEmail] = useState("misaki.tanaka@myshop.jp");
+  const [avatarUrl, setAvatarUrl] = useState(currentUser.avatar);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const saveTimeout = useRef<NodeJS.Timeout | null>(null);
   const [saved, setSaved] = useState(false);
 
@@ -20,6 +22,21 @@ export default function ProfilePage() {
       setTimeout(() => setSaved(false), 2000);
     }, 800);
   }, []);
+
+  const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const result = ev.target?.result as string;
+      if (result) {
+        setAvatarUrl(result);
+        autoSave();
+      }
+    };
+    reader.readAsDataURL(file);
+  }, [autoSave]);
 
   return (
     <div className="flex h-full">
@@ -60,18 +77,35 @@ export default function ProfilePage() {
           <div className="mb-8 flex items-center gap-4">
             <div className="relative">
               <Avatar
-                src={currentUser.avatar}
+                src={avatarUrl}
                 fallback={currentUser.name}
                 size="lg"
                 className="h-20 w-20"
               />
-              <button className="absolute -right-1 -bottom-1 flex h-7 w-7 cursor-pointer items-center justify-center rounded-full bg-brand text-white shadow-sm hover:bg-brand/90 transition-colors">
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="absolute -right-1 -bottom-1 flex h-7 w-7 cursor-pointer items-center justify-center rounded-full bg-brand text-white shadow-sm hover:bg-brand/90 transition-colors"
+              >
                 <Camera className="h-3.5 w-3.5" />
               </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleFileChange}
+              />
             </div>
             <div>
               <p className="text-[16px] font-semibold">{currentUser.name}</p>
               <p className="text-[13px] text-muted-foreground">管理者</p>
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="mt-1 flex items-center gap-1 text-[13px] text-brand hover:text-brand/80 cursor-pointer transition-colors"
+              >
+                <Upload className="h-3 w-3" />
+                写真を変更
+              </button>
             </div>
           </div>
 

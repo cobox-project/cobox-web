@@ -65,6 +65,17 @@ function isUnread(conv: Conversation): boolean {
   return conv.isRead === false || conv.unreadCount > 0;
 }
 
+function renderMentions(text: string): React.ReactNode {
+  const memberNames = teamMembers.map((m) => m.name);
+  const pattern = new RegExp(`(@(?:${memberNames.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")}))`, "g");
+  const parts = text.split(pattern);
+  return parts.map((part, i) =>
+    part.startsWith("@") && memberNames.some((n) => part === `@${n}`)
+      ? <span key={i} className="font-medium text-blue-500">{part}</span>
+      : part
+  );
+}
+
 export default function MessagesPage() {
   const router = useRouter();
   const [conversations, setConversations] = useState(allConversations);
@@ -303,13 +314,13 @@ export default function MessagesPage() {
             <FolderItem icon={AtSign} label="メンションされた" count={counts.mentioned}
               isActive={folderFilter === "mentioned"}
               onClick={() => { setFolderFilter("mentioned"); setAccountFilter(null); setGroupFilter(null); }} />
-            <FolderItem icon={Check} label="解決済み" count={counts.resolved}
+            <FolderItem icon={Check} label="解決済み" count={0}
               isActive={folderFilter === "resolved"}
               onClick={() => { setFolderFilter("resolved"); setAccountFilter(null); setGroupFilter(null); }} />
             <FolderItem icon={Star} label="お気に入り" count={counts.favorite}
               isActive={folderFilter === "favorite"}
               onClick={() => { setFolderFilter("favorite"); setAccountFilter(null); setGroupFilter(null); }} />
-            <FolderItem icon={Ban} label="スパム" count={counts.spam}
+            <FolderItem icon={Ban} label="スパム" count={0}
               isActive={folderFilter === "spam"}
               onClick={() => { setFolderFilter("spam"); setAccountFilter(null); setGroupFilter(null); }} />
           </div>
@@ -917,7 +928,7 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
                   el.style.height = Math.min(el.scrollHeight, 160) + "px";
                 }} />
               <div className="flex items-center justify-between px-3 pb-2">
-                <Tooltip content="ファイルを添付" side="top">
+                <Tooltip content="ファイルを添付" side="right">
                   <Button variant="ghost" size="icon-sm" className="h-8 w-8 text-muted-foreground">
                     <Paperclip className="h-4 w-4" />
                   </Button>
@@ -1008,7 +1019,7 @@ function MessageBubble({ message, channel, contactEmail }: { message: Message; c
             <MessageSquareText className="h-3 w-3 text-amber-500" />
             <span className="text-[12px] font-medium text-amber-600">チーム内メモ</span>
           </div>
-          <p className="text-[14px] leading-relaxed text-amber-900/70">{content}</p>
+          <p className="text-[14px] leading-relaxed text-amber-900/70">{renderMentions(content)}</p>
           <div className="mt-2 flex items-center gap-1.5">
             <Avatar src={teamMembers.find((m) => m.name === senderName)?.avatar} fallback={senderName} size="sm" className="h-4 w-4 text-[5px]" />
             <span className="text-[12px] text-muted-foreground">{senderName}</span>
