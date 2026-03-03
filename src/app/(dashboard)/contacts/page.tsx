@@ -551,7 +551,7 @@ function ContactDetail({
               {isEditing ? "連絡先を編集" : (contact.name || "（新規連絡先）")}
             </h2>
             {!isEditing && contact.nameFurigana && (
-              <p className="mt-0.5 text-[14px] text-muted-foreground">{contact.nameFurigana}</p>
+              <p className="mt-0.5 text-[13px] text-muted-foreground">{contact.nameFurigana}</p>
             )}
           </div>
           {!isEditing && (
@@ -686,19 +686,16 @@ function ContactDetail({
         ) : (
           <div className="space-y-8">
             <section>
-              <h3 className="mb-2 text-[14px] font-medium uppercase tracking-wider text-muted-foreground">会社名</h3>
+              <h3 className="mb-2 text-[13px] font-medium uppercase tracking-wider text-muted-foreground">会社名</h3>
               {contact.company ? (
-                <>
-                  <p className="text-[18px] font-medium">{contact.company}</p>
-                  {contact.companyFurigana && <p className="text-[15px] text-muted-foreground">{contact.companyFurigana}</p>}
-                </>
+                <p className="text-[17px]">{contact.company}</p>
               ) : (
                 <p className="text-[16px] text-muted-foreground/60">なし</p>
               )}
             </section>
 
             <section>
-              <h3 className="mb-2 text-[14px] font-medium uppercase tracking-wider text-muted-foreground">連絡先</h3>
+              <h3 className="mb-2 text-[13px] font-medium uppercase tracking-wider text-muted-foreground">連絡先</h3>
               <div className="space-y-2">
                 {contact.phone && (
                   <div className="flex items-center gap-2.5 text-[17px]">
@@ -708,7 +705,10 @@ function ContactDetail({
                 )}
                 {contact.email && (
                   <div className="flex items-center gap-2.5 text-[17px]">
-                    <span className="text-muted-foreground text-[15px] w-24 shrink-0">メール</span>
+                    <span className="text-muted-foreground text-[15px] w-24 shrink-0 flex items-center gap-1">
+                      <Mail className="h-3.5 w-3.5 text-channel-email" />
+                      メール
+                    </span>
                     <span className={cn(contact.channels.some((ch) => ch.channel === "email" && ch.isAutoLinked) ? "border-b border-dashed border-brand/30" : "")}>
                       {contact.email}
                     </span>
@@ -735,7 +735,7 @@ function ContactDetail({
             </section>
 
             <section>
-              <h3 className="mb-2 text-[14px] font-medium uppercase tracking-wider text-muted-foreground">グループ</h3>
+              <h3 className="mb-2 text-[13px] font-medium uppercase tracking-wider text-muted-foreground">グループ</h3>
               {memberGroups.length === 0 ? (
                 <p className="text-[16px] text-muted-foreground/60">なし</p>
               ) : (
@@ -748,7 +748,7 @@ function ContactDetail({
             </section>
 
             <section>
-              <h3 className="mb-2 text-[14px] font-medium uppercase tracking-wider text-muted-foreground">メッセージ履歴</h3>
+              <h3 className="mb-2 text-[13px] font-medium uppercase tracking-wider text-muted-foreground">メッセージ履歴</h3>
               {contactConversations.length === 0 ? (
                 <p className="text-[16px] text-muted-foreground">履歴はありません</p>
               ) : (
@@ -767,7 +767,7 @@ function ContactDetail({
                           <p className="text-[14px] text-muted-foreground">{conv.lastMessageAt}</p>
                         </div>
                         <span className="rounded-full px-2 py-0.5 text-[12px] font-medium shrink-0 bg-foreground/6 text-foreground/50">
-                          {conv.status === "open" ? "未対応" : conv.status === "pending" ? "保留中" : "解決済み"}
+                          {conv.status === "open" ? "未対応" : conv.status === "resolved" ? "解決済み" : "対応中"}
                         </span>
                       </button>
                     );
@@ -777,11 +777,12 @@ function ContactDetail({
             </section>
 
             <section>
-              <div className="mb-2 text-[14px] text-muted-foreground">ID: {contact.id}</div>
+              <h3 className="mb-2 text-[13px] font-medium uppercase tracking-wider text-muted-foreground">ID</h3>
+              <p className="text-[17px] tabular-nums">{contact.id}</p>
             </section>
 
             <section>
-              <h3 className="mb-2 text-[14px] font-medium uppercase tracking-wider text-muted-foreground">メモ</h3>
+              <h3 className="mb-2 text-[13px] font-medium uppercase tracking-wider text-muted-foreground">メモ</h3>
               <p className="text-[17px] leading-relaxed text-foreground/80">{contact.note || "なし"}</p>
             </section>
           </div>

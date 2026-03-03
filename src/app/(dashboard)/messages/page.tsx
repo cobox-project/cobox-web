@@ -26,7 +26,6 @@ import {
   Paperclip,
   MoreHorizontal,
   UserPlus,
-  Clock,
   Check,
   CircleDashed,
   MessageSquareText,
@@ -39,6 +38,7 @@ import {
   Star,
   Ban,
   AlertTriangle,
+  AtSign,
 } from "lucide-react";
 
 const channelIcons: Record<Channel, React.ElementType> = {
@@ -55,7 +55,7 @@ const channelStyles: Record<Channel, { bg: string; text: string }> = {
   facebook: { bg: "bg-channel-facebook/10", text: "text-channel-facebook" },
 };
 
-type FolderFilter = "all" | "mine" | "pending" | "resolved" | "favorite" | "spam";
+type FolderFilter = "all" | "mine" | "mentioned" | "resolved" | "favorite" | "spam";
 
 function getAccountName(accountId: string): string {
   return accounts.find((a) => a.id === accountId)?.name ?? "";
@@ -105,8 +105,8 @@ export default function MessagesPage() {
       case "mine":
         list = list.filter((c) => c.assignee?.id === currentUser.id);
         break;
-      case "pending":
-        list = list.filter((c) => c.status === "pending");
+      case "mentioned":
+        list = list.filter((c) => c.messages.some((m) => m.isInternal && m.content.includes(`@${currentUser.name}`)));
         break;
       case "resolved":
         list = list.filter((c) => c.status === "resolved");
@@ -254,7 +254,7 @@ export default function MessagesPage() {
     return {
       all: nonSpam.length,
       mine: nonSpam.filter((c) => c.assignee?.id === currentUser.id).length,
-      pending: nonSpam.filter((c) => c.status === "pending").length,
+      mentioned: nonSpam.filter((c) => c.messages.some((m) => m.isInternal && m.content.includes(`@${currentUser.name}`))).length,
       resolved: nonSpam.filter((c) => c.status === "resolved").length,
       favorite: nonSpam.filter((c) => c.isFavorite).length,
       spam: conversations.filter((c) => c.isSpam).length,
@@ -300,9 +300,9 @@ export default function MessagesPage() {
             <FolderItemWithAvatar label="自分のアサイン分" count={counts.mine}
               isActive={folderFilter === "mine"}
               onClick={() => { setFolderFilter("mine"); setAccountFilter(null); setGroupFilter(null); }} />
-            <FolderItem icon={Clock} label="保留" count={counts.pending}
-              isActive={folderFilter === "pending"}
-              onClick={() => { setFolderFilter("pending"); setAccountFilter(null); setGroupFilter(null); }} />
+            <FolderItem icon={AtSign} label="メンションされた" count={counts.mentioned}
+              isActive={folderFilter === "mentioned"}
+              onClick={() => { setFolderFilter("mentioned"); setAccountFilter(null); setGroupFilter(null); }} />
             <FolderItem icon={Check} label="解決済み" count={counts.resolved}
               isActive={folderFilter === "resolved"}
               onClick={() => { setFolderFilter("resolved"); setAccountFilter(null); setGroupFilter(null); }} />
@@ -620,6 +620,93 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
   const [emailBcc, setEmailBcc] = useState("");
   const [emailSubject, setEmailSubject] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const memoRef = useRef<HTMLTextAreaElement>(null);
+
+  // @mention autocomplete state
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const [mentionIndex, setMentionIndex] = useState(0);
+  const [mentionPos, setMentionPos] = useState<{ top: number; left: number } | null>(null);
+  const mentionStartRef = useRef<number>(-1);
+
+  const mentionCandidates = useMemo(() => {
+    if (mentionQuery === null) return [];
+    const q = mentionQuery.toLowerCase();
+    return teamMembers.filter((m) => m.name.toLowerCase().includes(q));
+  }, [mentionQuery]);
+
+  const insertMention = useCallback((memberName: string) => {
+    const start = mentionStartRef.current;
+    const before = memoText.substring(0, start);
+    const afterCursor = memoText.substring(memoRef.current?.selectionStart ?? start);
+    // Find end of the @query
+    const queryEnd = memoRef.current?.selectionStart ?? start;
+    const after = memoText.substring(queryEnd);
+    const newText = `${before}@${memberName} ${after}`;
+    setMemoText(newText);
+    setMentionQuery(null);
+    setMentionIndex(0);
+    mentionStartRef.current = -1;
+    // Focus and set cursor position after the inserted mention
+    requestAnimationFrame(() => {
+      if (memoRef.current) {
+        const cursorPos = before.length + memberName.length + 2; // +2 for @ and space
+        memoRef.current.focus();
+        memoRef.current.setSelectionRange(cursorPos, cursorPos);
+      }
+    });
+  }, [memoText]);
+
+  const handleMemoChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const val = e.target.value;
+    setMemoText(val);
+    const cursorPos = e.target.selectionStart;
+    const textBefore = val.substring(0, cursorPos);
+    const lastAtIndex = textBefore.lastIndexOf("@");
+    if (lastAtIndex >= 0) {
+      const charBeforeAt = lastAtIndex > 0 ? textBefore[lastAtIndex - 1] : " ";
+      if (charBeforeAt === " " || charBeforeAt === "\n" || lastAtIndex === 0) {
+        const query = textBefore.substring(lastAtIndex + 1);
+        if (!query.includes(" ") && !query.includes("\n")) {
+          mentionStartRef.current = lastAtIndex;
+          setMentionQuery(query);
+          setMentionIndex(0);
+          setMentionPos({ top: 0, left: 0 });
+          return;
+        }
+      }
+    }
+    setMentionQuery(null);
+    setMentionIndex(0);
+  };
+
+  const handleMemoKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (mentionQuery !== null && mentionCandidates.length > 0) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setMentionIndex((prev) => Math.min(prev + 1, mentionCandidates.length - 1));
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setMentionIndex((prev) => Math.max(prev - 1, 0));
+        return;
+      }
+      if (e.key === "Enter" || e.key === "Tab") {
+        e.preventDefault();
+        insertMention(mentionCandidates[mentionIndex].name);
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setMentionQuery(null);
+        return;
+      }
+    }
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+      e.preventDefault();
+      handleSendMemo();
+    }
+  };
 
   const Icon = channelIcons[conversation.channel];
   const style = channelStyles[conversation.channel];
@@ -779,9 +866,6 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
             <DropdownItem onClick={() => onMarkUnread(conversation.id)}>
               <Mail className="h-3.5 w-3.5" /> 未読にする
             </DropdownItem>
-            <DropdownItem onClick={() => onStatusChange(conversation.id, "pending")}>
-              <Clock className="h-3.5 w-3.5" /> 保留にする
-            </DropdownItem>
             <DropdownItem onClick={() => onMarkSpam(conversation.id)}>
               <Ban className="h-3.5 w-3.5" /> スパムとして報告
             </DropdownItem>
@@ -796,7 +880,7 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
       <div className="flex-1 overflow-y-auto px-5 py-5">
         <div className="mx-auto max-w-2xl space-y-4">
           {conversation.messages.map((message) => (
-            <MessageBubble key={message.id} message={message} channel={conversation.channel} />
+            <MessageBubble key={message.id} message={message} channel={conversation.channel} contactEmail={contactObj?.email} />
           ))}
 
           {/* Inline reply input - after last message */}
@@ -851,21 +935,17 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
       {/* Team memo */}
       <div className="border-t px-5 py-3">
         <div className="mx-auto max-w-2xl">
-          <div className="rounded-lg border border-amber-200/50 bg-amber-50/30">
+          <div className="relative rounded-lg border border-amber-200/50 bg-amber-50/30">
             <div className="flex items-center gap-2.5 px-3 py-3">
               <MessageSquareText className="h-4 w-4 shrink-0 text-amber-500" />
-              <textarea value={memoText} onChange={(e) => setMemoText(e.target.value)}
-                placeholder="チーム内メモを入力"
+              <textarea value={memoText} onChange={handleMemoChange}
+                placeholder="チーム内メモを入力（@でメンション）"
                 rows={1}
                 className="flex-1 resize-none bg-transparent text-[14px] leading-normal outline-none placeholder:text-amber-400/60"
                 style={{ height: "auto", minHeight: "24px", maxHeight: "80px", overflow: "auto" }}
-                onKeyDown={(e) => {
-                  if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-                    e.preventDefault();
-                    handleSendMemo();
-                  }
-                }}
+                onKeyDown={handleMemoKeyDown}
                 ref={(el) => {
+                  (memoRef as React.MutableRefObject<HTMLTextAreaElement | null>).current = el;
                   if (el) {
                     el.style.height = "auto";
                     el.style.height = Math.min(el.scrollHeight, 80) + "px";
@@ -880,6 +960,31 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
                 </Button>
               </div>
             )}
+
+            {/* @mention suggestions popup */}
+            {mentionQuery !== null && mentionCandidates.length > 0 && mentionPos && (
+              <div
+                className="absolute bottom-full left-8 mb-1 w-[200px] rounded-lg border bg-popover p-1 shadow-lg z-[300]"
+              >
+                {mentionCandidates.map((member, i) => (
+                  <button
+                    key={member.id}
+                    className={cn(
+                      "flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-[14px] transition-colors cursor-pointer",
+                      i === mentionIndex ? "bg-accent text-foreground" : "text-foreground hover:bg-accent/50"
+                    )}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      insertMention(member.name);
+                    }}
+                    onMouseEnter={() => setMentionIndex(i)}
+                  >
+                    <Avatar src={member.avatar} fallback={member.name} size="sm" className="h-6 w-6 text-[8px]" />
+                    <span className="font-medium">{member.name}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -889,7 +994,7 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
 
 /* ─── Message Bubble ─────────────────────────────── */
 
-function MessageBubble({ message, channel }: { message: Message; channel: Channel }) {
+function MessageBubble({ message, channel, contactEmail }: { message: Message; channel: Channel; contactEmail?: string }) {
   const { content, timestamp, isInbound, senderName, isInternal, emailHeader } = message;
   const [headerExpanded, setHeaderExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -936,10 +1041,10 @@ function MessageBubble({ message, channel }: { message: Message; channel: Channe
               </button>
               {headerExpanded && (
                 <div className="mt-2 space-y-1 text-[14px] text-muted-foreground">
-                  {senderName && isInbound && (
+                  {isInbound && (contactEmail || senderName) && (
                     <div className="flex items-center gap-2">
                       <span className="w-10 shrink-0 text-right font-medium text-[13px]">From</span>
-                      <span>{senderName}</span>
+                      <span>{contactEmail || senderName}</span>
                     </div>
                   )}
                   {emailHeader.to && (
