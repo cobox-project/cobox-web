@@ -1,5 +1,5 @@
-export type Channel = "instagram" | "line" | "email" | "facebook";
-export type Status = "open" | "pending" | "resolved";
+export type Channel = "instagram" | "line" | "email" | "facebook" | "whatsapp";
+export type Status = "open" | "completed" | "no_action";
 
 export interface Account {
   id: string;
@@ -25,7 +25,7 @@ export interface ContactGroup {
 export interface ChannelHandle {
   channel: Channel;
   handle: string;
-  isAutoLinked?: boolean; // true if linked from inbound message
+  isAutoLinked?: boolean;
 }
 
 export interface Contact {
@@ -50,6 +50,15 @@ export interface EmailHeader {
   bcc?: string;
 }
 
+export interface Attachment {
+  id: string;
+  name: string;
+  type: "image" | "pdf" | "file";
+  url: string;
+  size?: string;
+  mimeType?: string;
+}
+
 export interface Message {
   id: string;
   content: string;
@@ -58,25 +67,27 @@ export interface Message {
   senderName: string;
   isInternal?: boolean;
   emailHeader?: EmailHeader;
+  attachments?: Attachment[];
 }
 
 export interface Conversation {
   id: string;
+  messageNumber: number;
   accountId: string;
   contactId: string;
   contactName: string;
   channel: Channel;
   status: Status;
-  assignee?: TeamMember;
+  assignees: TeamMember[];
   subject?: string;
   lastMessage: string;
   lastMessageAt: string;
   unreadCount: number;
   isRead?: boolean;
-  needsAction?: boolean;
   messages: Message[];
   isFavorite?: boolean;
-  isSpam?: boolean;
+  linkedConversationIds?: string[];
+  linkedContactId?: string;
 }
 
 export interface AccountPermission {
@@ -88,4 +99,11 @@ export interface AccountPermission {
 export interface MemberPermissions {
   memberId: string;
   permissions: AccountPermission[];
+}
+
+export interface ComposeTemplate {
+  id: string;
+  name: string;
+  subject?: string;
+  body: string;
 }
