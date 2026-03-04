@@ -20,6 +20,8 @@ import {
   FolderOpen,
   X,
   Trash2,
+  UserPlus,
+  Check,
 } from "lucide-react";
 
 const channelIcons: Record<Channel, React.ElementType> = {
@@ -36,6 +38,10 @@ const channelStyles: Record<Channel, { bg: string; text: string }> = {
   facebook: { bg: "bg-channel-facebook/10", text: "text-channel-facebook" },
 };
 
+function isAddMode(contact: Contact): boolean {
+  return !!contact.isManuallyCreated && !contact.name;
+}
+
 export default function ContactsPage() {
   const router = useRouter();
   const [contacts, setContacts] = useState(initialContacts);
@@ -45,6 +51,7 @@ export default function ContactsPage() {
   const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [showAddGroup, setShowAddGroup] = useState(false);
+  const [showAddToGroup, setShowAddToGroup] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   const groupContacts = useMemo(() => {
@@ -147,6 +154,18 @@ export default function ContactsPage() {
     });
   };
 
+  const handleAddContactsToGroup = (contactIds: string[]) => {
+    if (!selectedGroupId) return;
+    setGroups((prev) =>
+      prev.map((g) => {
+        if (g.id !== selectedGroupId) return g;
+        const newIds = contactIds.filter((id) => !g.contactIds.includes(id));
+        return { ...g, contactIds: [...g.contactIds, ...newIds] };
+      })
+    );
+    setShowAddToGroup(false);
+  };
+
   const handleDeleteContact = (contactId: string) => {
     const contact = contacts.find((c) => c.id === contactId);
     if (!contact) return;
@@ -235,7 +254,15 @@ export default function ContactsPage() {
               className="flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted-foreground/50"
             />
           </div>
-          {selectedGroupId === null && (
+          {/* Section title header */}
+          {selectedGroupId && (
+            <div className="mt-2 px-1">
+              <p className="text-[12px] font-medium text-muted-foreground truncate">
+                {groups.find((g) => g.id === selectedGroupId)?.name}
+              </p>
+            </div>
+          )}
+          {selectedGroupId === null ? (
             <button
               onClick={handleAddContact}
               className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-xl border border-border/60 bg-accent/30 px-3 py-2.5 text-[14px] text-muted-foreground hover:bg-accent/60 transition-colors cursor-pointer"
@@ -243,11 +270,24 @@ export default function ContactsPage() {
               <Plus className="h-4 w-4" />
               連絡先を追加する
             </button>
+          ) : (
+            <button
+              onClick={() => setShowAddToGroup(true)}
+              className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-xl border border-brand/30 bg-brand/5 px-3 py-2.5 text-[14px] text-brand hover:bg-brand/10 transition-colors cursor-pointer"
+            >
+              <UserPlus className="h-4 w-4" />
+              このグループに追加
+            </button>
           )}
         </div>
 
         <div className="flex-1 overflow-y-auto">
-          {filtered.map((contact) => (
+          {filtered.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+              <Search className="mb-2 h-8 w-8 opacity-20" />
+              <p className="text-[14px]">連絡先がありません。</p>
+            </div>
+          ) : filtered.map((contact) => (
             <button
               key={contact.id}
               onClick={() => {
@@ -300,7 +340,10 @@ export default function ContactsPage() {
           groups={groups}
           isEditing={isEditing}
           onStartEdit={() => setIsEditing(true)}
-          onCancelEdit={() => {
+          onCancelEdit={(hasInput) => {
+            if (isAddMode(selected) && hasInput) {
+              if (!window.confirm("入力内容が破棄されます。よろしいですか？")) return;
+            }
             setIsEditing(false);
             setHasUnsavedChanges(false);
             // If it's a new empty contact, remove it
@@ -318,11 +361,7 @@ export default function ContactsPage() {
           }}
           onUnsavedChange={() => setHasUnsavedChanges(true)}
           onUpdateGroups={(updatedGroups) => setGroups(updatedGroups)}
-          onDelete={() => {
-            if (selected.isManuallyCreated) {
-              handleDeleteContact(selected.id);
-            }
-          }}
+          onDelete={() => handleDeleteContact(selected.id)}
           onNavigateToThread={(convId) => {
             router.push(`/messages?thread=${convId}`);
           }}
@@ -338,6 +377,15 @@ export default function ContactsPage() {
 
       {showAddGroup && (
         <AddGroupModal onAdd={handleAddGroup} onClose={() => setShowAddGroup(false)} />
+      )}
+
+      {showAddToGroup && selectedGroupId && (
+        <AddToGroupModal
+          contacts={contacts}
+          currentGroupContactIds={groups.find((g) => g.id === selectedGroupId)?.contactIds ?? []}
+          onAdd={handleAddContactsToGroup}
+          onClose={() => setShowAddToGroup(false)}
+        />
       )}
     </div>
   );
@@ -500,7 +548,7 @@ function ContactDetail({
   groups: ContactGroup[];
   isEditing: boolean;
   onStartEdit: () => void;
-  onCancelEdit: () => void;
+  onCancelEdit: (hasInput: boolean) => void;
   onUpdateContact: (updated: Contact) => void;
   onUnsavedChange: () => void;
   onUpdateGroups: (groups: ContactGroup[]) => void;
@@ -525,6 +573,11 @@ function ContactDetail({
   const memberGroups = groups.filter((g) => g.contactIds.includes(contact.id));
 
   const handleSave = () => {
+    // New contacts require name
+    if (isAdd && !editName.trim()) {
+      window.alert("氏名を入力してください。");
+      return;
+    }
     const updated: Contact = {
       ...contact,
       name: editName,
@@ -549,7 +602,9 @@ function ContactDetail({
 
   const markChanged = () => onUnsavedChange();
 
-  const isAddMode = isEditing && contact.isManuallyCreated && !contact.name;
+  const isAdd = isEditing && contact.isManuallyCreated && !contact.name;
+
+  const hasAnyInput = !!(editName || editNameFurigana || editCompany || editCompanyFurigana || editPhone || editEmail || editNote || editChannels.some(ch => ch.handle));
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
@@ -565,16 +620,9 @@ function ContactDetail({
             )}
           </div>
           {!isEditing && (
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" className="h-9 text-[14px] px-4" onClick={onStartEdit}>
-                編集
-              </Button>
-              {contact.isManuallyCreated && (
-                <Button variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-destructive" onClick={onDelete}>
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              )}
-            </div>
+            <Button variant="outline" size="sm" className="h-9 text-[14px] px-4" onClick={onStartEdit}>
+              編集
+            </Button>
           )}
         </div>
 
@@ -682,6 +730,20 @@ function ContactDetail({
               <textarea value={editNote} onChange={(e) => { setEditNote(e.target.value); markChanged(); }}
                 placeholder="メモを入力..." rows={4}
                 className="w-full resize-none rounded-md border px-3 py-2.5 text-[15px] outline-none focus:border-brand/40 placeholder:text-muted-foreground/50" />
+            </section>
+
+            <section className="pt-4 border-t border-border/40">
+              <button
+                onClick={() => {
+                  if (window.confirm("この連絡先を削除しますか？")) {
+                    onDelete();
+                  }
+                }}
+                className="flex w-full items-center justify-center gap-2 rounded-lg border border-destructive/30 px-4 py-3 text-[14px] font-medium text-destructive hover:bg-destructive/5 transition-colors cursor-pointer"
+              >
+                <Trash2 className="h-4 w-4" />
+                この連絡先を削除
+              </button>
             </section>
 
           </div>
@@ -796,11 +858,11 @@ function ContactDetail({
       {isEditing && (
         <div className="shrink-0 border-t bg-background px-8 py-4">
           <div className="mx-auto max-w-xl flex gap-3">
-            <Button variant="outline" className="flex-1 h-11 text-[15px] font-medium" onClick={onCancelEdit}>
+            <Button variant="outline" className="flex-1 h-11 text-[15px] font-medium" onClick={() => onCancelEdit(hasAnyInput)}>
               キャンセル
             </Button>
             <Button className="flex-1 h-11 bg-brand hover:bg-brand/90 text-[15px] font-medium" onClick={handleSave}>
-              {isAddMode ? "追加" : "保存"}
+              {isAdd ? "追加" : "保存"}
             </Button>
           </div>
         </div>
@@ -829,6 +891,106 @@ function AddGroupModal({ onAdd, onClose }: { onAdd: (name: string) => void; onCl
           <button onClick={onClose} className="cursor-pointer rounded-lg border px-4 py-2.5 text-[14px] font-medium hover:bg-accent">キャンセル</button>
           <button onClick={() => name.trim() && onAdd(name.trim())} disabled={!name.trim()}
             className="cursor-pointer rounded-lg bg-brand px-4 py-2.5 text-[14px] font-medium text-white hover:bg-brand/90 disabled:opacity-50">追加</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Add To Group Modal ─────────────────── */
+function AddToGroupModal({ contacts, currentGroupContactIds, onAdd, onClose }: {
+  contacts: Contact[];
+  currentGroupContactIds: string[];
+  onAdd: (contactIds: string[]) => void;
+  onClose: () => void;
+}) {
+  const [search, setSearch] = useState("");
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase().trim();
+    return contacts.filter((c) => {
+      if (!q) return true;
+      return c.name.toLowerCase().includes(q) || c.email?.toLowerCase().includes(q) || c.company?.toLowerCase().includes(q);
+    });
+  }, [contacts, search]);
+
+  const toggleContact = (id: string) => {
+    setSelectedIds((prev) => prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]);
+  };
+
+  const alreadyInGroup = (id: string) => currentGroupContactIds.includes(id);
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/30" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="flex w-[420px] max-h-[520px] flex-col rounded-xl bg-background shadow-xl">
+        <div className="shrink-0 p-5 pb-3">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-[17px] font-semibold">このグループに追加</h2>
+            <button onClick={onClose} className="cursor-pointer rounded-md p-1 text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
+          </div>
+          <div className="flex items-center gap-2 rounded-xl border px-3 py-2">
+            <Search className="h-4 w-4 text-muted-foreground" />
+            <input
+              autoFocus value={search} onChange={(e) => setSearch(e.target.value)}
+              placeholder="連絡先を検索..."
+              className="flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted-foreground/50" />
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-5">
+          {filtered.length === 0 ? (
+            <p className="py-8 text-center text-[14px] text-muted-foreground">該当する連絡先がありません</p>
+          ) : (
+            <div className="space-y-0.5">
+              {filtered.map((contact) => {
+                const inGroup = alreadyInGroup(contact.id);
+                const isSelected = selectedIds.includes(contact.id);
+                return (
+                  <button
+                    key={contact.id}
+                    onClick={() => !inGroup && toggleContact(contact.id)}
+                    disabled={inGroup}
+                    className={cn(
+                      "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors",
+                      inGroup
+                        ? "opacity-40 cursor-not-allowed"
+                        : isSelected
+                          ? "bg-brand/8 cursor-pointer"
+                          : "hover:bg-accent/50 cursor-pointer"
+                    )}
+                  >
+                    <div className={cn(
+                      "flex h-5 w-5 shrink-0 items-center justify-center rounded border transition-colors",
+                      inGroup
+                        ? "bg-muted border-border"
+                        : isSelected
+                          ? "bg-brand border-brand"
+                          : "border-border"
+                    )}>
+                      {(inGroup || isSelected) && <Check className={cn("h-3 w-3", inGroup ? "text-muted-foreground" : "text-white")} />}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[15px] font-medium">{contact.name || "（名前なし）"}</p>
+                      {contact.company && <p className="truncate text-[12px] text-muted-foreground">{contact.company}</p>}
+                    </div>
+                    {inGroup && <span className="shrink-0 text-[11px] text-muted-foreground">追加済み</span>}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className="shrink-0 border-t p-5 pt-4 flex justify-between items-center">
+          <span className="text-[13px] text-muted-foreground">
+            {selectedIds.length > 0 ? `${selectedIds.length}件選択中` : "選択してください"}
+          </span>
+          <div className="flex gap-2">
+            <button onClick={onClose} className="cursor-pointer rounded-lg border px-4 py-2.5 text-[14px] font-medium hover:bg-accent">キャンセル</button>
+            <button onClick={() => onAdd(selectedIds)} disabled={selectedIds.length === 0}
+              className="cursor-pointer rounded-lg bg-brand px-4 py-2.5 text-[14px] font-medium text-white hover:bg-brand/90 disabled:opacity-50">追加</button>
+          </div>
         </div>
       </div>
     </div>

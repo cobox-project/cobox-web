@@ -4,7 +4,7 @@ import { useState, useRef, useCallback } from "react";
 import Link from "next/link";
 import { currentUser } from "@/data/mock";
 import { Avatar } from "@/components/ui/avatar";
-import { Camera, User, Bell, Upload } from "lucide-react";
+import { Camera, User, Bell } from "lucide-react";
 
 export default function ProfilePage() {
   const [name, setName] = useState(currentUser.name);
@@ -99,13 +99,6 @@ export default function ProfilePage() {
             <div>
               <p className="text-[16px] font-semibold">{currentUser.name}</p>
               <p className="text-[13px] text-muted-foreground">管理者</p>
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="mt-1 flex items-center gap-1 text-[13px] text-brand hover:text-brand/80 cursor-pointer transition-colors"
-              >
-                <Upload className="h-3 w-3" />
-                写真を変更
-              </button>
             </div>
           </div>
 
