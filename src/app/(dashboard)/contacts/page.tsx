@@ -273,7 +273,7 @@ export default function ContactsPage() {
           ) : (
             <button
               onClick={() => setShowAddToGroup(true)}
-              className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-xl border border-brand/30 bg-brand/5 px-3 py-2.5 text-[14px] text-brand hover:bg-brand/10 transition-colors cursor-pointer"
+              className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-xl border border-border/60 bg-accent/30 px-3 py-2.5 text-[14px] text-muted-foreground hover:bg-accent/60 transition-colors cursor-pointer"
             >
               <UserPlus className="h-4 w-4" />
               このグループに追加
@@ -732,17 +732,16 @@ function ContactDetail({
                 className="w-full resize-none rounded-md border px-3 py-2.5 text-[15px] outline-none focus:border-brand/40 placeholder:text-muted-foreground/50" />
             </section>
 
-            <section className="pt-4 border-t border-border/40">
+            <section className="pt-4">
               <button
                 onClick={() => {
                   if (window.confirm("この連絡先を削除しますか？")) {
                     onDelete();
                   }
                 }}
-                className="flex w-full items-center justify-center gap-2 rounded-lg border border-destructive/30 px-4 py-3 text-[14px] font-medium text-destructive hover:bg-destructive/5 transition-colors cursor-pointer"
+                className="text-[14px] text-destructive hover:text-destructive/70 underline underline-offset-2 transition-colors cursor-pointer"
               >
-                <Trash2 className="h-4 w-4" />
-                この連絡先を削除
+                連絡先を削除する
               </button>
             </section>
 

@@ -39,6 +39,7 @@ import {
   Ban,
   AlertTriangle,
   AtSign,
+  Smile,
 } from "lucide-react";
 
 const channelIcons: Record<Channel, React.ElementType> = {
@@ -54,6 +55,13 @@ const channelStyles: Record<Channel, { bg: string; text: string }> = {
   email: { bg: "bg-channel-email/10", text: "text-channel-email" },
   facebook: { bg: "bg-channel-facebook/10", text: "text-channel-facebook" },
 };
+
+const lineStamps = [
+  "👍", "❤️", "😊", "😂", "🙏", "👋",
+  "🎉", "💪", "😭", "🤗", "😍", "🥺",
+  "✨", "🔥", "🌸", "☀️", "🙌", "😎",
+  "💕", "🤝", "👏", "🫡", "🤣", "😢",
+];
 
 type FolderFilter = "all" | "mine" | "mentioned" | "resolved" | "favorite" | "spam";
 
@@ -89,6 +97,8 @@ export default function MessagesPage() {
   const [detailContactId, setDetailContactId] = useState<string | null>(null);
   const [unreadOnly, setUnreadOnly] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [recentlyReadIds, setRecentlyReadIds] = useState<Set<string>>(new Set());
+  const [undoStack, setUndoStack] = useState<{ id: string; unreadCount: number }[]>([]);
 
   const filtered = useMemo(() => {
     let list = conversations;
@@ -131,7 +141,7 @@ export default function MessagesPage() {
     }
 
     if (unreadOnly) {
-      list = list.filter(isUnread);
+      list = list.filter(c => isUnread(c) || recentlyReadIds.has(c.id));
     }
 
     if (searchQuery.trim()) {
@@ -145,7 +155,7 @@ export default function MessagesPage() {
     }
 
     return list;
-  }, [conversations, folderFilter, accountFilter, groupFilter, searchQuery, unreadOnly]);
+  }, [conversations, folderFilter, accountFilter, groupFilter, searchQuery, unreadOnly, recentlyReadIds]);
 
   const selectedConversation = useMemo(
     () => conversations.find((c) => c.id === selectedId) ?? null,
@@ -247,15 +257,24 @@ export default function MessagesPage() {
 
   // Track which conversation was viewed, mark as read when navigating away
   const prevSelectedRef = useRef<string | null>(null);
+  const unreadOnlyRef = useRef(unreadOnly);
+  unreadOnlyRef.current = unreadOnly;
   useEffect(() => {
     // Mark the previously viewed conversation as read when selection changes
     if (prevSelectedRef.current && prevSelectedRef.current !== selectedId) {
       const prevId = prevSelectedRef.current;
-      setConversations((prev) =>
-        prev.map((c) =>
+      setConversations((prev) => {
+        const prevConv = prev.find(c => c.id === prevId);
+        if (prevConv && isUnread(prevConv) && unreadOnlyRef.current) {
+          queueMicrotask(() => {
+            setRecentlyReadIds(s => new Set(s).add(prevId));
+            setUndoStack(stack => [...stack, { id: prevId, unreadCount: prevConv.unreadCount }]);
+          });
+        }
+        return prev.map((c) =>
           c.id === prevId ? { ...c, isRead: true, unreadCount: 0 } : c
-        )
-      );
+        );
+      });
     }
     prevSelectedRef.current = selectedId;
   }, [selectedId]);
@@ -288,6 +307,34 @@ export default function MessagesPage() {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [filtered, selectedId]);
+
+  // Undo: restore recently read conversation with Cmd+Z
+  const undoStackRef = useRef(undoStack);
+  undoStackRef.current = undoStack;
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "z" && !e.shiftKey) {
+        if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+        if (undoStackRef.current.length === 0) return;
+        e.preventDefault();
+        const last = undoStackRef.current[undoStackRef.current.length - 1];
+        setUndoStack(stack => stack.slice(0, -1));
+        setConversations((prev) =>
+          prev.map((c) =>
+            c.id === last.id ? { ...c, isRead: false, unreadCount: last.unreadCount } : c
+          )
+        );
+        setRecentlyReadIds((s) => {
+          const next = new Set(s);
+          next.delete(last.id);
+          return next;
+        });
+        setSelectedId(last.id);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
 
   const detailContact = detailContactId
     ? contacts.find((c) => c.id === detailContactId) ?? null
@@ -424,7 +471,15 @@ export default function MessagesPage() {
               <ConversationItem key={conv.id} conversation={conv}
                 isSelected={conv.id === selectedId}
                 unreadOnly={unreadOnly}
-                onSelect={() => setSelectedId(conv.id)} />
+                isRecentlyRead={recentlyReadIds.has(conv.id)}
+                onSelect={() => setSelectedId(conv.id)}
+                onAnimationComplete={() => {
+                  setRecentlyReadIds(s => {
+                    const next = new Set(s);
+                    next.delete(conv.id);
+                    return next;
+                  });
+                }} />
             ))
           )}
         </div>
@@ -535,8 +590,9 @@ function FolderItemWithAvatar({ label, count, isActive, onClick }: {
 
 /* ─── Conversation List Item ─────────────────────── */
 
-function ConversationItem({ conversation, isSelected, unreadOnly, onSelect }: {
-  conversation: Conversation; isSelected: boolean; unreadOnly: boolean; onSelect: () => void;
+function ConversationItem({ conversation, isSelected, unreadOnly, isRecentlyRead, onSelect, onAnimationComplete }: {
+  conversation: Conversation; isSelected: boolean; unreadOnly: boolean; isRecentlyRead?: boolean;
+  onSelect: () => void; onAnimationComplete?: () => void;
 }) {
   const { contactName, channel, lastMessage, lastMessageAt, assignee, subject } = conversation;
   const Icon = channelIcons[channel];
@@ -545,27 +601,17 @@ function ConversationItem({ conversation, isSelected, unreadOnly, onSelect }: {
   // Priority: resolved > unread
   const isResolved = conversation.status === "resolved";
 
-  // Track when unread state changes to animate
-  const prevUnreadRef = useRef(unread);
-  const [justRead, setJustRead] = useState(false);
-
-  useEffect(() => {
-    if (prevUnreadRef.current && !unread) {
-      setJustRead(true);
-      const timer = setTimeout(() => setJustRead(false), 400);
-      return () => clearTimeout(timer);
-    }
-    prevUnreadRef.current = unread;
-  }, [unread]);
-
   // Display: subject only for email, lastMessage (1 line) for others
   const displayText = channel === "email" && subject ? subject : lastMessage;
 
   return (
     <button onClick={onSelect}
+      onAnimationEnd={() => {
+        if (isRecentlyRead && onAnimationComplete) onAnimationComplete();
+      }}
       className={cn(
         "flex w-full gap-3 border-b px-4 py-3 text-left transition-all duration-300 cursor-pointer",
-        justRead && unreadOnly && "animate-read-fade",
+        isRecentlyRead && unreadOnly && "animate-read-fade",
         isSelected
           ? "bg-brand text-white"
           : isResolved
@@ -662,6 +708,20 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
   const [mentionPos, setMentionPos] = useState<{ top: number; left: number } | null>(null);
   const mentionStartRef = useRef<number>(-1);
 
+  // LINE stamp picker state
+  const [showStampPicker, setShowStampPicker] = useState(false);
+  const stampPickerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!showStampPicker) return;
+    const handler = (e: MouseEvent) => {
+      if (stampPickerRef.current && !stampPickerRef.current.contains(e.target as Node)) {
+        setShowStampPicker(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showStampPicker]);
+
   const mentionCandidates = useMemo(() => {
     if (mentionQuery === null) return [];
     const q = mentionQuery.toLowerCase();
@@ -746,6 +806,7 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
   const style = channelStyles[conversation.channel];
 
   const isEmail = conversation.channel === "email";
+  const isLine = conversation.channel === "line";
   const isSelfAssigned = conversation.assignee?.id === currentUser.id;
 
   const contactObj = contacts.find((c) => c.id === conversation.contactId);
@@ -951,11 +1012,40 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
                   el.style.height = Math.min(el.scrollHeight, 160) + "px";
                 }} />
               <div className="flex items-center justify-between px-3 pb-2">
-                <Tooltip content="ファイルを添付" side="right">
-                  <Button variant="ghost" size="icon-sm" className="h-8 w-8 text-muted-foreground">
-                    <Paperclip className="h-4 w-4" />
-                  </Button>
-                </Tooltip>
+                <div className="flex items-center gap-1">
+                  <Tooltip content="ファイルを添付" side="right">
+                    <Button variant="ghost" size="icon-sm" className="h-8 w-8 text-muted-foreground">
+                      <Paperclip className="h-4 w-4" />
+                    </Button>
+                  </Tooltip>
+                  {isLine && (
+                    <div ref={stampPickerRef} className="relative">
+                      <Tooltip content="スタンプ" side="right">
+                        <Button variant="ghost" size="icon-sm" className="h-8 w-8 text-muted-foreground"
+                          onClick={() => setShowStampPicker(!showStampPicker)}>
+                          <Smile className="h-4 w-4" />
+                        </Button>
+                      </Tooltip>
+                      {showStampPicker && (
+                        <div className="absolute bottom-full left-0 mb-2 w-[280px] rounded-lg border bg-popover p-3 shadow-lg z-[200]">
+                          <p className="mb-2 text-[12px] font-medium text-muted-foreground">スタンプ</p>
+                          <div className="grid grid-cols-6 gap-1">
+                            {lineStamps.map((stamp, i) => (
+                              <button key={i}
+                                className="flex h-10 w-10 items-center justify-center rounded-lg text-[22px] hover:bg-accent transition-colors cursor-pointer"
+                                onClick={() => {
+                                  onSendMessage(conversation.id, stamp, false);
+                                  setShowStampPicker(false);
+                                }}>
+                                {stamp}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
                 <Button size="sm" className="h-8 rounded-md bg-brand hover:bg-brand/90 px-4 text-[14px]"
                   disabled={!replyText.trim()} onClick={handleSendReply}>
                   <Send className="h-3 w-3 mr-1" /> 送信
@@ -1107,6 +1197,10 @@ function MessageBubble({ message, channel, contactEmail }: { message: Message; c
                 <span key={i}>{line}{i < content.split("\n").length - 1 && <br />}</span>
               ))}
             </div>
+          </div>
+        ) : lineStamps.includes(content.trim()) ? (
+          <div className="text-[48px] leading-none py-1">
+            {content}
           </div>
         ) : (
           <div className={cn(
