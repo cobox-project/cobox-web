@@ -11,7 +11,7 @@ import {
   MessageCircle,
   Mail,
   Facebook,
-  Phone,
+
   Link2,
   Users,
   Plus,
@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 
 const tabs = [
-  { id: "accounts", label: "アカウント接続", icon: Link2 },
+  { id: "accounts", label: "チャネル接続", icon: Link2 },
   { id: "team", label: "チーム", icon: Users },
   { id: "billing", label: "支払い", icon: CreditCard },
 ] as const;
@@ -35,7 +35,6 @@ const channelIcons: Record<Channel, React.ElementType> = {
   line: MessageCircle,
   email: Mail,
   facebook: Facebook,
-  whatsapp: Phone,
 };
 
 const channelLabels: Record<Channel, string> = {
@@ -43,7 +42,6 @@ const channelLabels: Record<Channel, string> = {
   line: "LINE",
   email: "Email",
   facebook: "Facebook",
-  whatsapp: "WhatsApp Business",
 };
 
 const channelStyles: Record<Channel, { bg: string; text: string }> = {
@@ -51,7 +49,6 @@ const channelStyles: Record<Channel, { bg: string; text: string }> = {
   line: { bg: "bg-channel-line/10", text: "text-channel-line" },
   email: { bg: "bg-channel-email/10", text: "text-channel-email" },
   facebook: { bg: "bg-channel-facebook/10", text: "text-channel-facebook" },
-  whatsapp: { bg: "bg-channel-whatsapp/10", text: "text-channel-whatsapp" },
 };
 
 export default function SettingsPage() {
@@ -98,8 +95,8 @@ function AccountsSettings() {
     <div>
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <h2 className="text-[17px] font-semibold">アカウント接続</h2>
-          <p className="mt-0.5 text-[13px] text-muted-foreground">メッセージを受信するアカウントを管理</p>
+          <h2 className="text-[17px] font-semibold">チャネル接続</h2>
+          <p className="mt-0.5 text-[13px] text-muted-foreground">メッセージを受信するチャネルを管理</p>
         </div>
         <Button size="sm" className="h-8 gap-1.5 text-[13px] bg-brand hover:bg-brand/90"
           onClick={() => setShowAddModal(true)}>
@@ -139,7 +136,7 @@ function AccountsSettings() {
           onClick={(e) => { if (e.target === e.currentTarget) setShowAddModal(false); }}>
           <div className="w-[520px] rounded-xl bg-background p-6 shadow-xl">
             <div className="mb-5 flex items-center justify-between">
-              <h2 className="text-[19px] font-semibold">アカウントを追加</h2>
+              <h2 className="text-[19px] font-semibold">チャネルを追加</h2>
               <button onClick={() => setShowAddModal(false)}
                 className="cursor-pointer rounded-md p-1.5 text-muted-foreground hover:bg-accent">
                 <X className="h-4 w-4" />
@@ -231,16 +228,6 @@ function AccountsSettings() {
                 </div>
               </button>
 
-              {/* 【11】WhatsApp Business */}
-              <button className="flex w-full items-center gap-3 rounded-lg border px-4 py-3.5 text-left hover:bg-accent/30 transition-colors cursor-pointer">
-                <div className={cn("flex h-10 w-10 items-center justify-center rounded-lg", channelStyles.whatsapp.bg)}>
-                  <Phone className={cn("h-5 w-5", channelStyles.whatsapp.text)} />
-                </div>
-                <div className="flex-1">
-                  <p className="text-[15px] font-medium">WhatsApp Business</p>
-                  <p className="text-[13px] text-muted-foreground">Meta Business API連携</p>
-                </div>
-              </button>
             </div>
           </div>
         </div>
@@ -276,7 +263,7 @@ function TeamSettings() {
   return (
     <div>
       <h2 className="text-[17px] font-semibold mb-1">チーム</h2>
-      <p className="mb-5 text-[13px] text-muted-foreground">チームメンバーとアカウント権限を管理</p>
+      <p className="mb-5 text-[13px] text-muted-foreground">チームメンバーとチャネル権限を管理</p>
 
       <div className="mb-8">
         <label className="mb-1.5 block text-[13px] font-medium text-muted-foreground">チーム名</label>
@@ -323,7 +310,7 @@ function TeamSettings() {
               </div>
               {isExpanded && memberPerms && (
                 <div className="border-t bg-accent/20 px-4 py-4">
-                  <p className="text-[13px] font-medium text-muted-foreground mb-3">アカウント別権限</p>
+                  <p className="text-[13px] font-medium text-muted-foreground mb-3">チャネル別権限</p>
                   <div className="space-y-2">
                     {accounts.map((account) => {
                       const perm = memberPerms.permissions.find((p) => p.accountId === account.id);
@@ -377,15 +364,15 @@ function BillingSettings() {
       name: "フリー",
       price: "¥0",
       priceNum: 0,
-      desc: "永久無料",
+      desc: "無料",
       members: "1名",
       features: [
-        "1アカウントのみ",
+        "1チャネルのみ",
         "LINE連携不可",
         "データ保存: 30日",
         "クレカ登録不要",
       ],
-      channelNote: "Email / Instagram / Facebook / WhatsApp",
+      channelNote: "Email / Instagram / Facebook",
     },
     {
       id: "starter",
@@ -395,7 +382,7 @@ function BillingSettings() {
       desc: "小規模チーム向け",
       members: "1〜5名",
       features: [
-        "5アカウントまで",
+        "5チャネルまで",
         "LINE無料枠: 200通/月",
         "超過: 3円/通",
         "データ保存: 180日",
@@ -410,7 +397,7 @@ function BillingSettings() {
       desc: "成長中のチーム向け",
       members: "6名以上",
       features: [
-        "無制限アカウント",
+        "無制限チャネル",
         "LINE無料枠: 1,000通/月",
         "超過: 3円/通",
         "データ保存: 無制限",
@@ -518,7 +505,7 @@ function BillingSettings() {
 
             {/* Channel note */}
             <p className="mb-4 text-[13px] text-muted-foreground">
-              Email / Instagram / Facebook / WhatsApp: 全プラン無制限・無料
+              Email / Instagram / Facebook: 全プラン無制限・無料
             </p>
 
             <div className="grid grid-cols-3 gap-4">

@@ -19,9 +19,9 @@ import { Avatar } from "@/components/ui/avatar";
 import {
   Instagram,
   MessageCircle,
+  MessageCircleMore,
   Mail,
   Facebook,
-  Phone,
   Send,
   Paperclip,
   MoreHorizontal,
@@ -43,10 +43,7 @@ import {
   Image as ImageIcon,
   Plus,
   UserPlus,
-  Clock,
-  CheckCircle2,
-  MinusCircle,
-  Users,
+  FolderOpen,
 } from "lucide-react";
 
 const channelIcons: Record<Channel, React.ElementType> = {
@@ -54,7 +51,6 @@ const channelIcons: Record<Channel, React.ElementType> = {
   line: MessageCircle,
   email: Mail,
   facebook: Facebook,
-  whatsapp: Phone,
 };
 
 const channelStyles: Record<Channel, { bg: string; text: string }> = {
@@ -62,7 +58,6 @@ const channelStyles: Record<Channel, { bg: string; text: string }> = {
   line: { bg: "bg-channel-line/10", text: "text-channel-line" },
   email: { bg: "bg-channel-email/10", text: "text-channel-email" },
   facebook: { bg: "bg-channel-facebook/10", text: "text-channel-facebook" },
-  whatsapp: { bg: "bg-channel-whatsapp/10", text: "text-channel-whatsapp" },
 };
 
 const lineStamps = [
@@ -236,14 +231,6 @@ export default function MessagesPage() {
     setDeleteConfirmId(null);
   }, [selectedId]);
 
-  const handleMarkUnread = useCallback((id: string) => {
-    setConversations((prev) =>
-      prev.map((c) =>
-        c.id === id ? { ...c, isRead: false, unreadCount: Math.max(1, c.unreadCount) } : c
-      )
-    );
-  }, []);
-
   const handleSendMessage = useCallback((id: string, content: string, isInternal: boolean) => {
     const now = new Date();
     const ts = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, "0")}/${String(now.getDate()).padStart(2, "0")} ${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
@@ -353,14 +340,23 @@ export default function MessagesPage() {
   const currentSectionLabel = useMemo(() => {
     if (accountFilter) return accounts.find((a) => a.id === accountFilter)?.name ?? null;
     if (groupFilter) return contactGroups.find((g) => g.id === groupFilter)?.name ?? null;
-    return null;
-  }, [accountFilter, groupFilter]);
+    const folderLabels: Record<FolderFilter, string> = {
+      new: "新着", in_progress: "対応中", completed: "完了", no_action: "対応なし",
+      mine: "自分が担当", mentioned: "メンションされた", favorite: "お気に入り",
+    };
+    return folderLabels[folderFilter] ?? null;
+  }, [accountFilter, groupFilter, folderFilter]);
 
   return (
     <div className="flex h-full overflow-x-auto">
       {/* ── Layer 2: Folders (220px) ── 【1】 */}
       <div className="flex h-full w-[220px] shrink-0 flex-col border-r bg-background">
-        <div className="shrink-0 px-3 pt-4 pb-2" />
+        <div className="shrink-0 px-3 pt-4 pb-2 flex items-center justify-between">
+          <h2 className="px-2 text-[15px] font-semibold text-foreground">メッセージ</h2>
+          <button onClick={() => router.push("/messages/compose")} className="cursor-pointer rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors">
+            <Plus className="h-4 w-4" />
+          </button>
+        </div>
 
         <nav className="flex-1 overflow-y-auto px-2">
           {/* Status folders */}
@@ -368,13 +364,13 @@ export default function MessagesPage() {
             <FolderItem icon={Inbox} label="新着" count={counts.new}
               isActive={folderFilter === "new" && !accountFilter && !groupFilter}
               onClick={() => { setFolderFilter("new"); setAccountFilter(null); setGroupFilter(null); }} />
-            <FolderItem icon={Clock} label="対応中" count={counts.in_progress}
+            <FolderItem icon={MessageCircleMore} label="対応中" count={counts.in_progress}
               isActive={folderFilter === "in_progress" && !accountFilter && !groupFilter}
               onClick={() => { setFolderFilter("in_progress"); setAccountFilter(null); setGroupFilter(null); }} />
-            <FolderItem icon={CheckCircle2} label="完了" count={counts.completed}
+            <FolderItem icon={Check} label="完了" count={0}
               isActive={folderFilter === "completed" && !accountFilter && !groupFilter}
               onClick={() => { setFolderFilter("completed"); setAccountFilter(null); setGroupFilter(null); }} />
-            <FolderItem icon={MinusCircle} label="対応なし" count={counts.no_action}
+            <FolderItem icon={X} label="対応なし" count={counts.no_action}
               isActive={folderFilter === "no_action" && !accountFilter && !groupFilter}
               onClick={() => { setFolderFilter("no_action"); setAccountFilter(null); setGroupFilter(null); }} />
           </div>
@@ -402,15 +398,14 @@ export default function MessagesPage() {
               className="mb-1 flex w-full items-center gap-1 px-2 text-[12px] font-medium uppercase tracking-wider text-muted-foreground cursor-pointer hover:text-foreground transition-colors"
             >
               <ChevronDown className={cn("h-3 w-3 transition-transform", !accountsExpanded && "-rotate-90")} />
-              アカウント
+              チャネル
             </button>
             {accountsExpanded && (
               <div className="space-y-0.5">
                 {accounts.map((account) => {
                   const Icon = channelIcons[account.channel];
-                  const nonSpam = conversations.filter((c) => c.accountId === account.id);
                   return (
-                    <FolderItem key={account.id} icon={Icon} label={account.name} count={nonSpam.length}
+                    <FolderItem key={account.id} icon={Icon} label={account.name} count={0}
                       isActive={accountFilter === account.id}
                       onClick={() => { setAccountFilter(account.id); setFolderFilter("new"); setGroupFilter(null); }}
                       iconColor={channelStyles[account.channel].text} />
@@ -431,31 +426,16 @@ export default function MessagesPage() {
             </button>
             {groupsExpanded && (
               <div className="space-y-0.5">
-                {contactGroups.map((group) => {
-                  const groupConvCount = conversations.filter(
-                    (c) => group.contactIds.includes(c.contactId)
-                  ).length;
-                  return (
-                    <FolderItem key={group.id} icon={Users} label={group.name} count={groupConvCount}
+                {contactGroups.map((group) => (
+                    <FolderItem key={group.id} icon={FolderOpen} label={group.name} count={0}
                       isActive={groupFilter === group.id}
                       onClick={() => { setGroupFilter(group.id); setFolderFilter("new"); setAccountFilter(null); }} />
-                  );
-                })}
+                ))}
               </div>
             )}
           </div>
         </nav>
 
-        {/* New compose button */}
-        <div className="shrink-0 px-3 py-3 border-t">
-          <Button
-            className="w-full h-9 gap-1.5 text-[13px] bg-brand hover:bg-brand/90"
-            onClick={() => router.push("/messages/compose")}
-          >
-            <Plus className="h-3.5 w-3.5" />
-            新規作成
-          </Button>
-        </div>
       </div>
 
       {/* ── Layer 3: Thread list (320px) ── */}
@@ -485,6 +465,7 @@ export default function MessagesPage() {
             filtered.map((conv) => (
               <ConversationItem key={conv.id} conversation={conv}
                 isSelected={conv.id === selectedId}
+                isSelfAssigned={conv.assignees.some((a) => a.id === currentUser.id)}
                 isRecentlyRead={recentlyReadIds.has(conv.id)}
                 onSelect={() => setSelectedId(conv.id)}
                 onAnimationComplete={() => {
@@ -512,7 +493,6 @@ export default function MessagesPage() {
           onOpenContactDetail={(contactId) => setDetailContactId(contactId)}
           onToggleFavorite={handleToggleFavorite}
           onRequestDelete={(id) => setDeleteConfirmId(id)}
-          onMarkUnread={handleMarkUnread}
           onSendMessage={handleSendMessage}
           onLinkConversation={handleLinkConversation}
           onUnlinkConversation={handleUnlinkConversation}
@@ -621,8 +601,8 @@ function FolderItemWithAvatar({ label, count, isActive, onClick }: {
 
 /* ─── Conversation List Item ─────────────────────── */
 
-function ConversationItem({ conversation, isSelected, isRecentlyRead, onSelect, onAnimationComplete }: {
-  conversation: Conversation; isSelected: boolean; isRecentlyRead?: boolean;
+function ConversationItem({ conversation, isSelected, isSelfAssigned, isRecentlyRead, onSelect, onAnimationComplete }: {
+  conversation: Conversation; isSelected: boolean; isSelfAssigned?: boolean; isRecentlyRead?: boolean;
   onSelect: () => void; onAnimationComplete?: () => void;
 }) {
   const { contactName, channel, lastMessage, lastMessageAt, assignees, subject } = conversation;
@@ -643,11 +623,9 @@ function ConversationItem({ conversation, isSelected, isRecentlyRead, onSelect, 
         "flex w-full gap-3 border-b px-4 py-3 text-left transition-all duration-300 cursor-pointer",
         isSelected
           ? "bg-brand text-white"
-          : isCompleted || isNoAction
-            ? "bg-background hover:bg-accent/40"
-            : unread
-              ? "bg-brand/4 hover:bg-brand/8"
-              : "bg-background hover:bg-accent/40"
+          : isSelfAssigned
+            ? "bg-brand/5 hover:bg-brand/10"
+            : "bg-background hover:bg-accent/40"
       )}>
       {/* Channel icon */}
       <div className={cn(
@@ -723,7 +701,7 @@ function ConversationItem({ conversation, isSelected, isRecentlyRead, onSelect, 
 function ConversationDetail({ conversation, conversations: allConvs, onStatusChange,
   onAssignSelf, onRemoveAssignee, onSetAssignee,
   onOpenContactDetail, onToggleFavorite, onRequestDelete,
-  onMarkUnread, onSendMessage, onLinkConversation, onUnlinkConversation,
+  onSendMessage, onLinkConversation, onUnlinkConversation,
   onNavigateToContact, onSelectConversation, onPreviewImage }: {
   conversation: Conversation; conversations: Conversation[];
   onStatusChange: (id: string, status: Status) => void;
@@ -733,7 +711,6 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
   onOpenContactDetail: (contactId: string) => void;
   onToggleFavorite: (id: string) => void;
   onRequestDelete: (id: string) => void;
-  onMarkUnread: (id: string) => void;
   onSendMessage: (id: string, content: string, isInternal: boolean) => void;
   onLinkConversation: (convId: string, targetId: string) => void;
   onUnlinkConversation: (convId: string, targetId: string) => void;
@@ -741,6 +718,7 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
   onSelectConversation: (id: string) => void;
   onPreviewImage: (url: string) => void;
 }) {
+  const [showRightPane, setShowRightPane] = useState(true);
   const [replyText, setReplyText] = useState("");
   const [memoText, setMemoText] = useState("");
   const [emailFrom, setEmailFrom] = useState("info@myshop.jp");
@@ -841,7 +819,7 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
 
   const contactObj = contacts.find((c) => c.id === conversation.contactId);
   const accountObj = accounts.find((a) => a.id === conversation.accountId);
-  const channelLabel = conversation.channel === "email" ? "メール" : conversation.channel === "line" ? "LINE" : conversation.channel === "instagram" ? "Instagram" : conversation.channel === "whatsapp" ? "WhatsApp" : "Facebook";
+  const channelLabel = conversation.channel === "email" ? "メール" : conversation.channel === "line" ? "LINE" : conversation.channel === "instagram" ? "Instagram" : "Facebook";
   const accountName = accountObj?.name ?? "";
 
   useEffect(() => {
@@ -893,7 +871,7 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
       <div className="flex h-full min-w-[400px] flex-1 flex-col bg-background">
         {/* 【2】Action bar */}
         <header className="flex shrink-0 items-center justify-between border-b px-5 py-3">
-          <button onClick={() => onOpenContactDetail(conversation.contactId)}
+          <button onClick={() => setShowRightPane((prev) => !prev)}
             className="flex min-w-0 items-center gap-3 cursor-pointer rounded-lg px-2 py-1.5 -ml-2 transition-colors hover:bg-accent active:bg-accent/80">
             <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-full", style.bg)}>
               <Icon className={cn("h-4 w-4", style.text)} />
@@ -907,82 +885,80 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
           </button>
 
           <div className="flex items-center gap-1.5">
-            {/* 【2】Assign self button - changes text based on existing assignees */}
-            {!isSelfAssigned && (
-              <Button variant="outline" size="sm" className="h-9 gap-1.5 text-[14px] px-3"
-                onClick={() => onAssignSelf(conversation.id)}>
-                <UserPlus className="h-3.5 w-3.5" />
-                {conversation.assignees.length === 0 ? "自分をアサイン" : "自分をアサイン追加"}
-              </Button>
-            )}
-
-            {/* 【2】Assignee dropdown */}
-            <Dropdown align="right"
-              trigger={
-                <Button variant="ghost" size="sm" className="h-9 gap-1 text-[14px] px-3 border">
-                  {conversation.assignees.length > 0 ? (
-                    <span className="flex items-center gap-1">
-                      {conversation.assignees.map((a) => (
-                        <Avatar key={a.id} src={a.avatar} fallback={a.name} size="sm" className="h-4 w-4 text-[6px]" />
-                      ))}
-                      担当者
-                    </span>
-                  ) : (
-                    <span className="flex items-center gap-1">
-                      <CircleDashed className="h-3.5 w-3.5" />
-                      担当者
-                    </span>
-                  )}
-                  <ChevronDown className="h-2.5 w-2.5 text-muted-foreground" />
+            {/* Assignee button group: self-assign + dropdown */}
+            <div className="flex items-center">
+              {!isSelfAssigned && (
+                <Button variant="outline" size="sm" className="h-9 gap-1.5 text-[14px] px-3 rounded-r-none border-r-0"
+                  onClick={() => onAssignSelf(conversation.id)}>
+                  <UserPlus className="h-3.5 w-3.5" />
+                  自分をアサイン
                 </Button>
-              }>
-              {teamMembers.map((m) => {
-                const isAssigned = conversation.assignees.some((a) => a.id === m.id);
-                return (
-                  <DropdownItem key={m.id} active={isAssigned}
-                    onClick={() => isAssigned ? onRemoveAssignee(conversation.id, m.id) : onSetAssignee(conversation.id, m.id)}>
-                    <Avatar src={m.avatar} fallback={m.name} size="sm" className="h-4 w-4 text-[6px]" />
-                    {m.name}
-                    {isAssigned && <Check className="h-3 w-3 ml-auto text-brand" />}
-                  </DropdownItem>
-                );
-              })}
-            </Dropdown>
+              )}
+              <Dropdown align="right"
+                trigger={
+                  <Button variant="outline" size="sm" className={cn("h-9 gap-1 text-[14px] px-3", !isSelfAssigned && "rounded-l-none")}>
+                    {conversation.assignees.length > 0 ? (
+                      <span className="flex items-center gap-1">
+                        {conversation.assignees.map((a) => (
+                          <Avatar key={a.id} src={a.avatar} fallback={a.name} size="sm" className="h-4 w-4 text-[6px]" />
+                        ))}
+                        {isSelfAssigned && <span>担当者</span>}
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1">
+                        <CircleDashed className="h-3.5 w-3.5" />
+                      </span>
+                    )}
+                    <ChevronDown className="h-2.5 w-2.5 text-muted-foreground" />
+                  </Button>
+                }>
+                {teamMembers.map((m) => {
+                  const isAssigned = conversation.assignees.some((a) => a.id === m.id);
+                  return (
+                    <DropdownItem key={m.id} active={isAssigned}
+                      onClick={() => isAssigned ? onRemoveAssignee(conversation.id, m.id) : onSetAssignee(conversation.id, m.id)}>
+                      <Avatar src={m.avatar} fallback={m.name} size="sm" className="h-4 w-4 text-[6px]" />
+                      {m.name}
+                      {isAssigned && <Check className="h-3 w-3 ml-auto text-brand" />}
+                    </DropdownItem>
+                  );
+                })}
+              </Dropdown>
+            </div>
 
-            {/* 【2】Complete button - single click */}
-            {conversation.status !== "completed" ? (
-              <Button size="sm"
-                className="h-9 gap-1.5 text-[14px] px-4 bg-brand hover:bg-brand/90"
-                onClick={() => onStatusChange(conversation.id, "completed")}>
-                <CheckCircle2 className="h-3.5 w-3.5" />
-                完了にする
-              </Button>
-            ) : (
-              <Button size="sm" variant="outline"
-                className="h-9 gap-1.5 text-[14px] px-4"
-                onClick={() => onStatusChange(conversation.id, "open")}>
-                対応中に戻す
-              </Button>
-            )}
+            {/* Side-by-side 完了/対応なし buttons */}
+            <div className="flex items-center rounded-lg border overflow-hidden">
+              <button
+                onClick={() => onStatusChange(conversation.id, conversation.status === "completed" ? "open" : "completed")}
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-[7px] text-[14px] font-medium transition-colors cursor-pointer",
+                  conversation.status === "completed"
+                    ? "bg-brand text-white"
+                    : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                )}>
+                <Check className="h-3.5 w-3.5" />
+                完了
+              </button>
+              <div className="w-px bg-border h-5" />
+              <button
+                onClick={() => onStatusChange(conversation.id, conversation.status === "no_action" ? "open" : "no_action")}
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-[7px] text-[14px] font-medium transition-colors cursor-pointer",
+                  conversation.status === "no_action"
+                    ? "bg-foreground/80 text-white"
+                    : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                )}>
+                <X className="h-3.5 w-3.5" />
+                対応なし
+              </button>
+            </div>
 
-            {/* 【2】More menu with 対応なし */}
+            {/* More menu */}
             <Dropdown align="right"
               trigger={<Button variant="ghost" size="icon-sm" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button>}>
               <DropdownItem onClick={() => onToggleFavorite(conversation.id)}>
                 <Star className={cn("h-3.5 w-3.5", conversation.isFavorite && "fill-amber-400 text-amber-400")} />
                 {conversation.isFavorite ? "お気に入りを解除" : "お気に入り"}
-              </DropdownItem>
-              {conversation.status !== "no_action" ? (
-                <DropdownItem onClick={() => onStatusChange(conversation.id, "no_action")}>
-                  <MinusCircle className="h-3.5 w-3.5" /> 対応なしにする
-                </DropdownItem>
-              ) : (
-                <DropdownItem onClick={() => onStatusChange(conversation.id, "open")}>
-                  <Inbox className="h-3.5 w-3.5" /> 対応なしを解除
-                </DropdownItem>
-              )}
-              <DropdownItem onClick={() => onMarkUnread(conversation.id)}>
-                <Mail className="h-3.5 w-3.5" /> 未読にする
               </DropdownItem>
               <DropdownItem className="text-destructive" onClick={() => onRequestDelete(conversation.id)}>
                 <Trash2 className="h-3.5 w-3.5" /> 完全に削除
@@ -994,11 +970,21 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
         {/* Messages + inline reply */}
         <div className="flex-1 overflow-y-auto px-5 py-5">
           <div className="mx-auto max-w-2xl space-y-4">
+            {/* Linked messages banner (top) */}
+            {linkedIds.length > 0 && (
+              <LinkedMessagesBanner linkedIds={linkedIds} allConversations={allConvs} onSelect={onSelectConversation} />
+            )}
+
             {conversation.messages.map((message) => (
               <MessageBubble key={message.id} message={message} channel={conversation.channel}
                 contactEmail={contactObj?.email} onPreviewImage={onPreviewImage} />
             ))}
             <div ref={messagesEndRef} />
+
+            {/* Linked messages banner (bottom) */}
+            {linkedIds.length > 0 && (
+              <LinkedMessagesBanner linkedIds={linkedIds} allConversations={allConvs} onSelect={onSelectConversation} />
+            )}
 
             {/* Reply input */}
             <div className="flex justify-end">
@@ -1069,6 +1055,13 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
                 </div>
               </div>
             </div>
+
+            {/* Message ID */}
+            <div className="text-center">
+              <span className="text-[12px] text-muted-foreground/50 tabular-nums">
+                メッセージID: {formatMessageNumber(conversation.messageNumber)}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -1119,17 +1112,20 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
       </div>
 
       {/* 【3】Right side pane */}
-      <RightSidePane
-        conversation={conversation}
-        allConversations={allConvs}
-        contactConversations={contactConversations}
-        linkedContact={linkedContact}
-        linkedIds={linkedIds}
-        onLinkConversation={onLinkConversation}
-        onUnlinkConversation={onUnlinkConversation}
-        onNavigateToContact={onNavigateToContact}
-        onSelectConversation={onSelectConversation}
-      />
+      {showRightPane && (
+        <RightSidePane
+          conversation={conversation}
+          allConversations={allConvs}
+          contactConversations={contactConversations}
+          linkedContact={linkedContact}
+          linkedIds={linkedIds}
+          onLinkConversation={onLinkConversation}
+          onUnlinkConversation={onUnlinkConversation}
+          onNavigateToContact={onNavigateToContact}
+          onSelectConversation={onSelectConversation}
+          onClose={() => setShowRightPane(false)}
+        />
+      )}
     </div>
   );
 }
@@ -1137,7 +1133,7 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
 /* ─── 【3】Right Side Pane ─────────────────────────── */
 
 function RightSidePane({ conversation, allConversations, contactConversations, linkedContact, linkedIds,
-  onLinkConversation, onUnlinkConversation, onNavigateToContact, onSelectConversation }: {
+  onLinkConversation, onUnlinkConversation, onNavigateToContact, onSelectConversation, onClose }: {
   conversation: Conversation;
   allConversations: Conversation[];
   contactConversations: Conversation[];
@@ -1147,113 +1143,99 @@ function RightSidePane({ conversation, allConversations, contactConversations, l
   onUnlinkConversation: (convId: string, targetId: string) => void;
   onNavigateToContact: (contactId: string) => void;
   onSelectConversation: (id: string) => void;
+  onClose: () => void;
 }) {
-  const [contactExpanded, setContactExpanded] = useState(true);
-  const [historyExpanded, setHistoryExpanded] = useState(true);
-  const [showLinkPicker, setShowLinkPicker] = useState(false);
-
   const contactObj = contacts.find((c) => c.id === conversation.contactId);
   const contactGroups_ = contactGroups.filter((g) => g.contactIds.includes(conversation.contactId));
 
   return (
-    <div className="flex h-full w-[300px] min-w-[260px] shrink-0 flex-col border-l bg-background overflow-y-auto">
-      {/* Message ID at top */}
-      <div className="shrink-0 px-4 py-3 border-b">
-        <span className="text-[15px] font-semibold tabular-nums text-foreground">
-          メッセージID: {formatMessageNumber(conversation.messageNumber)}
-        </span>
+    <div className="flex h-full w-[300px] min-w-[260px] shrink-0 flex-col border-l bg-background animate-slide-in-right">
+      {/* Header with close button */}
+      <div className="shrink-0 flex items-center justify-between px-4 py-3 border-b">
+        <span className="text-[14px] font-semibold text-foreground">詳細</span>
+        <button onClick={onClose} className="cursor-pointer rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors">
+          <X className="h-4 w-4" />
+        </button>
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-3">
-        {/* 連絡先 section */}
-        <section className="mb-4">
-          <button onClick={() => setContactExpanded(!contactExpanded)}
-            className="flex w-full items-center gap-1.5 py-1.5 text-[13px] font-semibold text-foreground cursor-pointer">
-            <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", !contactExpanded && "-rotate-90")} />
-            連絡先
-          </button>
-          {contactExpanded && (
-            <div className="mt-2 space-y-2">
-              {linkedContact || contactObj ? (
-                <div>
-                  <button
-                    onClick={() => onNavigateToContact((linkedContact ?? contactObj)!.id)}
-                    className="text-[15px] font-medium text-brand hover:text-brand/80 cursor-pointer transition-colors"
-                  >
-                    {(linkedContact ?? contactObj)!.name}
-                  </button>
-                  {(linkedContact ?? contactObj)!.company && (
-                    <p className="text-[13px] text-muted-foreground">{(linkedContact ?? contactObj)!.company}</p>
-                  )}
-
-                  {/* Channel info */}
-                  <div className="mt-2 space-y-1">
-                    {(linkedContact ?? contactObj)!.channels.map((ch) => {
-                      const CIcon = channelIcons[ch.channel];
-                      const s = channelStyles[ch.channel];
-                      return (
-                        <div key={ch.channel + ch.handle} className="flex items-center gap-2 text-[13px]">
-                          <CIcon className={cn("h-3.5 w-3.5", s.text)} />
-                          <span className="text-muted-foreground">{ch.handle}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* Groups */}
-                  {contactGroups_.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-1">
-                      {contactGroups_.map((g) => (
-                        <span key={g.id} className="rounded-full bg-accent px-2 py-0.5 text-[11px] font-medium text-foreground/70">{g.name}</span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <button className="flex items-center gap-1.5 text-[14px] text-brand hover:text-brand/80 transition-colors cursor-pointer">
-                  <Plus className="h-3.5 w-3.5" />
-                  連絡先と紐づける
+        {/* 連絡先 section - always visible */}
+        <section className="mb-5">
+          <h4 className="py-1.5 text-[14px] font-semibold text-foreground">連絡先</h4>
+          <div className="mt-2 space-y-2">
+            {linkedContact || contactObj ? (
+              <div>
+                <button
+                  onClick={() => onNavigateToContact((linkedContact ?? contactObj)!.id)}
+                  className="text-[16px] font-medium text-brand hover:text-brand/80 cursor-pointer transition-colors"
+                >
+                  {(linkedContact ?? contactObj)!.name}
                 </button>
-              )}
-            </div>
-          )}
+                {(linkedContact ?? contactObj)!.company && (
+                  <p className="text-[14px] text-muted-foreground">{(linkedContact ?? contactObj)!.company}</p>
+                )}
+
+                {/* Channel info */}
+                <div className="mt-2 space-y-1">
+                  {(linkedContact ?? contactObj)!.channels.map((ch) => {
+                    const CIcon = channelIcons[ch.channel];
+                    const s = channelStyles[ch.channel];
+                    return (
+                      <div key={ch.channel + ch.handle} className="flex items-center gap-2 text-[14px]">
+                        <CIcon className={cn("h-3.5 w-3.5", s.text)} />
+                        <span className="text-muted-foreground">{ch.handle}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Groups */}
+                {contactGroups_.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {contactGroups_.map((g) => (
+                      <span key={g.id} className="rounded-full bg-accent px-2 py-0.5 text-[12px] font-medium text-foreground/70">{g.name}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <button className="flex items-center gap-1.5 text-[14px] text-brand hover:text-brand/80 transition-colors cursor-pointer">
+                <Plus className="h-3.5 w-3.5" />
+                連絡先と紐づける
+              </button>
+            )}
+          </div>
         </section>
 
-        {/* メッセージ履歴 section */}
+        {/* メッセージ履歴 section - always visible */}
         <section>
-          <button onClick={() => setHistoryExpanded(!historyExpanded)}
-            className="flex w-full items-center gap-1.5 py-1.5 text-[13px] font-semibold text-foreground cursor-pointer">
-            <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", !historyExpanded && "-rotate-90")} />
-            メッセージ履歴
-          </button>
-          {historyExpanded && (
-            <div className="mt-2 space-y-1.5">
-              {contactConversations.length === 0 ? (
-                <p className="text-[13px] text-muted-foreground/60">履歴はありません</p>
-              ) : (
-                contactConversations.map((conv) => {
-                  const CIcon = channelIcons[conv.channel];
-                  const s = channelStyles[conv.channel];
-                  const isLinked = linkedIds.includes(conv.id);
-                  const isCurrent = conv.id === conversation.id;
-                  return (
-                    <ThreadHistoryItem
-                      key={conv.id}
-                      conv={conv}
-                      CIcon={CIcon}
-                      channelStyle={s}
-                      isLinked={isLinked}
-                      isCurrent={isCurrent}
-                      currentConvId={conversation.id}
-                      onSelect={() => onSelectConversation(conv.id)}
-                      onLink={() => onLinkConversation(conversation.id, conv.id)}
-                      onUnlink={() => onUnlinkConversation(conversation.id, conv.id)}
-                    />
-                  );
-                })
-              )}
-            </div>
-          )}
+          <h4 className="py-1.5 text-[14px] font-semibold text-foreground">メッセージ履歴</h4>
+          <div className="mt-2 space-y-1.5">
+            {contactConversations.length === 0 ? (
+              <p className="text-[14px] text-muted-foreground/60">履歴はありません</p>
+            ) : (
+              contactConversations.map((conv) => {
+                const CIcon = channelIcons[conv.channel];
+                const s = channelStyles[conv.channel];
+                const isLinked = linkedIds.includes(conv.id);
+                const isCurrent = conv.id === conversation.id;
+                return (
+                  <ThreadHistoryItem
+                    key={conv.id}
+                    conv={conv}
+                    CIcon={CIcon}
+                    channelStyle={s}
+                    isLinked={isLinked}
+                    isCurrent={isCurrent}
+                    currentConvId={conversation.id}
+                    onSelect={() => onSelectConversation(conv.id)}
+                    onLink={() => onLinkConversation(conversation.id, conv.id)}
+                    onUnlink={() => onUnlinkConversation(conversation.id, conv.id)}
+                  />
+                );
+              })
+            )}
+          </div>
         </section>
       </div>
     </div>
@@ -1291,8 +1273,8 @@ function ThreadHistoryItem({ conv, CIcon, channelStyle, isLinked, isCurrent, cur
         <CIcon className={cn("h-2.5 w-2.5", channelStyle.text)} />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[12px] font-medium">{conv.subject || conv.lastMessage}</p>
-        <p className="text-[11px] text-muted-foreground">{conv.lastMessageAt}</p>
+        <p className="truncate text-[13px] font-medium">{conv.subject || conv.lastMessage}</p>
+        <p className="text-[12px] text-muted-foreground">{conv.lastMessageAt}</p>
       </div>
 
       {/* Hover menu */}
@@ -1478,6 +1460,40 @@ function AttachmentList({ attachments, onPreviewImage }: {
           </a>
         );
       })}
+    </div>
+  );
+}
+
+/* ─── Linked Messages Banner ─────────────────────── */
+
+function LinkedMessagesBanner({ linkedIds, allConversations, onSelect }: {
+  linkedIds: string[];
+  allConversations: Conversation[];
+  onSelect: (id: string) => void;
+}) {
+  const linkedConvs = linkedIds.map((id) => allConversations.find((c) => c.id === id)).filter(Boolean) as Conversation[];
+  if (linkedConvs.length === 0) return null;
+
+  return (
+    <div className="rounded-lg border border-brand/20 bg-brand/3 px-3 py-2">
+      <div className="flex items-center gap-1.5 mb-1.5">
+        <Link2 className="h-3.5 w-3.5 text-brand" />
+        <span className="text-[13px] font-medium text-brand">紐づけられたメッセージ</span>
+      </div>
+      <div className="space-y-1">
+        {linkedConvs.map((conv) => {
+          const CIcon = channelIcons[conv.channel];
+          const s = channelStyles[conv.channel];
+          return (
+            <button key={conv.id} onClick={() => onSelect(conv.id)}
+              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-brand/5 transition-colors cursor-pointer">
+              <CIcon className={cn("h-3.5 w-3.5 shrink-0", s.text)} />
+              <span className="truncate text-[13px] font-medium text-foreground">{conv.subject || conv.lastMessage}</span>
+              <span className="shrink-0 text-[12px] text-muted-foreground">{conv.lastMessageAt}</span>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

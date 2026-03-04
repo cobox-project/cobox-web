@@ -16,7 +16,7 @@ import {
   MessageCircle,
   Mail,
   Facebook,
-  Phone,
+
   Plus,
   FolderOpen,
   X,
@@ -31,7 +31,6 @@ const channelIcons: Record<Channel, React.ElementType> = {
   line: MessageCircle,
   email: Mail,
   facebook: Facebook,
-  whatsapp: Phone,
 };
 
 const channelStyles: Record<Channel, { bg: string; text: string }> = {
@@ -39,7 +38,6 @@ const channelStyles: Record<Channel, { bg: string; text: string }> = {
   line: { bg: "bg-channel-line/10", text: "text-channel-line" },
   email: { bg: "bg-channel-email/10", text: "text-channel-email" },
   facebook: { bg: "bg-channel-facebook/10", text: "text-channel-facebook" },
-  whatsapp: { bg: "bg-channel-whatsapp/10", text: "text-channel-whatsapp" },
 };
 
 function isAddMode(contact: Contact): boolean {
@@ -285,11 +283,11 @@ export default function ContactsPage() {
               </button>
               {/* 【8】Send to group button */}
               <button
-                onClick={() => router.push(`/messages/compose`)}
+                onClick={() => router.push(`/messages/compose?group=${selectedGroupId}`)}
                 className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-brand/30 bg-brand/5 px-3 py-2.5 text-[14px] text-brand hover:bg-brand/10 transition-colors cursor-pointer"
               >
                 <Send className="h-4 w-4" />
-                送信
+                一括送信
               </button>
             </div>
           )}
@@ -691,7 +689,7 @@ function ContactDetail({
                     disabled={editChannels.some((ch) => ch.channel === "email" && ch.isAutoLinked)}
                     className="w-full rounded-md border px-3 py-2.5 text-[15px] outline-none focus:border-brand/40 disabled:bg-accent/30 disabled:text-muted-foreground" />
                 </div>
-                {(["instagram", "line", "facebook", "whatsapp"] as Channel[]).map((channel) => {
+                {(["instagram", "line", "facebook"] as Channel[]).map((channel) => {
                   const existing = editChannels.find((ch) => ch.channel === channel);
                   const Icon = channelIcons[channel];
                   const isAutoLinked = existing?.isAutoLinked;
@@ -699,7 +697,7 @@ function ContactDetail({
                     <div key={channel}>
                       <label className="mb-1 flex items-center gap-2 text-[13px] text-muted-foreground">
                         <Icon className="h-3.5 w-3.5" />
-                        {channel === "instagram" ? "Instagram" : channel === "line" ? "LINE" : channel === "whatsapp" ? "WhatsApp" : "Facebook"}
+                        {channel === "instagram" ? "Instagram" : channel === "line" ? "LINE" : "Facebook"}
                         {isAutoLinked && <span className="text-[11px] text-brand bg-brand/10 px-1.5 py-0.5 rounded">自動連携</span>}
                       </label>
                       <input
@@ -801,7 +799,7 @@ function ContactDetail({
                     <div key={ch.channel + ch.handle} className="flex items-center gap-2.5 text-[17px]">
                       <span className="text-muted-foreground text-[15px] w-24 shrink-0 flex items-center gap-1">
                         <Icon className={cn("h-3.5 w-3.5", s.text)} />
-                        {ch.channel === "instagram" ? "Instagram" : ch.channel === "line" ? "LINE" : ch.channel === "whatsapp" ? "WhatsApp" : "Facebook"}
+                        {ch.channel === "instagram" ? "Instagram" : ch.channel === "line" ? "LINE" : "Facebook"}
                       </span>
                       <span className={cn(ch.isAutoLinked ? "border-b border-dashed border-brand/30" : "")}>{ch.handle}</span>
                       {ch.isAutoLinked && <span className="text-[11px] text-brand bg-brand/10 px-1.5 py-0.5 rounded">自動連携</span>}

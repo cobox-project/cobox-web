@@ -1,4 +1,4 @@
-export type Channel = "instagram" | "line" | "email" | "facebook" | "whatsapp";
+export type Channel = "instagram" | "line" | "email" | "facebook";
 export type Status = "open" | "completed" | "no_action";
 
 export interface Account {

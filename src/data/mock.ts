@@ -48,12 +48,6 @@ export const accounts: Account[] = [
     name: "My Shop",
     description: "Facebook Messenger",
   },
-  {
-    id: "acc-wa",
-    channel: "whatsapp",
-    name: "+81-3-1234-5678",
-    description: "WhatsApp Business",
-  },
 ];
 
 export const contactGroups: ContactGroup[] = [
@@ -189,7 +183,6 @@ export const memberPermissions: MemberPermissions[] = [
       { accountId: "acc-line", canView: true, canReply: true },
       { accountId: "acc-ig", canView: true, canReply: true },
       { accountId: "acc-fb", canView: true, canReply: true },
-      { accountId: "acc-wa", canView: true, canReply: true },
     ],
   },
   {
@@ -199,7 +192,6 @@ export const memberPermissions: MemberPermissions[] = [
       { accountId: "acc-line", canView: true, canReply: true },
       { accountId: "acc-ig", canView: true, canReply: false },
       { accountId: "acc-fb", canView: true, canReply: false },
-      { accountId: "acc-wa", canView: true, canReply: true },
     ],
   },
   {
@@ -209,7 +201,6 @@ export const memberPermissions: MemberPermissions[] = [
       { accountId: "acc-line", canView: true, canReply: false },
       { accountId: "acc-ig", canView: true, canReply: true },
       { accountId: "acc-fb", canView: true, canReply: true },
-      { accountId: "acc-wa", canView: false, canReply: false },
     ],
   },
 ];

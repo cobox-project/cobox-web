@@ -1,24 +1,22 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useMemo, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { contacts, contactGroups, composeTemplates } from "@/data/mock";
-import type { Contact, ContactGroup } from "@/data/types";
+import { contacts, contactGroups, composeTemplates, accounts } from "@/data/mock";
+import type { Contact } from "@/data/types";
 import { Button } from "@/components/ui/button";
-import { Dropdown, DropdownItem } from "@/components/ui/dropdown";
 import {
   ArrowLeft,
   Send,
   Save,
-  Eye,
   X,
   Users,
   User,
-  ChevronDown,
   Search,
   FileText,
-  Check,
+  Mail,
+  ChevronDown,
 } from "lucide-react";
 
 const variableButtons = [
@@ -27,18 +25,37 @@ const variableButtons = [
   { label: "会社名", variable: "{{会社名}}" },
 ];
 
+const emailAccounts = accounts.filter((a) => a.channel === "email");
+
 export default function ComposePage() {
+  return (
+    <Suspense fallback={<div className="flex h-full items-center justify-center text-muted-foreground">読み込み中...</div>}>
+      <ComposePageInner />
+    </Suspense>
+  );
+}
+
+function ComposePageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [recipientType, setRecipientType] = useState<"group" | "individual">("group");
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
   const [selectedContactIds, setSelectedContactIds] = useState<string[]>([]);
-  const [showRecipientPicker, setShowRecipientPicker] = useState(false);
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
-  const [showPreview, setShowPreview] = useState(false);
   const [previewContactId, setPreviewContactId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedEmailAccountId, setSelectedEmailAccountId] = useState(emailAccounts[0]?.id ?? "");
+
+  // Pre-select group from query param
+  useEffect(() => {
+    const groupId = searchParams.get("group");
+    if (groupId) {
+      setRecipientType("group");
+      setSelectedGroupIds([groupId]);
+    }
+  }, [searchParams]);
 
   // Resolved recipients
   const resolvedContacts = useMemo(() => {
@@ -128,11 +145,28 @@ export default function ComposePage() {
         </div>
       </header>
 
-      {/* Main content */}
+      {/* Main content - split layout: editor left, preview right */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Editor */}
-        <div className="flex-1 overflow-y-auto">
-          <div className="mx-auto max-w-2xl px-8 py-6 space-y-5">
+        {/* Editor pane */}
+        <div className="flex-1 overflow-y-auto border-r">
+          <div className="max-w-xl px-8 py-6 space-y-5">
+            {/* Email account selector */}
+            <section>
+              <label className="mb-1.5 block text-[13px] font-medium text-muted-foreground">送信元メールアカウント</label>
+              <div className="flex items-center gap-2">
+                <Mail className="h-4 w-4 text-channel-email shrink-0" />
+                <select
+                  value={selectedEmailAccountId}
+                  onChange={(e) => setSelectedEmailAccountId(e.target.value)}
+                  className="flex-1 rounded-lg border px-3 py-2.5 text-[15px] outline-none focus:border-brand/40 bg-background"
+                >
+                  {emailAccounts.map((acc) => (
+                    <option key={acc.id} value={acc.id}>{acc.name}</option>
+                  ))}
+                </select>
+              </div>
+            </section>
+
             {/* Recipient type */}
             <section>
               <label className="mb-2 block text-[13px] font-medium text-muted-foreground">宛先</label>
@@ -271,50 +305,53 @@ export default function ComposePage() {
                 </div>
               )}
             </section>
+          </div>
+        </div>
 
-            {/* Preview */}
-            <section>
-              <div className="flex items-center justify-between mb-2">
-                <button onClick={() => setShowPreview(!showPreview)}
-                  className="flex items-center gap-1.5 text-[14px] font-medium text-foreground cursor-pointer">
-                  <Eye className="h-4 w-4 text-muted-foreground" />
-                  プレビュー
-                  <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", showPreview && "rotate-180")} />
-                </button>
-                {showPreview && resolvedContacts.length > 0 && (
-                  <select
-                    value={previewContactId ?? ""}
-                    onChange={(e) => setPreviewContactId(e.target.value || null)}
-                    className="rounded-md border px-2 py-1 text-[13px] outline-none"
-                  >
-                    {resolvedContacts.map((c) => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                  </select>
+        {/* Live preview pane (always visible on right) */}
+        <div className="w-[400px] shrink-0 overflow-y-auto bg-accent/5">
+          <div className="px-6 py-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-[15px] font-semibold">プレビュー</h3>
+              {resolvedContacts.length > 0 && (
+                <select
+                  value={previewContactId ?? ""}
+                  onChange={(e) => setPreviewContactId(e.target.value || null)}
+                  className="rounded-md border px-2 py-1 text-[13px] outline-none bg-background"
+                >
+                  {resolvedContacts.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            {previewContact ? (
+              <div className="rounded-lg border bg-background p-5">
+                <p className="text-[13px] text-muted-foreground mb-3">
+                  宛先: {previewContact.name} ({previewContact.email ?? "メールなし"})
+                </p>
+                <p className="text-[12px] text-muted-foreground mb-3">
+                  送信元: {emailAccounts.find((a) => a.id === selectedEmailAccountId)?.name ?? ""}
+                </p>
+                {subject && (
+                  <p className="text-[15px] font-semibold mb-3 pb-3 border-b">
+                    {resolveVariables(subject, previewContact)}
+                  </p>
                 )}
-              </div>
-              {showPreview && (
-                <div className="rounded-lg border bg-accent/10 p-5">
-                  {previewContact ? (
-                    <div>
-                      <p className="text-[13px] text-muted-foreground mb-2">
-                        宛先: {previewContact.name} ({previewContact.email ?? "メールなし"})
-                      </p>
-                      {subject && (
-                        <p className="text-[15px] font-semibold mb-3">
-                          {resolveVariables(subject, previewContact)}
-                        </p>
-                      )}
-                      <div className="text-[15px] leading-relaxed whitespace-pre-wrap">
-                        {resolveVariables(body, previewContact)}
-                      </div>
-                    </div>
-                  ) : (
-                    <p className="text-[14px] text-muted-foreground">宛先を選択してください</p>
+                <div className="text-[15px] leading-relaxed whitespace-pre-wrap">
+                  {resolveVariables(body, previewContact) || (
+                    <span className="text-muted-foreground/40">本文を入力するとプレビューが表示されます</span>
                   )}
                 </div>
-              )}
-            </section>
+              </div>
+            ) : (
+              <div className="rounded-lg border bg-background p-5">
+                <p className="text-[14px] text-muted-foreground text-center py-8">
+                  宛先を選択するとプレビューが表示されます
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </div>

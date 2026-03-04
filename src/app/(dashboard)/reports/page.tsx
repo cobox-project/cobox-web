@@ -10,7 +10,7 @@ import {
   MessageCircle,
   Mail,
   Facebook,
-  Phone,
+
   Clock,
   Inbox,
   CheckCircle2,
@@ -27,7 +27,6 @@ const channelIcons: Record<Channel, React.ElementType> = {
   line: MessageCircle,
   email: Mail,
   facebook: Facebook,
-  whatsapp: Phone,
 };
 
 const channelColors: Record<Channel, string> = {
@@ -35,7 +34,6 @@ const channelColors: Record<Channel, string> = {
   line: "oklch(0.60 0.17 145)",
   email: "oklch(0.52 0.14 250)",
   facebook: "oklch(0.50 0.18 285)",
-  whatsapp: "oklch(0.58 0.17 155)",
 };
 
 const channelBgClasses: Record<Channel, string> = {
@@ -43,7 +41,6 @@ const channelBgClasses: Record<Channel, string> = {
   line: "bg-channel-line",
   email: "bg-channel-email",
   facebook: "bg-channel-facebook",
-  whatsapp: "bg-channel-whatsapp",
 };
 
 const channelLabels: Record<Channel, string> = {
@@ -51,7 +48,6 @@ const channelLabels: Record<Channel, string> = {
   line: "LINE",
   email: "Email",
   facebook: "Facebook",
-  whatsapp: "WhatsApp",
 };
 
 const dayLabels = ["月", "火", "水", "木", "金", "土", "日"];
@@ -82,9 +78,8 @@ function generateWeekData(weekStart: Date) {
     const line = ((seed * 5 + 3) % 4) + 1;
     const email = ((seed * 7 + 2) % 6) + 1;
     const facebook = (seed * 11) % 3;
-    const whatsapp = (seed * 13) % 2;
-    const resolved = Math.max(0, Math.floor((instagram + line + email + facebook + whatsapp) * 0.4 + ((seed * 13) % 3) - 1));
-    return { label, date: formatDate(date), fullDate: date, instagram, line, email, facebook, whatsapp, resolved };
+    const resolved = Math.max(0, Math.floor((instagram + line + email + facebook) * 0.4 + ((seed * 13) % 3) - 1));
+    return { label, date: formatDate(date), fullDate: date, instagram, line, email, facebook, resolved };
   });
 }
 
@@ -124,14 +119,14 @@ function WeekNav({ weekOffset, setWeekOffset, currentMonday, weekEnd }: {
 }
 
 function BarTooltip({ d, x, y }: { d: ReturnType<typeof generateWeekData>[0]; x: number; y: number }) {
-  const total = d.instagram + d.line + d.email + d.facebook + d.whatsapp;
+  const total = d.instagram + d.line + d.email + d.facebook;
   return (
     <div
       className="pointer-events-none fixed z-[300] rounded-lg bg-foreground/90 px-3 py-2 text-[12px] text-white shadow-lg"
       style={{ left: x, top: y - 8, transform: "translate(-50%, -100%)" }}
     >
       <p className="font-semibold mb-1">{d.date}（{d.label}） — 合計 {total}件 / 解決 {d.resolved}件</p>
-      {(["instagram", "line", "email", "facebook", "whatsapp"] as Channel[]).map((ch) => {
+      {(["instagram", "line", "email", "facebook"] as Channel[]).map((ch) => {
         const val = d[ch as keyof typeof d] as number;
         if (val === 0) return null;
         return (
@@ -150,8 +145,8 @@ type ReportTab = "summary" | "channel" | "staff";
 
 const reportTabs = [
   { id: "summary" as ReportTab, label: "サマリー", icon: LayoutDashboard },
-  { id: "channel" as ReportTab, label: "チャネル別", icon: BarChart3 },
-  { id: "staff" as ReportTab, label: "スタッフ別", icon: Users },
+  { id: "channel" as ReportTab, label: "チャネル", icon: BarChart3 },
+  { id: "staff" as ReportTab, label: "スタッフ", icon: Users },
 ];
 
 export default function ReportsPage() {
@@ -233,7 +228,7 @@ function SummaryReport() {
   }, [heatmapMonday]);
 
   const stackedData = useMemo(() => generateWeekData(chartMonday), [chartMonday]);
-  const maxStacked = Math.max(...stackedData.map((d) => d.instagram + d.line + d.email + d.facebook + d.whatsapp));
+  const maxStacked = Math.max(...stackedData.map((d) => d.instagram + d.line + d.email + d.facebook));
   const maxResolved = Math.max(...stackedData.map((d) => d.resolved));
 
   const heatmapData = useMemo(() => generateHeatmapData(heatmapMonday), [heatmapMonday]);
@@ -337,7 +332,7 @@ function SummaryReport() {
             </svg>
             <div className="relative flex items-end justify-around h-[180px] px-4">
               {stackedData.map((d, i) => {
-                const barTotal = d.instagram + d.line + d.email + d.facebook + d.whatsapp;
+                const barTotal = d.instagram + d.line + d.email + d.facebook;
                 const height = maxStacked > 0 ? (barTotal / maxStacked) * 170 : 0;
                 return (
                   <div key={i} className="flex-1 flex flex-col items-center max-w-[36px]"
@@ -350,7 +345,6 @@ function SummaryReport() {
                       {d.line > 0 && <div className="bg-channel-line" style={{ height: `${(d.line / barTotal) * 100}%` }} />}
                       {d.instagram > 0 && <div className="bg-channel-instagram" style={{ height: `${(d.instagram / barTotal) * 100}%` }} />}
                       {d.facebook > 0 && <div className="bg-channel-facebook" style={{ height: `${(d.facebook / barTotal) * 100}%` }} />}
-                      {d.whatsapp > 0 && <div className="bg-channel-whatsapp" style={{ height: `${(d.whatsapp / barTotal) * 100}%` }} />}
                     </div>
                   </div>
                 );
@@ -367,7 +361,7 @@ function SummaryReport() {
           </div>
           {hoveredBar && <BarTooltip d={hoveredBar.d} x={hoveredBar.x} y={hoveredBar.y} />}
           <div className="mt-3 flex items-center gap-4">
-            {(["instagram", "line", "email", "facebook", "whatsapp"] as Channel[]).map((ch) => (
+            {(["instagram", "line", "email", "facebook"] as Channel[]).map((ch) => (
               <div key={ch} className="flex items-center gap-1.5">
                 <div className={cn("h-3 w-3 rounded-sm", channelBgClasses[ch])} />
                 <span className="text-[12px] text-muted-foreground">{channelLabels[ch]}</span>
@@ -439,7 +433,7 @@ function ChannelReport() {
   return (
     <>
       <div className="mb-6">
-        <h2 className="text-[19px] font-semibold">チャネル別レポート</h2>
+        <h2 className="text-[19px] font-semibold">チャネル</h2>
       </div>
 
       <div className="space-y-4">
@@ -489,7 +483,7 @@ function StaffReport() {
   return (
     <>
       <div className="mb-6">
-        <h2 className="text-[19px] font-semibold">スタッフ別レポート</h2>
+        <h2 className="text-[19px] font-semibold">スタッフ</h2>
       </div>
 
       <section className="rounded-lg border bg-white p-5">
