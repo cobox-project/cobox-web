@@ -293,6 +293,21 @@ export default function MessagesPage() {
     ? contacts.find((c) => c.id === detailContactId) ?? null
     : null;
 
+  // Current first-level label for title header (null means "all" = no header)
+  const currentSectionLabel = useMemo(() => {
+    if (accountFilter) return accounts.find((a) => a.id === accountFilter)?.name ?? null;
+    if (groupFilter) return contactGroups.find((g) => g.id === groupFilter)?.name ?? null;
+    const folderLabels: Record<FolderFilter, string | null> = {
+      all: null,
+      mine: "自分のアサイン分",
+      mentioned: "メンションされた",
+      resolved: "解決済み",
+      favorite: "お気に入り",
+      spam: "スパム",
+    };
+    return folderLabels[folderFilter];
+  }, [folderFilter, accountFilter, groupFilter]);
+
   return (
     <div className="flex h-full overflow-x-auto">
       {/* ── Layer 2: Folders (220px) ── */}
@@ -375,6 +390,13 @@ export default function MessagesPage() {
               className="flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted-foreground/50" />
           </div>
 
+          {/* Section title header */}
+          {currentSectionLabel && (
+            <div className="px-1">
+              <p className="text-[12px] font-medium text-muted-foreground truncate">{currentSectionLabel}</p>
+            </div>
+          )}
+
           {/* Unread only - prominent button style */}
           <button
             onClick={() => setUnreadOnly(!unreadOnly)}
@@ -401,6 +423,7 @@ export default function MessagesPage() {
             filtered.map((conv) => (
               <ConversationItem key={conv.id} conversation={conv}
                 isSelected={conv.id === selectedId}
+                unreadOnly={unreadOnly}
                 onSelect={() => setSelectedId(conv.id)} />
             ))
           )}
@@ -512,8 +535,8 @@ function FolderItemWithAvatar({ label, count, isActive, onClick }: {
 
 /* ─── Conversation List Item ─────────────────────── */
 
-function ConversationItem({ conversation, isSelected, onSelect }: {
-  conversation: Conversation; isSelected: boolean; onSelect: () => void;
+function ConversationItem({ conversation, isSelected, unreadOnly, onSelect }: {
+  conversation: Conversation; isSelected: boolean; unreadOnly: boolean; onSelect: () => void;
 }) {
   const { contactName, channel, lastMessage, lastMessageAt, assignee, subject } = conversation;
   const Icon = channelIcons[channel];
@@ -542,7 +565,7 @@ function ConversationItem({ conversation, isSelected, onSelect }: {
     <button onClick={onSelect}
       className={cn(
         "flex w-full gap-3 border-b px-4 py-3 text-left transition-all duration-300 cursor-pointer",
-        justRead && "animate-read-fade",
+        justRead && unreadOnly && "animate-read-fade",
         isSelected
           ? "bg-brand text-white"
           : isResolved
