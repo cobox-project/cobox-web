@@ -59,15 +59,14 @@ const channelStyles: Record<Channel, { bg: string; text: string }> = {
   email: { bg: "bg-channel-email/10", text: "text-channel-email" },
   facebook: { bg: "bg-channel-facebook/10", text: "text-channel-facebook" },
 };
-
 const lineStamps = [
-  "👍", "❤️", "😊", "😂", "🙏", "👋",
-  "🎉", "💪", "😭", "🤗", "😍", "🥺",
-  "✨", "🔥", "🌸", "☀️", "🙌", "😎",
-  "💕", "🤝", "👏", "🫡", "🤣", "😢",
+  "\U0001f44d", "\u2764\ufe0f", "\U0001f60a", "\U0001f602", "\U0001f64f", "\U0001f44b",
+  "\U0001f389", "\U0001f4aa", "\U0001f62d", "\U0001f917", "\U0001f60d", "\U0001f97a",
+  "\u2728", "\U0001f525", "\U0001f338", "\u2600\ufe0f", "\U0001f64c", "\U0001f60e",
+  "\U0001f495", "\U0001f91d", "\U0001f44f", "\U0001fae1", "\U0001f923", "\U0001f622",
 ];
 
-// 【1】New folder structure
+// folder structure
 type FolderFilter =
   | "new"        // 新着（未アサイン）
   | "in_progress" // 対応中（アサイン済み未完了）
@@ -112,6 +111,7 @@ export default function MessagesPage() {
   const [undoStack, setUndoStack] = useState<{ id: string; unreadCount: number }[]>([]);
   const [accountsExpanded, setAccountsExpanded] = useState(true);
   const [groupsExpanded, setGroupsExpanded] = useState(true);
+  const [showRightPane, setShowRightPane] = useState(true);
 
   // Image preview modal
   const [previewImage, setPreviewImage] = useState<string | null>(null);
@@ -132,7 +132,7 @@ export default function MessagesPage() {
       }
     }
 
-    // 【1】New folder filtering logic
+    // Folder filtering logic
     if (!accountFilter && !groupFilter) {
       switch (folderFilter) {
         case "new":
@@ -255,7 +255,7 @@ export default function MessagesPage() {
     );
   }, []);
 
-  // 【4】Link conversations
+  // Link conversations
   const handleLinkConversation = useCallback((convId: string, targetId: string) => {
     setConversations((prev) =>
       prev.map((c) => {
@@ -302,7 +302,7 @@ export default function MessagesPage() {
     prevSelectedRef.current = selectedId;
   }, [selectedId]);
 
-  // 【1】Counts for folder badges
+  // Counts for folder badges
   const counts = useMemo(() => {
     return {
       new: conversations.filter((c) => c.status === "open" && c.assignees.length === 0).length,
@@ -337,20 +337,28 @@ export default function MessagesPage() {
     ? contacts.find((c) => c.id === detailContactId) ?? null
     : null;
 
+  // Change #8: Also return folder name when no account/group is selected
+  const folderLabels: Record<FolderFilter, string> = {
+    new: "新着",
+    in_progress: "対応中",
+    completed: "完了",
+    no_action: "対応なし",
+    mine: "自分が担当",
+    mentioned: "メンションされた",
+    favorite: "お気に入り",
+  };
+
   const currentSectionLabel = useMemo(() => {
     if (accountFilter) return accounts.find((a) => a.id === accountFilter)?.name ?? null;
     if (groupFilter) return contactGroups.find((g) => g.id === groupFilter)?.name ?? null;
-    const folderLabels: Record<FolderFilter, string> = {
-      new: "新着", in_progress: "対応中", completed: "完了", no_action: "対応なし",
-      mine: "自分が担当", mentioned: "メンションされた", favorite: "お気に入り",
-    };
-    return folderLabels[folderFilter] ?? null;
+    return folderLabels[folderFilter];
   }, [accountFilter, groupFilter, folderFilter]);
 
   return (
     <div className="flex h-full overflow-x-auto">
-      {/* ── Layer 2: Folders (220px) ── 【1】 */}
+      {/* Layer 2: Folders (220px) */}
       <div className="flex h-full w-[220px] shrink-0 flex-col border-r bg-background">
+        {/* Change #2: Add page title and compose button */}
         <div className="shrink-0 px-3 pt-4 pb-2 flex items-center justify-between">
           <h2 className="px-2 text-[15px] font-semibold text-foreground">メッセージ</h2>
           <button onClick={() => router.push("/messages/compose")} className="cursor-pointer rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors">
@@ -359,7 +367,7 @@ export default function MessagesPage() {
         </div>
 
         <nav className="flex-1 overflow-y-auto px-2">
-          {/* Status folders */}
+          {/* Status folders - Change #3: icons, Change #4: no count on completed */}
           <div className="space-y-0.5">
             <FolderItem icon={Inbox} label="新着" count={counts.new}
               isActive={folderFilter === "new" && !accountFilter && !groupFilter}
@@ -391,7 +399,7 @@ export default function MessagesPage() {
               onClick={() => { setFolderFilter("favorite"); setAccountFilter(null); setGroupFilter(null); }} />
           </div>
 
-          {/* Accounts section */}
+          {/* Change #6: Rename to チャネル, Change #5: no count on account items */}
           <div className="mt-5">
             <button
               onClick={() => setAccountsExpanded(!accountsExpanded)}
@@ -415,7 +423,7 @@ export default function MessagesPage() {
             )}
           </div>
 
-          {/* Groups section */}
+          {/* Groups section - Change #7: FolderOpen icon, Change #5: no count */}
           <div className="mt-5">
             <button
               onClick={() => setGroupsExpanded(!groupsExpanded)}
@@ -427,18 +435,18 @@ export default function MessagesPage() {
             {groupsExpanded && (
               <div className="space-y-0.5">
                 {contactGroups.map((group) => (
-                    <FolderItem key={group.id} icon={FolderOpen} label={group.name} count={0}
-                      isActive={groupFilter === group.id}
-                      onClick={() => { setGroupFilter(group.id); setFolderFilter("new"); setAccountFilter(null); }} />
+                  <FolderItem key={group.id} icon={FolderOpen} label={group.name} count={0}
+                    isActive={groupFilter === group.id}
+                    onClick={() => { setGroupFilter(group.id); setFolderFilter("new"); setAccountFilter(null); }} />
                 ))}
               </div>
             )}
           </div>
         </nav>
-
+        {/* Change #2: Removed bottom 新規作成 button */}
       </div>
 
-      {/* ── Layer 3: Thread list (320px) ── */}
+      {/* Layer 3: Thread list (320px) */}
       <div className="flex h-full w-[320px] shrink-0 flex-col border-r bg-background">
         <div className="shrink-0 px-3 pt-3 pb-2 space-y-2">
           <div className="flex items-center gap-2 rounded-xl border px-3 py-2">
@@ -465,8 +473,8 @@ export default function MessagesPage() {
             filtered.map((conv) => (
               <ConversationItem key={conv.id} conversation={conv}
                 isSelected={conv.id === selectedId}
-                isSelfAssigned={conv.assignees.some((a) => a.id === currentUser.id)}
                 isRecentlyRead={recentlyReadIds.has(conv.id)}
+                isSelfAssigned={conv.assignees.some((a) => a.id === currentUser.id)}
                 onSelect={() => setSelectedId(conv.id)}
                 onAnimationComplete={() => {
                   setRecentlyReadIds(s => {
@@ -480,7 +488,7 @@ export default function MessagesPage() {
         </div>
       </div>
 
-      {/* ── Layer 4: Thread detail ── */}
+      {/* Layer 4: Thread detail */}
       {selectedConversation ? (
         <ConversationDetail
           key={selectedConversation.id}
@@ -501,6 +509,8 @@ export default function MessagesPage() {
           }}
           onSelectConversation={(id) => setSelectedId(id)}
           onPreviewImage={setPreviewImage}
+          showRightPane={showRightPane}
+          onToggleRightPane={() => setShowRightPane(!showRightPane)}
         />
       ) : (
         <div className="flex flex-1 items-center justify-center text-muted-foreground">
@@ -533,7 +543,7 @@ export default function MessagesPage() {
         </div>
       )}
 
-      {/* 【6】Image preview modal */}
+      {/* Image preview modal */}
       {previewImage && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60"
           onClick={() => setPreviewImage(null)}>
@@ -550,7 +560,7 @@ export default function MessagesPage() {
   );
 }
 
-/* ─── Folder Items ───────────────────────────────── */
+/* --- Folder Items --- */
 
 function FolderItem({ icon: Icon, label, count, isActive, onClick, iconColor }: {
   icon: React.ElementType; label: string; count: number; isActive: boolean;
@@ -599,10 +609,12 @@ function FolderItemWithAvatar({ label, count, isActive, onClick }: {
   );
 }
 
-/* ─── Conversation List Item ─────────────────────── */
+/* --- Conversation List Item --- */
+/* Change #9: added isSelfAssigned prop for green background */
 
-function ConversationItem({ conversation, isSelected, isSelfAssigned, isRecentlyRead, onSelect, onAnimationComplete }: {
-  conversation: Conversation; isSelected: boolean; isSelfAssigned?: boolean; isRecentlyRead?: boolean;
+function ConversationItem({ conversation, isSelected, isRecentlyRead, isSelfAssigned, onSelect, onAnimationComplete }: {
+  conversation: Conversation; isSelected: boolean; isRecentlyRead?: boolean;
+  isSelfAssigned: boolean;
   onSelect: () => void; onAnimationComplete?: () => void;
 }) {
   const { contactName, channel, lastMessage, lastMessageAt, assignees, subject } = conversation;
@@ -625,7 +637,11 @@ function ConversationItem({ conversation, isSelected, isSelfAssigned, isRecently
           ? "bg-brand text-white"
           : isSelfAssigned
             ? "bg-brand/5 hover:bg-brand/10"
-            : "bg-background hover:bg-accent/40"
+            : isCompleted || isNoAction
+              ? "bg-background hover:bg-accent/40"
+              : unread
+                ? "bg-brand/4 hover:bg-brand/8"
+                : "bg-background hover:bg-accent/40"
       )}>
       {/* Channel icon */}
       <div className={cn(
@@ -644,7 +660,6 @@ function ConversationItem({ conversation, isSelected, isSelfAssigned, isRecently
           )}>
             {contactName}
           </span>
-          {/* 【7】Absolute time */}
           <span className={cn("shrink-0 text-[12px]", isSelected ? "text-white/70" : "text-muted-foreground")}>
             {lastMessageAt}
           </span>
@@ -696,13 +711,15 @@ function ConversationItem({ conversation, isSelected, isSelfAssigned, isRecently
   );
 }
 
-/* ─── Conversation Detail ────────────────────────── */
+/* --- Conversation Detail --- */
+/* Changes #10, #11, #12, #13, #16, #18 applied here */
 
 function ConversationDetail({ conversation, conversations: allConvs, onStatusChange,
   onAssignSelf, onRemoveAssignee, onSetAssignee,
   onOpenContactDetail, onToggleFavorite, onRequestDelete,
   onSendMessage, onLinkConversation, onUnlinkConversation,
-  onNavigateToContact, onSelectConversation, onPreviewImage }: {
+  onNavigateToContact, onSelectConversation, onPreviewImage,
+  showRightPane, onToggleRightPane }: {
   conversation: Conversation; conversations: Conversation[];
   onStatusChange: (id: string, status: Status) => void;
   onAssignSelf: (id: string) => void;
@@ -717,8 +734,9 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
   onNavigateToContact: (contactId: string) => void;
   onSelectConversation: (id: string) => void;
   onPreviewImage: (url: string) => void;
+  showRightPane: boolean;
+  onToggleRightPane: () => void;
 }) {
-  const [showRightPane, setShowRightPane] = useState(true);
   const [replyText, setReplyText] = useState("");
   const [memoText, setMemoText] = useState("");
   const [emailFrom, setEmailFrom] = useState("info@myshop.jp");
@@ -856,7 +874,7 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
     setMemoText("");
   };
 
-  // 【3】Right pane data
+  // Right pane data
   const linkedContact = conversation.linkedContactId
     ? contacts.find((c) => c.id === conversation.linkedContactId)
     : null;
@@ -865,13 +883,17 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
     : allConvs.filter((c) => c.contactId === conversation.contactId);
   const linkedIds = conversation.linkedConversationIds ?? [];
 
+  // Change #18: linked conversations data
+  const linkedConversations = linkedIds.map((id) => allConvs.find((c) => c.id === id)).filter(Boolean) as Conversation[];
+
   return (
     <div className="flex h-full min-w-0 flex-1">
       {/* Main conversation area */}
       <div className="flex h-full min-w-[400px] flex-1 flex-col bg-background">
-        {/* 【2】Action bar */}
+        {/* Action bar */}
         <header className="flex shrink-0 items-center justify-between border-b px-5 py-3">
-          <button onClick={() => setShowRightPane((prev) => !prev)}
+          {/* Change #13: clicking contact name toggles right pane */}
+          <button onClick={onToggleRightPane}
             className="flex min-w-0 items-center gap-3 cursor-pointer rounded-lg px-2 py-1.5 -ml-2 transition-colors hover:bg-accent active:bg-accent/80">
             <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-full", style.bg)}>
               <Icon className={cn("h-4 w-4", style.text)} />
@@ -885,28 +907,48 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
           </button>
 
           <div className="flex items-center gap-1.5">
-            {/* Assignee button group: self-assign + dropdown */}
-            <div className="flex items-center">
-              {!isSelfAssigned && (
+            {/* Change #12: Combined assign button with assignee dropdown */}
+            {!isSelfAssigned ? (
+              <div className="flex items-center">
                 <Button variant="outline" size="sm" className="h-9 gap-1.5 text-[14px] px-3 rounded-r-none border-r-0"
                   onClick={() => onAssignSelf(conversation.id)}>
                   <UserPlus className="h-3.5 w-3.5" />
-                  自分をアサイン
+                  {conversation.assignees.length === 0 ? "自分をアサイン" : "自分をアサイン追加"}
                 </Button>
-              )}
+                <Dropdown align="right"
+                  trigger={
+                    <Button variant="outline" size="sm" className="h-9 px-1.5 rounded-l-none">
+                      <ChevronDown className="h-3 w-3 text-muted-foreground" />
+                    </Button>
+                  }>
+                  {teamMembers.map((m) => {
+                    const isAssigned = conversation.assignees.some((a) => a.id === m.id);
+                    return (
+                      <DropdownItem key={m.id} active={isAssigned}
+                        onClick={() => isAssigned ? onRemoveAssignee(conversation.id, m.id) : onSetAssignee(conversation.id, m.id)}>
+                        <Avatar src={m.avatar} fallback={m.name} size="sm" className="h-4 w-4 text-[6px]" />
+                        {m.name}
+                        {isAssigned && <Check className="h-3 w-3 ml-auto text-brand" />}
+                      </DropdownItem>
+                    );
+                  })}
+                </Dropdown>
+              </div>
+            ) : (
               <Dropdown align="right"
                 trigger={
-                  <Button variant="outline" size="sm" className={cn("h-9 gap-1 text-[14px] px-3", !isSelfAssigned && "rounded-l-none")}>
+                  <Button variant="ghost" size="sm" className="h-9 gap-1 text-[14px] px-3 border">
                     {conversation.assignees.length > 0 ? (
                       <span className="flex items-center gap-1">
                         {conversation.assignees.map((a) => (
                           <Avatar key={a.id} src={a.avatar} fallback={a.name} size="sm" className="h-4 w-4 text-[6px]" />
                         ))}
-                        {isSelfAssigned && <span>担当者</span>}
+                        担当者
                       </span>
                     ) : (
                       <span className="flex items-center gap-1">
                         <CircleDashed className="h-3.5 w-3.5" />
+                        担当者
                       </span>
                     )}
                     <ChevronDown className="h-2.5 w-2.5 text-muted-foreground" />
@@ -924,36 +966,33 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
                   );
                 })}
               </Dropdown>
-            </div>
+            )}
 
-            {/* Side-by-side 完了/対応なし buttons */}
-            <div className="flex items-center rounded-lg border overflow-hidden">
-              <button
-                onClick={() => onStatusChange(conversation.id, conversation.status === "completed" ? "open" : "completed")}
+            {/* Change #10: Two side-by-side buttons for 完了 and 対応なし */}
+            <div className="flex items-center gap-1">
+              <Button size="sm"
+                variant={conversation.status === "completed" ? "default" : "outline"}
                 className={cn(
-                  "flex items-center gap-1.5 px-3 py-[7px] text-[14px] font-medium transition-colors cursor-pointer",
-                  conversation.status === "completed"
-                    ? "bg-brand text-white"
-                    : "text-muted-foreground hover:bg-accent hover:text-foreground"
-                )}>
+                  "h-9 gap-1.5 text-[14px] px-3",
+                  conversation.status === "completed" && "bg-brand hover:bg-brand/90"
+                )}
+                onClick={() => onStatusChange(conversation.id, conversation.status === "completed" ? "open" : "completed")}>
                 <Check className="h-3.5 w-3.5" />
                 完了
-              </button>
-              <div className="w-px bg-border h-5" />
-              <button
-                onClick={() => onStatusChange(conversation.id, conversation.status === "no_action" ? "open" : "no_action")}
+              </Button>
+              <Button size="sm"
+                variant={conversation.status === "no_action" ? "default" : "outline"}
                 className={cn(
-                  "flex items-center gap-1.5 px-3 py-[7px] text-[14px] font-medium transition-colors cursor-pointer",
-                  conversation.status === "no_action"
-                    ? "bg-foreground/80 text-white"
-                    : "text-muted-foreground hover:bg-accent hover:text-foreground"
-                )}>
+                  "h-9 gap-1.5 text-[14px] px-3",
+                  conversation.status === "no_action" && "bg-muted-foreground hover:bg-muted-foreground/90"
+                )}
+                onClick={() => onStatusChange(conversation.id, conversation.status === "no_action" ? "open" : "no_action")}>
                 <X className="h-3.5 w-3.5" />
                 対応なし
-              </button>
+              </Button>
             </div>
 
-            {/* More menu */}
+            {/* Change #11: More menu without 未読にする and without 対応なし */}
             <Dropdown align="right"
               trigger={<Button variant="ghost" size="icon-sm" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button>}>
               <DropdownItem onClick={() => onToggleFavorite(conversation.id)}>
@@ -970,9 +1009,22 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
         {/* Messages + inline reply */}
         <div className="flex-1 overflow-y-auto px-5 py-5">
           <div className="mx-auto max-w-2xl space-y-4">
-            {/* Linked messages banner (top) */}
-            {linkedIds.length > 0 && (
-              <LinkedMessagesBanner linkedIds={linkedIds} allConversations={allConvs} onSelect={onSelectConversation} />
+            {/* Change #18: Linked messages banner at top */}
+            {linkedConversations.length > 0 && (
+              <div className="rounded-lg border border-brand/20 bg-brand/5 px-4 py-2.5">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <Link2 className="h-3.5 w-3.5 text-brand" />
+                  <span className="text-[13px] font-medium text-brand">紐づけられたメッセージ</span>
+                </div>
+                <div className="space-y-1">
+                  {linkedConversations.map((lc) => (
+                    <button key={lc.id} onClick={() => onSelectConversation(lc.id)}
+                      className="block w-full text-left text-[13px] text-brand hover:text-brand/70 hover:underline cursor-pointer truncate">
+                      {lc.subject || lc.contactName}: {lc.lastMessage}
+                    </button>
+                  ))}
+                </div>
+              </div>
             )}
 
             {conversation.messages.map((message) => (
@@ -980,11 +1032,6 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
                 contactEmail={contactObj?.email} onPreviewImage={onPreviewImage} />
             ))}
             <div ref={messagesEndRef} />
-
-            {/* Linked messages banner (bottom) */}
-            {linkedIds.length > 0 && (
-              <LinkedMessagesBanner linkedIds={linkedIds} allConversations={allConvs} onSelect={onSelectConversation} />
-            )}
 
             {/* Reply input */}
             <div className="flex justify-end">
@@ -1014,7 +1061,7 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
                   }} />
                 <div className="flex items-center justify-between px-3 pb-2">
                   <div className="flex items-center gap-1">
-                    {/* 【6】Attachment button */}
+                    {/* Attachment button */}
                     <Tooltip content="ファイルを添付" side="right">
                       <Button variant="ghost" size="icon-sm" className="h-8 w-8 text-muted-foreground"
                         onClick={() => fileInputRef.current?.click()}>
@@ -1023,6 +1070,7 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
                     </Tooltip>
                     <input ref={fileInputRef} type="file" multiple className="hidden"
                       onChange={() => { /* File upload would be handled here */ }} />
+                    {/* Change #19: stamp picker with bottom-full positioning */}
                     {isLine && (
                       <div ref={stampPickerRef} className="relative">
                         <Tooltip content="スタンプ" side="right">
@@ -1056,11 +1104,27 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
               </div>
             </div>
 
-            {/* Message ID */}
-            <div className="text-center">
-              <span className="text-[12px] text-muted-foreground/50 tabular-nums">
-                メッセージID: {formatMessageNumber(conversation.messageNumber)}
-              </span>
+            {/* Change #18: Linked messages banner at bottom */}
+            {linkedConversations.length > 0 && (
+              <div className="rounded-lg border border-brand/20 bg-brand/5 px-4 py-2.5">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <Link2 className="h-3.5 w-3.5 text-brand" />
+                  <span className="text-[13px] font-medium text-brand">紐づけられたメッセージ</span>
+                </div>
+                <div className="space-y-1">
+                  {linkedConversations.map((lc) => (
+                    <button key={lc.id} onClick={() => onSelectConversation(lc.id)}
+                      className="block w-full text-left text-[13px] text-brand hover:text-brand/70 hover:underline cursor-pointer truncate">
+                      {lc.subject || lc.contactName}: {lc.lastMessage}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Change #16: Message ID below messages */}
+            <div className="text-center pt-2">
+              <span className="text-[12px] text-muted-foreground">メッセージID: {formatMessageNumber(conversation.messageNumber)}</span>
             </div>
           </div>
         </div>
@@ -1111,7 +1175,7 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
         </div>
       </div>
 
-      {/* 【3】Right side pane */}
+      {/* Change #13: Right side pane - toggleable */}
       {showRightPane && (
         <RightSidePane
           conversation={conversation}
@@ -1123,14 +1187,15 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
           onUnlinkConversation={onUnlinkConversation}
           onNavigateToContact={onNavigateToContact}
           onSelectConversation={onSelectConversation}
-          onClose={() => setShowRightPane(false)}
+          onClose={onToggleRightPane}
         />
       )}
     </div>
   );
 }
 
-/* ─── 【3】Right Side Pane ─────────────────────────── */
+/* --- Right Side Pane --- */
+/* Changes #13, #14, #15, #16, #17 applied here */
 
 function RightSidePane({ conversation, allConversations, contactConversations, linkedContact, linkedIds,
   onLinkConversation, onUnlinkConversation, onNavigateToContact, onSelectConversation, onClose }: {
@@ -1145,26 +1210,31 @@ function RightSidePane({ conversation, allConversations, contactConversations, l
   onSelectConversation: (id: string) => void;
   onClose: () => void;
 }) {
+  const [showLinkPicker, setShowLinkPicker] = useState(false);
+
   const contactObj = contacts.find((c) => c.id === conversation.contactId);
   const contactGroups_ = contactGroups.filter((g) => g.contactIds.includes(conversation.contactId));
 
   return (
-    <div className="flex h-full w-[300px] min-w-[260px] shrink-0 flex-col border-l bg-background animate-slide-in-right">
-      {/* Header with close button */}
-      <div className="shrink-0 flex items-center justify-between px-4 py-3 border-b">
-        <span className="text-[14px] font-semibold text-foreground">詳細</span>
-        <button onClick={onClose} className="cursor-pointer rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors">
+    <div className="flex h-full w-[300px] min-w-[260px] shrink-0 flex-col border-l bg-background overflow-y-auto">
+      {/* Change #13: Close button in header, Change #16: removed message ID from here */}
+      <div className="shrink-0 px-4 py-3 border-b flex items-center justify-between">
+        <span className="text-[15px] font-semibold text-foreground">詳細</span>
+        <button onClick={onClose} className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors cursor-pointer">
           <X className="h-4 w-4" />
         </button>
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-3">
-        {/* 連絡先 section - always visible */}
-        <section className="mb-5">
-          <h4 className="py-1.5 text-[14px] font-semibold text-foreground">連絡先</h4>
+        {/* Change #14: 連絡先 section - always shown, no toggle */}
+        <section className="mb-4">
+          <div className="flex w-full items-center gap-1.5 py-1.5 text-[14px] font-semibold text-foreground">
+            連絡先
+          </div>
           <div className="mt-2 space-y-2">
             {linkedContact || contactObj ? (
               <div>
+                {/* Change #15: increased text sizes */}
                 <button
                   onClick={() => onNavigateToContact((linkedContact ?? contactObj)!.id)}
                   className="text-[16px] font-medium text-brand hover:text-brand/80 cursor-pointer transition-colors"
@@ -1207,9 +1277,11 @@ function RightSidePane({ conversation, allConversations, contactConversations, l
           </div>
         </section>
 
-        {/* メッセージ履歴 section - always visible */}
+        {/* Change #14: メッセージ履歴 section - always shown, no toggle */}
         <section>
-          <h4 className="py-1.5 text-[14px] font-semibold text-foreground">メッセージ履歴</h4>
+          <div className="flex w-full items-center gap-1.5 py-1.5 text-[14px] font-semibold text-foreground">
+            メッセージ履歴
+          </div>
           <div className="mt-2 space-y-1.5">
             {contactConversations.length === 0 ? (
               <p className="text-[14px] text-muted-foreground/60">履歴はありません</p>
@@ -1242,7 +1314,8 @@ function RightSidePane({ conversation, allConversations, contactConversations, l
   );
 }
 
-/* ─── 【4】Thread History Item (with link menu) ──── */
+/* --- Thread History Item (with link menu) --- */
+/* Change #15: increased text sizes, Change #17: clickable to navigate */
 
 function ThreadHistoryItem({ conv, CIcon, channelStyle, isLinked, isCurrent, currentConvId, onSelect, onLink, onUnlink }: {
   conv: Conversation;
@@ -1290,13 +1363,13 @@ function ThreadHistoryItem({ conv, CIcon, channelStyle, isLinked, isCurrent, cur
             <div className="absolute right-0 top-6 z-[200] min-w-[180px] rounded-lg border bg-popover p-1 shadow-lg">
               {isLinked ? (
                 <button onClick={(e) => { e.stopPropagation(); onUnlink(); setShowMenu(false); }}
-                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-[13px] text-foreground hover:bg-accent transition-colors cursor-pointer">
+                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-[14px] text-foreground hover:bg-accent transition-colors cursor-pointer">
                   <Link2 className="h-3.5 w-3.5 text-destructive" />
                   紐づけを解除
                 </button>
               ) : (
                 <button onClick={(e) => { e.stopPropagation(); onLink(); setShowMenu(false); }}
-                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-[13px] text-foreground hover:bg-accent transition-colors cursor-pointer">
+                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-[14px] text-foreground hover:bg-accent transition-colors cursor-pointer">
                   <Link2 className="h-3.5 w-3.5 text-brand" />
                   このメッセージと紐づける
                 </button>
@@ -1309,7 +1382,7 @@ function ThreadHistoryItem({ conv, CIcon, channelStyle, isLinked, isCurrent, cur
   );
 }
 
-/* ─── Message Bubble ─────────────────────────────── */
+/* --- Message Bubble --- */
 
 function MessageBubble({ message, channel, contactEmail, onPreviewImage }: {
   message: Message; channel: Channel; contactEmail?: string;
@@ -1391,7 +1464,7 @@ function MessageBubble({ message, channel, contactEmail, onPreviewImage }: {
                 <span key={i}>{line}{i < content.split("\n").length - 1 && <br />}</span>
               ))}
             </div>
-            {/* 【6】Attachments in email */}
+            {/* Attachments in email */}
             {attachments && attachments.length > 0 && (
               <div className="border-t px-3.5 py-2">
                 <AttachmentList attachments={attachments} onPreviewImage={onPreviewImage} />
@@ -1410,7 +1483,7 @@ function MessageBubble({ message, channel, contactEmail, onPreviewImage }: {
                 <span key={i}>{line}{i < content.split("\n").length - 1 && <br />}</span>
               ))}
             </div>
-            {/* 【6】Attachments in non-email */}
+            {/* Attachments in non-email */}
             {attachments && attachments.length > 0 && (
               <div className="mt-1.5">
                 <AttachmentList attachments={attachments} onPreviewImage={onPreviewImage} />
@@ -1423,7 +1496,7 @@ function MessageBubble({ message, channel, contactEmail, onPreviewImage }: {
   );
 }
 
-/* ─── 【6】Attachment List ────────────────────────── */
+/* --- Attachment List --- */
 
 function AttachmentList({ attachments, onPreviewImage }: {
   attachments: Attachment[];
@@ -1464,41 +1537,7 @@ function AttachmentList({ attachments, onPreviewImage }: {
   );
 }
 
-/* ─── Linked Messages Banner ─────────────────────── */
-
-function LinkedMessagesBanner({ linkedIds, allConversations, onSelect }: {
-  linkedIds: string[];
-  allConversations: Conversation[];
-  onSelect: (id: string) => void;
-}) {
-  const linkedConvs = linkedIds.map((id) => allConversations.find((c) => c.id === id)).filter(Boolean) as Conversation[];
-  if (linkedConvs.length === 0) return null;
-
-  return (
-    <div className="rounded-lg border border-brand/20 bg-brand/3 px-3 py-2">
-      <div className="flex items-center gap-1.5 mb-1.5">
-        <Link2 className="h-3.5 w-3.5 text-brand" />
-        <span className="text-[13px] font-medium text-brand">紐づけられたメッセージ</span>
-      </div>
-      <div className="space-y-1">
-        {linkedConvs.map((conv) => {
-          const CIcon = channelIcons[conv.channel];
-          const s = channelStyles[conv.channel];
-          return (
-            <button key={conv.id} onClick={() => onSelect(conv.id)}
-              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-brand/5 transition-colors cursor-pointer">
-              <CIcon className={cn("h-3.5 w-3.5 shrink-0", s.text)} />
-              <span className="truncate text-[13px] font-medium text-foreground">{conv.subject || conv.lastMessage}</span>
-              <span className="shrink-0 text-[12px] text-muted-foreground">{conv.lastMessageAt}</span>
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-/* ─── Reply Header ───────────────────────────────── */
+/* --- Reply Header --- */
 
 function ReplyHeader({ channel, channelLabel, accountName, isEmail,
   emailFrom, setEmailFrom, emailTo, setEmailTo,
