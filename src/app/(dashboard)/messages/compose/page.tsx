@@ -391,18 +391,6 @@ function ComposePageInner() {
                 placeholder="メッセージ本文を入力..."
                 rows={12}
                 className="w-full resize-none rounded-lg border px-3 py-2.5 text-[15px] leading-relaxed outline-none focus:border-brand/40 placeholder:text-muted-foreground/50" />
-              {undefinedVars.length > 0 && (
-                <div className="mt-2 rounded-lg border border-amber-300/50 bg-amber-50/50 px-3 py-2">
-                  <p className="text-[12px] font-medium text-amber-700">
-                    未定義の変数が含まれています（そのまま送信可能です）
-                  </p>
-                  <div className="mt-1 flex flex-wrap gap-1">
-                    {undefinedVars.map((v) => (
-                      <span key={v} className="rounded-full border border-amber-400/40 bg-amber-100/60 px-2 py-0.5 text-[11px] font-medium text-amber-700">{v}</span>
-                    ))}
-                  </div>
-                </div>
-              )}
             </section>
           </div>
         </div>
@@ -424,6 +412,14 @@ function ComposePageInner() {
                 </select>
               )}
             </div>
+
+            {undefinedVars.length > 0 && (
+              <div className="mb-4 rounded-lg border border-amber-300/50 bg-amber-50/50 px-3 py-2">
+                <p className="text-[12px] font-medium text-amber-700">
+                  念の為ご確認ください：未定義の変数が含まれています {undefinedVars.join(" ")}
+                </p>
+              </div>
+            )}
 
             {previewContact ? (
               <div className="rounded-lg border bg-background p-5">

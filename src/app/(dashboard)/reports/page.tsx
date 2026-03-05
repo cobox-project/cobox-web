@@ -45,55 +45,54 @@ const channelLabels: Record<Channel, string> = {
   facebook: "Facebook",
 };
 
-const dayLabels = ["月", "火", "水", "木", "金", "土", "日"];
-
-function formatDateFull(d: Date): string {
-  return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
-}
+const dayLabels = ["日", "月", "火", "水", "木", "金", "土"];
 
 function formatDate(d: Date): string {
   return `${d.getMonth() + 1}/${d.getDate()}`;
 }
 
-function getMonday(d: Date): Date {
-  const day = d.getDay();
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-  const monday = new Date(d);
-  monday.setDate(diff);
-  monday.setHours(0, 0, 0, 0);
-  return monday;
+function getDaysInMonth(year: number, month: number): number {
+  return new Date(year, month + 1, 0).getDate();
 }
 
-function generateWeekData(weekStart: Date) {
+function generateMonthData(year: number, month: number) {
   const today = new Date();
   today.setHours(23, 59, 59, 999);
-  return dayLabels.map((label, i) => {
-    const date = new Date(weekStart);
-    date.setDate(weekStart.getDate() + i);
+  const daysInMonth = getDaysInMonth(year, month);
+  const todayDate = today.getDate();
+  const todayMonth = today.getMonth();
+  const todayYear = today.getFullYear();
+
+  return Array.from({ length: daysInMonth }, (_, i) => {
+    const dayNum = i + 1;
+    const date = new Date(year, month, dayNum);
+    const dayOfWeek = date.getDay();
+    const label = dayLabels[dayOfWeek];
     const isFuture = date > today;
-    const seed = date.getDate() + date.getMonth() * 31;
+    const isToday = dayNum === todayDate && month === todayMonth && year === todayYear;
+    const seed = dayNum + month * 31;
     const instagram = isFuture ? 0 : ((seed * 3 + 7) % 5) + 1;
     const line = isFuture ? 0 : ((seed * 5 + 3) % 4) + 1;
     const email = isFuture ? 0 : ((seed * 7 + 2) % 6) + 1;
     const facebook = isFuture ? 0 : (seed * 11) % 3;
     const resolved = isFuture ? 0 : Math.max(0, Math.floor((instagram + line + email + facebook) * 0.4 + ((seed * 13) % 3) - 1));
-    return { label, date: formatDate(date), fullDate: date, instagram, line, email, facebook, resolved, isFuture };
+    return { label, date: formatDate(date), dayNum, fullDate: date, instagram, line, email, facebook, resolved, isFuture, isToday };
   });
 }
 
-function WeekNav({ weekOffset, setWeekOffset, currentMonday, weekEnd }: {
-  weekOffset: number; setWeekOffset: (fn: (p: number) => number) => void;
-  currentMonday: Date; weekEnd: Date;
+function MonthNav({ monthOffset, setMonthOffset, year, month }: {
+  monthOffset: number; setMonthOffset: (fn: (p: number) => number) => void;
+  year: number; month: number;
 }) {
   return (
     <div className="flex items-center gap-1">
-      <button onClick={() => setWeekOffset((p) => p - 1)} className="cursor-pointer rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors">
+      <button onClick={() => setMonthOffset((p) => p - 1)} className="cursor-pointer rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors">
         <ChevronLeft className="h-6 w-6" />
       </button>
-      <span className="text-[14px] font-medium text-muted-foreground text-center">
-        {formatDateFull(currentMonday)} - {formatDate(weekEnd)}
+      <span className="text-[14px] font-medium text-muted-foreground text-center min-w-[120px]">
+        {year}年{month + 1}月
       </span>
-      <button onClick={() => setWeekOffset((p) => Math.min(p + 1, 0))} disabled={weekOffset >= 0}
+      <button onClick={() => setMonthOffset((p) => Math.min(p + 1, 0))} disabled={monthOffset >= 0}
         className="cursor-pointer rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors disabled:opacity-30 disabled:cursor-default">
         <ChevronRight className="h-6 w-6" />
       </button>
@@ -101,7 +100,7 @@ function WeekNav({ weekOffset, setWeekOffset, currentMonday, weekEnd }: {
   );
 }
 
-function BarTooltip({ d, x, y }: { d: ReturnType<typeof generateWeekData>[0]; x: number; y: number }) {
+function BarTooltip({ d, x, y }: { d: ReturnType<typeof generateMonthData>[0]; x: number; y: number }) {
   const total = d.instagram + d.line + d.email + d.facebook;
   return (
     <div
@@ -183,31 +182,32 @@ function ChannelPieChart() {
 }
 
 export default function ReportsPage() {
-  const [weekOffset, setWeekOffset] = useState(0);
+  const [monthOffset, setMonthOffset] = useState(0);
 
-  const currentMonday = useMemo(() => {
-    const monday = getMonday(new Date());
-    monday.setDate(monday.getDate() + weekOffset * 7);
-    return monday;
-  }, [weekOffset]);
-
-  const weekEnd = useMemo(() => {
-    const sun = new Date(currentMonday);
-    sun.setDate(currentMonday.getDate() + 6);
-    return sun;
-  }, [currentMonday]);
+  const { year, month } = useMemo(() => {
+    const now = new Date();
+    const d = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1);
+    return { year: d.getFullYear(), month: d.getMonth() };
+  }, [monthOffset]);
 
   return (
     <div className="flex h-full">
-      {/* Left sub-navigation - just "レポート" title, no sub-tabs */}
+      {/* Left sub-navigation */}
       <div className="w-[220px] shrink-0 border-r bg-background px-3 py-4">
         <h1 className="mb-4 px-2.5 text-[15px] font-semibold">レポート</h1>
+        <nav className="space-y-0.5">
+          <button
+            className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-[7px] text-[15px] font-medium transition-colors cursor-pointer bg-accent text-foreground">
+            <BarChart3 className="h-[15px] w-[15px] shrink-0" />
+            サマリー
+          </button>
+        </nav>
       </div>
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto">
         <div className="w-full px-8 py-8">
-          <SummaryReport weekOffset={weekOffset} setWeekOffset={setWeekOffset} currentMonday={currentMonday} weekEnd={weekEnd} />
+          <SummaryReport monthOffset={monthOffset} setMonthOffset={setMonthOffset} year={year} month={month} />
         </div>
       </div>
     </div>
@@ -216,14 +216,14 @@ export default function ReportsPage() {
 
 /* ─── Summary Report ────── */
 
-function SummaryReport({ weekOffset, setWeekOffset, currentMonday, weekEnd }: {
-  weekOffset: number; setWeekOffset: (fn: (p: number) => number) => void;
-  currentMonday: Date; weekEnd: Date;
+function SummaryReport({ monthOffset, setMonthOffset, year, month }: {
+  monthOffset: number; setMonthOffset: (fn: (p: number) => number) => void;
+  year: number; month: number;
 }) {
   const total = conversations.length;
   const resolvedCount = conversations.filter((c) => c.status === "completed").length;
 
-  const stackedData = useMemo(() => generateWeekData(currentMonday), [currentMonday]);
+  const stackedData = useMemo(() => generateMonthData(year, month), [year, month]);
   const maxStacked = Math.max(...stackedData.map((d) => d.instagram + d.line + d.email + d.facebook));
   const maxResolved = Math.max(...stackedData.map((d) => d.resolved));
 
@@ -233,7 +233,7 @@ function SummaryReport({ weekOffset, setWeekOffset, currentMonday, weekEnd }: {
     <>
       <div className="mb-6 flex items-center gap-4">
         <h2 className="text-[19px] font-semibold">サマリー</h2>
-        <WeekNav weekOffset={weekOffset} setWeekOffset={setWeekOffset} currentMonday={currentMonday} weekEnd={weekEnd} />
+        <MonthNav monthOffset={monthOffset} setMonthOffset={setMonthOffset} year={year} month={month} />
       </div>
 
       {/* Top metrics - 3 cards */}
@@ -244,7 +244,7 @@ function SummaryReport({ weekOffset, setWeekOffset, currentMonday, weekEnd }: {
             <span className="text-[13px] text-muted-foreground">新着</span>
           </div>
           <p className="text-[28px] font-semibold tabular-nums">{total}</p>
-          <div className="mt-2 text-[12px] text-muted-foreground">前週比 <span className="text-foreground font-medium">+12%</span></div>
+          <div className="mt-2 text-[12px] text-muted-foreground">前月比 <span className="text-foreground font-medium">+12%</span></div>
         </div>
         <div className="rounded-lg border bg-white px-5 py-5 flex flex-col justify-between h-full">
           <div className="flex items-center gap-2 mb-2">
@@ -252,7 +252,7 @@ function SummaryReport({ weekOffset, setWeekOffset, currentMonday, weekEnd }: {
             <span className="text-[13px] text-muted-foreground">完了数</span>
           </div>
           <p className="text-[28px] font-semibold tabular-nums">{resolvedCount}</p>
-          <div className="mt-2 text-[12px] text-muted-foreground">前週比 <span className="text-foreground font-medium">+8%</span></div>
+          <div className="mt-2 text-[12px] text-muted-foreground">前月比 <span className="text-foreground font-medium">+8%</span></div>
         </div>
         <div className="rounded-lg border bg-white px-5 py-5">
           <div className="flex items-center gap-2 mb-3">
@@ -290,10 +290,10 @@ function SummaryReport({ weekOffset, setWeekOffset, currentMonday, weekEnd }: {
               const barTotal = d.instagram + d.line + d.email + d.facebook;
               const height = maxStacked > 0 ? (barTotal / maxStacked) * 250 : 0;
               return (
-                <div key={i} className={cn("flex items-end justify-center", d.isFuture && "opacity-20")}
+                <div key={i} className={cn("flex items-end justify-center relative", d.isFuture && "opacity-20", d.isToday && "bg-brand/5")}
                   onMouseEnter={(e) => { if (!d.isFuture) { const rect = e.currentTarget.getBoundingClientRect(); setHoveredBar({ d, x: rect.left + rect.width / 2, y: rect.top }); } }}
                   onMouseLeave={() => setHoveredBar(null)}>
-                  <div className={cn("w-[36px] flex flex-col-reverse rounded-t overflow-hidden transition-opacity",
+                  <div className={cn("w-[14px] flex flex-col-reverse rounded-t overflow-hidden transition-opacity",
                     hoveredBar && hoveredBar.d.date !== d.date ? "opacity-40" : "opacity-100"
                   )} style={{ height: `${height}px` }}>
                     {d.email > 0 && <div className="bg-channel-email" style={{ height: `${(d.email / barTotal) * 100}%` }} />}
@@ -309,8 +309,8 @@ function SummaryReport({ weekOffset, setWeekOffset, currentMonday, weekEnd }: {
           <div className="grid mt-1" style={{ gridTemplateColumns: `repeat(${stackedData.length}, 1fr)` }}>
             {stackedData.map((d, i) => (
               <div key={i} className={cn("text-center", d.isFuture && "opacity-30")}>
-                <div className="text-[11px] text-muted-foreground leading-tight">{d.date}</div>
-                <div className="text-[10px] text-muted-foreground/60">{d.label}</div>
+                <div className={cn("text-[11px] leading-tight", d.isToday ? "text-brand font-bold" : "text-muted-foreground")}>{d.dayNum}</div>
+                <div className={cn("text-[10px]", d.isToday ? "text-brand/70 font-medium" : "text-muted-foreground/60")}>{d.label}</div>
               </div>
             ))}
           </div>

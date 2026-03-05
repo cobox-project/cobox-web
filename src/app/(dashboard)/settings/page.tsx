@@ -70,12 +70,16 @@ function SettingsPageInner() {
   const initialTab = (searchParams.get("tab") as TabId) || "accounts";
   const [activeTab, setActiveTab] = useState<TabId>(initialTab);
 
+  const initialSubTab = (searchParams.get("subtab") as "templates" | "variables") || "templates";
+  const [templateSubTab, setTemplateSubTab] = useState<"templates" | "variables">(initialSubTab);
+
   useEffect(() => {
     const params = new URLSearchParams();
     if (activeTab !== "accounts") params.set("tab", activeTab);
+    if (activeTab === "templates" && templateSubTab !== "templates") params.set("subtab", templateSubTab);
     const qs = params.toString();
     window.history.replaceState(null, "", `/settings${qs ? `?${qs}` : ""}`);
-  }, [activeTab]);
+  }, [activeTab, templateSubTab]);
 
   return (
     <div className="flex h-full">
@@ -102,7 +106,7 @@ function SettingsPageInner() {
         <div className="mx-auto max-w-2xl px-8 py-6">
           {activeTab === "accounts" && <AccountsSettings />}
           {activeTab === "team" && <TeamSettings />}
-          {activeTab === "templates" && <TemplateSettings />}
+          {activeTab === "templates" && <TemplateSettings templateSubTab={templateSubTab} setTemplateSubTab={setTemplateSubTab} />}
           {activeTab === "billing" && <BillingSettings />}
         </div>
       </div>
@@ -363,8 +367,10 @@ function TeamSettings() {
 
 /* ─── Template Settings ─────────────────── */
 
-function TemplateSettings() {
-  const [templateSubTab, setTemplateSubTab] = useState<"templates" | "variables">("templates");
+function TemplateSettings({ templateSubTab, setTemplateSubTab }: {
+  templateSubTab: "templates" | "variables";
+  setTemplateSubTab: (v: "templates" | "variables") => void;
+}) {
   const [templates, setTemplates] = useState<ComposeTemplate[]>([...composeTemplates]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -560,7 +566,7 @@ function TemplateSettings() {
         <button onClick={() => setTemplateSubTab("variables")}
           className={cn("flex-1 rounded-md px-3 py-1.5 text-[14px] font-medium transition-colors cursor-pointer",
             templateSubTab === "variables" ? "bg-accent text-foreground" : "text-muted-foreground hover:text-foreground")}>
-          連絡先・定型文
+          変数
         </button>
       </div>
 
