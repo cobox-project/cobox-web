@@ -101,16 +101,16 @@ function WeekNav({ weekOffset, setWeekOffset, currentMonday, weekEnd }: {
   currentMonday: Date; weekEnd: Date;
 }) {
   return (
-    <div className="flex items-center gap-2">
-      <button onClick={() => setWeekOffset((p) => p - 1)} className="cursor-pointer rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors">
-        <ChevronLeft className="h-4 w-4" />
+    <div className="flex items-center gap-1">
+      <button onClick={() => setWeekOffset((p) => p - 1)} className="cursor-pointer rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors">
+        <ChevronLeft className="h-5 w-5" />
       </button>
-      <span className="text-[13px] font-medium text-muted-foreground min-w-[160px] text-center">
+      <span className="text-[14px] font-medium text-muted-foreground min-w-[180px] text-center">
         {formatDateFull(currentMonday)} - {formatDate(weekEnd)}
       </span>
       <button onClick={() => setWeekOffset((p) => Math.min(p + 1, 0))} disabled={weekOffset >= 0}
-        className="cursor-pointer rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors disabled:opacity-30 disabled:cursor-default">
-        <ChevronRight className="h-4 w-4" />
+        className="cursor-pointer rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors disabled:opacity-30 disabled:cursor-default">
+        <ChevronRight className="h-5 w-5" />
       </button>
     </div>
   );
@@ -300,20 +300,22 @@ function SummaryReport({ weekOffset, setWeekOffset, currentMonday, weekEnd }: {
       </div>
 
       {/* Top metrics - 3 cards */}
-      <div className="mb-8 grid grid-cols-3 gap-4">
-        <div className="rounded-lg border bg-white px-5 py-5">
+      <div className="mb-8 grid grid-cols-3 gap-4 items-start">
+        <div className="rounded-lg border bg-white px-5 py-5 flex flex-col justify-between h-full">
           <div className="flex items-center gap-2 mb-2">
             <Inbox className="h-4 w-4 text-muted-foreground" />
             <span className="text-[13px] text-muted-foreground">新着</span>
           </div>
           <p className="text-[28px] font-semibold tabular-nums">{total}</p>
+          <div className="mt-2 text-[12px] text-muted-foreground">前週比 <span className="text-foreground font-medium">—</span></div>
         </div>
-        <div className="rounded-lg border bg-white px-5 py-5">
+        <div className="rounded-lg border bg-white px-5 py-5 flex flex-col justify-between h-full">
           <div className="flex items-center gap-2 mb-2">
             <CheckCircle2 className="h-4 w-4 text-brand" />
             <span className="text-[13px] text-muted-foreground">完了数</span>
           </div>
           <p className="text-[28px] font-semibold tabular-nums text-brand">{resolvedCount}</p>
+          <div className="mt-2 text-[12px] text-muted-foreground">完了率 <span className="text-brand font-medium">{total > 0 ? Math.round((resolvedCount / total) * 100) : 0}%</span></div>
         </div>
         <div className="rounded-lg border bg-white px-5 py-5">
           <div className="flex items-center gap-2 mb-3">
@@ -327,12 +329,12 @@ function SummaryReport({ weekOffset, setWeekOffset, currentMonday, weekEnd }: {
       {/* Charts */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 mb-8">
         {/* Stacked bar chart */}
-        <section className="rounded-lg border bg-white p-5">
+        <section className="rounded-lg border bg-white p-5 flex flex-col">
           <div className="mb-4">
             <h3 className="text-[15px] font-semibold">チャンネル別推移</h3>
           </div>
-          <div className="relative h-72">
-            <svg className="absolute inset-0 w-full h-[260px] pointer-events-none z-10" viewBox="0 0 700 260" preserveAspectRatio="none">
+          <div className="relative flex-1 min-h-[260px]">
+            <svg className="absolute inset-0 w-full h-full pointer-events-none z-10" viewBox="0 0 700 260" preserveAspectRatio="none">
               <polyline fill="none" stroke="oklch(0.52 0.17 155)" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round"
                 points={stackedData.map((d, i) => {
                   const x = (i * 100) + 50;
@@ -394,10 +396,10 @@ function SummaryReport({ weekOffset, setWeekOffset, currentMonday, weekEnd }: {
           <div className="mb-4">
             <h3 className="text-[15px] font-semibold">新着時間ヒートマップ</h3>
           </div>
-          <div className="space-y-0.5">
+          <div>
             {/* Day labels header */}
-            <div className="flex items-center">
-              <span className="w-10 shrink-0" />
+            <div className="flex items-center mb-0.5">
+              <span className="w-8 shrink-0" />
               {dayLabels.map((day, dayIdx) => (
                 <span key={dayIdx} className="flex-1 text-center text-[11px] text-muted-foreground">
                   <span>{heatmapDates[dayIdx]}</span>
@@ -405,17 +407,17 @@ function SummaryReport({ weekOffset, setWeekOffset, currentMonday, weekEnd }: {
                 </span>
               ))}
             </div>
-            {/* Hour rows */}
+            {/* Hour rows - no gaps */}
             {Array.from({ length: 24 }, (_, hour) => (
-              <div key={hour} className="flex items-center gap-0.5">
-                <span className="w-10 shrink-0 text-[11px] text-muted-foreground text-right pr-1.5">
-                  {hour}:00
+              <div key={hour} className="flex items-center">
+                <span className="w-8 shrink-0 text-[10px] text-muted-foreground text-right pr-1">
+                  {hour % 3 === 0 ? `${hour}:00` : ""}
                 </span>
                 {dayLabels.map((day, dayIdx) => {
                   const val = heatmapData[dayIdx][hour];
                   const intensity = maxHeat > 0 ? val / maxHeat : 0;
                   return (
-                    <div key={dayIdx} className="flex-1 h-[9px] rounded-sm cursor-default transition-transform hover:scale-110 hover:z-10"
+                    <div key={dayIdx} className="flex-1 h-[7px] cursor-default transition-transform hover:scale-110 hover:z-10"
                       style={{ backgroundColor: val === 0 ? "oklch(0.96 0 0)" : `oklch(0.52 ${0.17 * intensity} 155 / ${0.15 + intensity * 0.85})` }}
                       onMouseEnter={(e) => { const rect = e.currentTarget.getBoundingClientRect(); setHoveredCell({ day, date: heatmapDates[dayIdx], hour, val, x: rect.left + rect.width / 2, y: rect.top }); }}
                       onMouseLeave={() => setHoveredCell(null)} />

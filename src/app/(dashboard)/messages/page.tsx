@@ -637,13 +637,16 @@ function SentMessagesView() {
       id: "sent_1",
       type: "bulk" as const,
       subject: "【春の新商品】特別先行セールのご案内",
-      body: "いつもご利用いただきありがとうございます。この度、春の新商品ラインナップが完成いたしましたので、お得意様限定の先行セールをご案内いたします...",
+      body: "{{名前}}様\n\nいつもご利用いただきありがとうございます。この度、春の新商品ラインナップが完成いたしましたので、お得意様限定の先行セールをご案内いたします...",
       recipientCount: 24,
       recipientGroups: ["VIP顧客"],
-      variables: { "名前": "連絡先名", "会社名": "会社名" },
+      recipientEmails: ["vip-group@example.com"],
+      bccEmails: ["archive@example.com"],
+      variables: { "名前": "連絡先名", "会社名": "会社名" } as Record<string, string>,
       sentAt: "2026-03-05 14:30",
       sentBy: "田中 美咲",
       channel: "email" as Channel,
+      fromEmail: "support@cobox.jp",
     },
     {
       id: "sent_2",
@@ -652,21 +655,28 @@ function SentMessagesView() {
       body: "山田様\n\nお問い合わせいただきありがとうございます。ご質問の件について回答いたします...",
       recipientCount: 1,
       recipientName: "山田 太郎",
+      recipientEmails: ["yamada@example.com"],
+      bccEmails: [],
       sentAt: "2026-03-05 11:15",
       sentBy: "田中 美咲",
       channel: "email" as Channel,
+      fromEmail: "support@cobox.jp",
+      linkedContactId: "contact_2",
     },
     {
       id: "sent_3",
       type: "bulk" as const,
       subject: "メンテナンスのお知らせ",
-      body: "システムメンテナンスを以下の日程で実施いたします。ご不便をおかけしますが、ご了承ください...",
+      body: "{{名前}}様\n\nシステムメンテナンスを以下の日程で実施いたします。ご不便をおかけしますが、ご了承ください...",
       recipientCount: 156,
       recipientGroups: ["全顧客", "パートナー"],
-      variables: { "名前": "連絡先名" },
+      recipientEmails: ["all-customers@example.com", "partners@example.com"],
+      bccEmails: ["log@example.com"],
+      variables: { "名前": "連絡先名" } as Record<string, string>,
       sentAt: "2026-03-04 09:00",
       sentBy: "佐藤 健一",
       channel: "email" as Channel,
+      fromEmail: "info@cobox.jp",
     },
     {
       id: "sent_4",
@@ -675,15 +685,29 @@ function SentMessagesView() {
       body: "ありがとうございます！確認いたしました。",
       recipientCount: 1,
       recipientName: "鈴木 花子",
+      recipientEmails: [],
+      bccEmails: [],
       sentAt: "2026-03-03 16:45",
       sentBy: "田中 美咲",
       channel: "line" as Channel,
+      linkedContactId: "contact_3",
     },
   ];
 
   const [selectedSent, setSelectedSent] = useState<string | null>(null);
+  const [sentSearch, setSentSearch] = useState("");
   const selectedItem = sentItems.find((s) => s.id === selectedSent);
   const sentListRef = useRef<HTMLDivElement>(null);
+
+  const filteredSentItems = useMemo(() => {
+    if (!sentSearch.trim()) return sentItems;
+    const q = sentSearch.toLowerCase();
+    return sentItems.filter((item) =>
+      item.subject?.toLowerCase().includes(q) ||
+      item.body.toLowerCase().includes(q) ||
+      (item.recipientName && item.recipientName.toLowerCase().includes(q))
+    );
+  }, [sentSearch]);
 
   // Keyboard navigation for sent messages
   useEffect(() => {
@@ -691,12 +715,12 @@ function SentMessagesView() {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
         e.preventDefault();
-        const idx = sentItems.findIndex((s) => s.id === selectedSent);
+        const idx = filteredSentItems.findIndex((s) => s.id === selectedSent);
         let nextIdx = idx;
-        if (e.key === "ArrowDown" && idx < sentItems.length - 1) nextIdx = idx + 1;
+        if (e.key === "ArrowDown" && idx < filteredSentItems.length - 1) nextIdx = idx + 1;
         else if (e.key === "ArrowUp" && idx > 0) nextIdx = idx - 1;
         if (nextIdx !== idx) {
-          setSelectedSent(sentItems[nextIdx].id);
+          setSelectedSent(filteredSentItems[nextIdx].id);
           const container = sentListRef.current;
           if (container) {
             const buttons = container.querySelectorAll<HTMLButtonElement>(":scope > button");
@@ -708,52 +732,73 @@ function SentMessagesView() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [selectedSent]);
+  }, [selectedSent, filteredSentItems]);
+
+  // Resolve variable preview
+  const renderPreviewBody = (body: string, variables: Record<string, string>) => {
+    let result = body;
+    Object.entries(variables).forEach(([key, val]) => {
+      result = result.replace(new RegExp(`\\{\\{${key}\\}\\}`, "g"), val);
+    });
+    return result;
+  };
 
   return (
     <div className="flex flex-1 overflow-hidden">
-      {/* Sent list */}
-      <div className="w-[400px] shrink-0 border-r overflow-y-auto">
-        <div className="px-4 py-3 border-b">
-          <h3 className="text-[15px] font-semibold">送信済み</h3>
-          <p className="text-[12px] text-muted-foreground mt-0.5">{sentItems.length}件</p>
+      {/* Sent list - 280px matching other folders */}
+      <div className="flex h-full w-[280px] shrink-0 flex-col border-r bg-background">
+        <div className="shrink-0 px-3 pt-3 pb-2">
+          <div className="flex items-center gap-2 rounded-xl border px-3 py-2">
+            <Search className="h-4 w-4 text-muted-foreground" />
+            <input value={sentSearch} onChange={(e) => setSentSearch(e.target.value)}
+              placeholder="送信済みを検索..."
+              className="flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted-foreground/50" />
+          </div>
         </div>
-        <div ref={sentListRef}>
-        {sentItems.map((item) => {
-          const Icon = channelIcons[item.channel];
-          const isSelected = selectedSent === item.id;
-          return (
-            <button key={item.id}
-              onClick={() => setSelectedSent(item.id)}
-              className={cn(
-                "w-full text-left px-4 py-3.5 border-b transition-colors cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-inset",
-                isSelected ? "bg-brand text-white" : "hover:bg-accent/30"
-              )}>
-              <div className="flex items-center gap-2 mb-1">
-                <Icon className={cn("h-3.5 w-3.5 shrink-0", isSelected ? "text-white/80" : channelStyles[item.channel].text)} />
-                {item.type === "bulk" && (
-                  <span className={cn("rounded-full px-1.5 py-0.5 text-[10px] font-medium", isSelected ? "bg-white/20 text-white" : "bg-amber-100 text-amber-700")}>一括送信</span>
-                )}
-                <span className={cn("text-[11px] ml-auto", isSelected ? "text-white/70" : "text-muted-foreground")}>{item.sentAt}</span>
-              </div>
-              <p className={cn("text-[14px] font-medium truncate", isSelected && "text-white")}>
-                {item.subject || item.body.slice(0, 40)}
-              </p>
-              <p className={cn("text-[12px] truncate mt-0.5", isSelected ? "text-white/70" : "text-muted-foreground")}>
-                {item.type === "bulk"
-                  ? `${item.recipientCount}名に送信`
-                  : `${item.recipientName}に送信`}
-              </p>
-            </button>
-          );
-        })}
+
+        <div ref={sentListRef} className="flex-1 overflow-y-auto">
+          {filteredSentItems.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+              <Send className="mb-2 h-8 w-8 opacity-30" />
+              <p className="text-[14px]">送信メッセージがありません</p>
+            </div>
+          ) : (
+            filteredSentItems.map((item) => {
+              const Icon = channelIcons[item.channel];
+              const isSelected = selectedSent === item.id;
+              return (
+                <button key={item.id}
+                  onClick={() => setSelectedSent(item.id)}
+                  className={cn(
+                    "w-full text-left px-3 py-3 border-b transition-colors cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-inset",
+                    isSelected ? "bg-brand text-white" : "hover:bg-accent/30"
+                  )}>
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <Icon className={cn("h-3.5 w-3.5 shrink-0", isSelected ? "text-white/80" : channelStyles[item.channel].text)} />
+                    {item.type === "bulk" && (
+                      <span className={cn("rounded-full px-1.5 py-0.5 text-[10px] font-medium", isSelected ? "bg-white/20 text-white" : "bg-amber-100 text-amber-700")}>一括</span>
+                    )}
+                    <span className={cn("text-[11px] ml-auto", isSelected ? "text-white/70" : "text-muted-foreground")}>{item.sentAt.split(" ")[1]}</span>
+                  </div>
+                  <p className={cn("text-[13px] font-medium truncate", isSelected && "text-white")}>
+                    {item.subject || item.body.slice(0, 30)}
+                  </p>
+                  <p className={cn("text-[12px] truncate mt-0.5", isSelected ? "text-white/70" : "text-muted-foreground")}>
+                    {item.type === "bulk"
+                      ? `${item.recipientCount}名に送信`
+                      : item.recipientName}
+                  </p>
+                </button>
+              );
+            })
+          )}
         </div>
       </div>
 
       {/* Sent detail */}
       {selectedItem ? (
         <div className="flex-1 overflow-y-auto p-6">
-          <div className="max-w-2xl">
+          <div className="max-w-2xl mx-auto">
             <div className="flex items-center gap-2 mb-4">
               {(() => { const Icon = channelIcons[selectedItem.channel]; return <Icon className={cn("h-4 w-4", channelStyles[selectedItem.channel].text)} />; })()}
               {selectedItem.type === "bulk" && (
@@ -767,34 +812,76 @@ function SentMessagesView() {
               <h2 className="text-[18px] font-semibold mb-4">{selectedItem.subject}</h2>
             )}
 
-            {/* Recipients info */}
-            <div className="rounded-lg border bg-accent/20 p-4 mb-4">
-              <p className="text-[13px] font-medium mb-2">宛先</p>
-              {selectedItem.type === "bulk" ? (
-                <div className="space-y-1">
-                  <p className="text-[14px]">{selectedItem.recipientCount}名</p>
-                  {selectedItem.recipientGroups && (
-                    <div className="flex items-center gap-1.5">
-                      <FolderOpen className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span className="text-[13px] text-muted-foreground">{selectedItem.recipientGroups.join(", ")}</span>
+            {/* Recipients info with email addresses */}
+            <div className="rounded-lg border bg-accent/20 p-4 mb-4 space-y-2">
+              {selectedItem.channel === "email" && selectedItem.fromEmail && (
+                <div className="flex items-start gap-2">
+                  <span className="text-[12px] font-medium text-muted-foreground w-12 shrink-0 pt-0.5">From</span>
+                  <span className="text-[13px]">{selectedItem.fromEmail}</span>
+                </div>
+              )}
+              <div className="flex items-start gap-2">
+                <span className="text-[12px] font-medium text-muted-foreground w-12 shrink-0 pt-0.5">To</span>
+                <div className="text-[13px]">
+                  {selectedItem.type === "bulk" ? (
+                    <div className="space-y-1">
+                      <span>{selectedItem.recipientCount}名</span>
+                      {selectedItem.recipientGroups && (
+                        <div className="flex items-center gap-1.5">
+                          <FolderOpen className="h-3 w-3 text-muted-foreground" />
+                          <span className="text-muted-foreground">{selectedItem.recipientGroups.join(", ")}</span>
+                        </div>
+                      )}
+                      {selectedItem.recipientEmails.length > 0 && (
+                        <p className="text-muted-foreground">{selectedItem.recipientEmails.join(", ")}</p>
+                      )}
+                    </div>
+                  ) : (
+                    <div>
+                      <span>{selectedItem.recipientName}</span>
+                      {selectedItem.recipientEmails.length > 0 && (
+                        <span className="text-muted-foreground ml-1.5">&lt;{selectedItem.recipientEmails[0]}&gt;</span>
+                      )}
                     </div>
                   )}
                 </div>
-              ) : (
-                <p className="text-[14px]">{selectedItem.recipientName}</p>
+              </div>
+              {selectedItem.bccEmails && selectedItem.bccEmails.length > 0 && (
+                <div className="flex items-start gap-2">
+                  <span className="text-[12px] font-medium text-muted-foreground w-12 shrink-0 pt-0.5">BCC</span>
+                  <span className="text-[13px] text-muted-foreground">{selectedItem.bccEmails.join(", ")}</span>
+                </div>
               )}
             </div>
 
-            {/* Variables used (for bulk) */}
+            {/* Linked contact */}
+            {selectedItem.linkedContactId && (() => {
+              const contact = contacts.find((c) => c.id === selectedItem.linkedContactId);
+              return contact ? (
+                <div className="flex items-center gap-2 mb-4 rounded-lg border px-3 py-2">
+                  <User className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="text-[13px]">連絡先: {contact.name}</span>
+                  {contact.company && <span className="text-[12px] text-muted-foreground">({contact.company})</span>}
+                </div>
+              ) : null;
+            })()}
+
+            {/* Variables used (for bulk) with preview */}
             {selectedItem.type === "bulk" && selectedItem.variables && (
-              <div className="rounded-lg border bg-accent/20 p-4 mb-4">
-                <p className="text-[13px] font-medium mb-2">使用変数</p>
-                <div className="flex items-center gap-2">
+              <div className="rounded-lg border bg-accent/20 p-4 mb-4 space-y-3">
+                <p className="text-[13px] font-medium">使用変数</p>
+                <div className="flex flex-wrap items-center gap-2">
                   {Object.entries(selectedItem.variables).map(([key, val]) => (
-                    <span key={key} className="rounded-full border border-brand/30 bg-brand/5 px-2.5 py-0.5 text-[12px] font-medium text-brand">
+                    <span key={key} className="rounded-full border border-brand/30 px-2.5 py-0.5 text-[12px] font-medium text-brand">
                       {`{{${key}}}`} → {val}
                     </span>
                   ))}
+                </div>
+                <div className="border-t pt-3">
+                  <p className="text-[12px] font-medium text-muted-foreground mb-1.5">プレビュー（変数展開後）</p>
+                  <div className="rounded-md border bg-white p-3 text-[13px] leading-relaxed whitespace-pre-wrap text-muted-foreground">
+                    {renderPreviewBody(selectedItem.body, selectedItem.variables)}
+                  </div>
                 </div>
               </div>
             )}
@@ -1273,10 +1360,10 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
             {/* Assign self + assignee dropdown */}
             <div className="flex items-center">
               {!isSelfAssigned && (
-                <Button variant="outline" size="sm" className="h-9 gap-1.5 text-[14px] px-3 rounded-r-none border-r-0"
+                <Button variant="outline" size="sm" className="hidden xl:flex h-9 gap-1.5 text-[14px] px-3 rounded-r-none border-r-0"
                   onClick={() => onAssignSelf(conversation.id)}>
                   <Avatar src={currentUser.avatar} fallback={currentUser.name} size="sm" className="h-4 w-4 text-[6px]" />
-                  <span className="hidden xl:inline">担当する</span>
+                  担当する
                 </Button>
               )}
               <AssigneePopover
@@ -1336,8 +1423,8 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
               <div className="space-y-1">
                 {linkedConversations.filter((lc) => new Date(lc.lastMessageAt) <= new Date(conversation.messages[0]?.timestamp ?? "")).map((lc) => (
                   <button key={lc.id} onClick={() => onSelectConversation(lc.id)}
-                    className="flex items-center gap-2 text-[13px] text-muted-foreground hover:text-foreground cursor-pointer transition-colors truncate w-full text-left">
-                    <Link2 className="h-3 w-3 shrink-0" />
+                    className="flex items-center gap-2 text-[13px] text-muted-foreground hover:text-foreground cursor-pointer transition-colors truncate w-full text-left border border-border rounded-lg px-3 py-2 hover:bg-accent">
+                    <Link2 className="h-3.5 w-3.5 shrink-0 text-brand" />
                     <span className="truncate">関連メッセージ：{lc.channel === "email" ? (lc.subject || lc.lastMessage) : (lc.messages[0]?.content || lc.lastMessage)}</span>
                   </button>
                 ))}
@@ -1458,8 +1545,8 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
               <div className="space-y-1">
                 {linkedConversations.filter((lc) => new Date(lc.lastMessageAt) > new Date(conversation.messages[0]?.timestamp ?? "")).map((lc) => (
                   <button key={lc.id} onClick={() => onSelectConversation(lc.id)}
-                    className="flex items-center gap-2 text-[13px] text-muted-foreground hover:text-foreground cursor-pointer transition-colors truncate w-full text-left">
-                    <Link2 className="h-3 w-3 shrink-0" />
+                    className="flex items-center gap-2 text-[13px] text-muted-foreground hover:text-foreground cursor-pointer transition-colors truncate w-full text-left border border-border rounded-lg px-3 py-2 hover:bg-accent">
+                    <Link2 className="h-3.5 w-3.5 shrink-0 text-brand" />
                     <span className="truncate">関連メッセージ：{lc.channel === "email" ? (lc.subject || lc.lastMessage) : (lc.messages[0]?.content || lc.lastMessage)}</span>
                   </button>
                 ))}
@@ -1689,7 +1776,7 @@ function ThreadHistoryItem({ conv, CIcon, channelStyle, isLinked, isCurrent, cur
     <div
       className={cn(
         "group relative flex items-center gap-2 rounded-md border px-2.5 py-2 transition-colors",
-        isCurrent ? "border-brand border-2 bg-brand/5" : isLinked ? "border-brand/20" : "hover:bg-accent/30",
+        isCurrent ? "border-brand border-2" : isLinked ? "border-brand/20" : "hover:bg-accent/30",
         !isCurrent && "cursor-pointer"
       )}
       onClick={() => !isCurrent && onSelect()}
@@ -1725,7 +1812,7 @@ function ThreadHistoryItem({ conv, CIcon, channelStyle, isLinked, isCurrent, cur
             </button>
           )}
           {showMenu && (
-            <div className="absolute right-0 top-8 z-[200] w-[220px] rounded-lg border bg-popover p-1 shadow-lg">
+            <div className="absolute right-0 top-8 z-[200] w-auto rounded-lg border bg-popover p-1 shadow-lg">
               {isLinked ? (
                 <button onClick={(e) => { e.stopPropagation(); onUnlink(); setShowMenu(false); }}
                   className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-[14px] text-left text-foreground hover:bg-accent transition-colors cursor-pointer">
@@ -1954,7 +2041,7 @@ function ReplyHeader({ channel, channelLabel, accountName, isEmail,
 
   return (
     <div className="border-b bg-accent/20 px-3 py-2">
-      <button onClick={() => isEmail ? setExpanded(!expanded) : undefined}
+      <button onClick={isEmail ? () => setExpanded(!expanded) : undefined}
         className={cn(
           "flex items-center gap-2 text-[14px] text-muted-foreground w-full text-left",
           isEmail && "cursor-pointer hover:text-foreground transition-colors"

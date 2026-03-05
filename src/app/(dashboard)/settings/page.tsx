@@ -351,10 +351,12 @@ function TemplateSettings() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [addForm, setAddForm] = useState({ name: "", subject: "", body: "" });
-  const [variables, setVariables] = useState([
-    { id: "name", label: "名前", key: "名前", description: "連絡先の名前" },
-    { id: "company", label: "会社名", key: "会社名", description: "連絡先の会社名" },
-  ]);
+  const defaultVariables = [
+    { id: "name", label: "名前", key: "名前" },
+    { id: "company", label: "会社名", key: "会社名" },
+  ];
+  const [customVariables, setCustomVariables] = useState<{ id: string; label: string; key: string }[]>([]);
+  const variables = [...defaultVariables, ...customVariables];
 
   const [editForm, setEditForm] = useState<{ name: string; subject: string; body: string }>({
     name: "",
@@ -540,12 +542,12 @@ function TemplateSettings() {
         <button onClick={() => setTemplateSubTab("variables")}
           className={cn("flex-1 rounded-md px-3 py-1.5 text-[14px] font-medium transition-colors cursor-pointer",
             templateSubTab === "variables" ? "bg-accent text-foreground" : "text-muted-foreground hover:text-foreground")}>
-          変数設定
+          変数
         </button>
       </div>
 
       {templateSubTab === "variables" ? (
-        <VariableSettings variables={variables} setVariables={setVariables} />
+        <VariableSettings defaultVariables={defaultVariables} customVariables={customVariables} setCustomVariables={setCustomVariables} />
       ) : (
         <>
           <div className="mb-4 flex items-center justify-end">
@@ -683,21 +685,22 @@ function TemplateSettings() {
 
 /* ─── Variable Settings ─────────────────── */
 
-function VariableSettings({ variables, setVariables }: {
-  variables: { id: string; label: string; key: string; description: string }[];
-  setVariables: React.Dispatch<React.SetStateAction<{ id: string; label: string; key: string; description: string }[]>>;
+function VariableSettings({ defaultVariables, customVariables, setCustomVariables }: {
+  defaultVariables: { id: string; label: string; key: string }[];
+  customVariables: { id: string; label: string; key: string }[];
+  setCustomVariables: React.Dispatch<React.SetStateAction<{ id: string; label: string; key: string }[]>>;
 }) {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState({ key: "", label: "", description: "" });
+  const [form, setForm] = useState({ key: "", label: "" });
 
   const openAdd = () => {
-    setForm({ key: "", label: "", description: "" });
+    setForm({ key: "", label: "" });
     setShowAddModal(true);
   };
 
-  const openEdit = (v: typeof variables[0]) => {
-    setForm({ key: v.key, label: v.label, description: v.description });
+  const openEdit = (v: { id: string; key: string; label: string }) => {
+    setForm({ key: v.key, label: v.label });
     setEditingId(v.id);
     setShowAddModal(true);
   };
@@ -705,9 +708,9 @@ function VariableSettings({ variables, setVariables }: {
   const handleSave = () => {
     if (!form.key.trim() || !form.label.trim()) return;
     if (editingId) {
-      setVariables((prev) => prev.map((v) => v.id === editingId ? { ...v, key: form.key.trim(), label: form.label.trim(), description: form.description.trim() } : v));
+      setCustomVariables((prev) => prev.map((v) => v.id === editingId ? { ...v, key: form.key.trim(), label: form.label.trim() } : v));
     } else {
-      setVariables((prev) => [...prev, { id: `var_${Date.now()}`, key: form.key.trim(), label: form.label.trim(), description: form.description.trim() }]);
+      setCustomVariables((prev) => [...prev, { id: `var_${Date.now()}`, key: form.key.trim(), label: form.label.trim() }]);
     }
     setShowAddModal(false);
     setEditingId(null);
@@ -715,46 +718,70 @@ function VariableSettings({ variables, setVariables }: {
 
   const handleDelete = (id: string) => {
     if (!window.confirm("この変数を削除しますか？")) return;
-    setVariables((prev) => prev.filter((v) => v.id !== id));
+    setCustomVariables((prev) => prev.filter((v) => v.id !== id));
   };
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
-        <p className="text-[13px] text-muted-foreground">テンプレートで使用できる変数を管理します。変数は {`{{変数名}}`} の形式で本文に挿入できます。</p>
-        <Button size="sm" className="h-8 gap-1.5 text-[13px] bg-brand hover:bg-brand/90 shrink-0 ml-4"
-          onClick={openAdd}>
-          <Plus className="h-3.5 w-3.5" />
-          追加
-        </Button>
+      <div className="mb-5">
+        <p className="text-[13px] text-muted-foreground">メール作成時に使用できる変数を管理します。変数は {`{{変数名}}`} の形式で本文に挿入できます。</p>
       </div>
-      <div className="space-y-2">
-        {variables.map((v) => (
-          <div key={v.id} className="flex items-center gap-3 rounded-lg border px-4 py-3.5 group">
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="rounded-full border border-brand/30 bg-brand/5 px-2.5 py-0.5 text-[12px] font-medium text-brand">{`{{${v.key}}}`}</span>
-                <span className="text-[14px] font-medium">{v.label}</span>
+
+      {/* Default variables */}
+      <div className="mb-6">
+        <h3 className="text-[14px] font-semibold mb-3">デフォルト変数</h3>
+        <div className="space-y-2">
+          {defaultVariables.map((v) => (
+            <div key={v.id} className="flex items-center gap-3 rounded-lg border bg-accent/20 px-4 py-3.5">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="rounded-full border border-brand/30 px-2.5 py-0.5 text-[12px] font-medium text-brand">{`{{${v.key}}}`}</span>
+                  <span className="text-[14px] font-medium">{v.label}</span>
+                </div>
               </div>
-              {v.description && <p className="text-[12px] text-muted-foreground mt-1">{v.description}</p>}
+              <span className="text-[11px] text-muted-foreground shrink-0">編集不可</span>
             </div>
-            <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-              <button onClick={() => openEdit(v)}
-                className="cursor-pointer rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors">
-                <Pencil className="h-3.5 w-3.5" />
-              </button>
-              <button onClick={() => handleDelete(v.id)}
-                className="cursor-pointer rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-destructive transition-colors">
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Custom variables */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-[14px] font-semibold">カスタム変数</h3>
+          <Button size="sm" className="h-8 gap-1.5 text-[13px] bg-brand hover:bg-brand/90 shrink-0"
+            onClick={openAdd}>
+            <Plus className="h-3.5 w-3.5" />
+            追加
+          </Button>
+        </div>
+        <div className="space-y-2">
+          {customVariables.map((v) => (
+            <div key={v.id} className="flex items-center gap-3 rounded-lg border px-4 py-3.5 group">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="rounded-full border border-brand/30 px-2.5 py-0.5 text-[12px] font-medium text-brand">{`{{${v.key}}}`}</span>
+                  <span className="text-[14px] font-medium">{v.label}</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button onClick={() => openEdit(v)}
+                  className="cursor-pointer rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors">
+                  <Pencil className="h-3.5 w-3.5" />
+                </button>
+                <button onClick={() => handleDelete(v.id)}
+                  className="cursor-pointer rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-destructive transition-colors">
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
             </div>
-          </div>
-        ))}
-        {variables.length === 0 && (
-          <div className="rounded-lg border border-dashed px-4 py-8 text-center">
-            <p className="text-[14px] text-muted-foreground">変数がありません</p>
-          </div>
-        )}
+          ))}
+          {customVariables.length === 0 && (
+            <div className="rounded-lg border border-dashed px-4 py-8 text-center">
+              <p className="text-[14px] text-muted-foreground">カスタム変数がありません</p>
+            </div>
+          )}
+        </div>
       </div>
 
       {showAddModal && (
@@ -772,20 +799,14 @@ function VariableSettings({ variables, setVariables }: {
               <div>
                 <label className="mb-1.5 block text-[13px] font-medium text-muted-foreground">変数キー *</label>
                 <input autoFocus value={form.key} onChange={(e) => setForm((p) => ({ ...p, key: e.target.value }))}
-                  placeholder="例: 名前"
+                  placeholder="例: 部署名"
                   className="w-full rounded-md border px-3 py-2.5 text-[14px] outline-none focus:border-brand/40" />
                 <p className="mt-1 text-[11px] text-muted-foreground">テンプレート内で {`{{${form.key || "キー"}}}`} として使用されます</p>
               </div>
               <div>
                 <label className="mb-1.5 block text-[13px] font-medium text-muted-foreground">表示名 *</label>
                 <input value={form.label} onChange={(e) => setForm((p) => ({ ...p, label: e.target.value }))}
-                  placeholder="例: お客様の名前"
-                  className="w-full rounded-md border px-3 py-2.5 text-[14px] outline-none focus:border-brand/40" />
-              </div>
-              <div>
-                <label className="mb-1.5 block text-[13px] font-medium text-muted-foreground">説明</label>
-                <input value={form.description} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
-                  placeholder="例: 連絡先の名前"
+                  placeholder="例: 部署名"
                   className="w-full rounded-md border px-3 py-2.5 text-[14px] outline-none focus:border-brand/40" />
               </div>
             </div>
