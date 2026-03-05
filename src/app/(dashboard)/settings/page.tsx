@@ -467,11 +467,11 @@ function TemplateSettings() {
             <div className="flex items-center justify-between mb-1.5">
               <label className="text-[13px] font-medium text-muted-foreground">件名</label>
               <div className="flex items-center gap-1.5">
-                {["名前", "会社名"].map((v) => (
-                  <button key={v}
-                    onClick={() => setEditForm((prev) => ({ ...prev, subject: prev.subject + `{{${v}}}` }))}
+                {variables.map((v) => (
+                  <button key={v.id}
+                    onClick={() => setEditForm((prev) => ({ ...prev, subject: prev.subject + `{{${v.key}}}` }))}
                     className="rounded-full border border-brand/30 bg-brand/5 px-2.5 py-0.5 text-[12px] font-medium text-brand hover:bg-brand/10 transition-colors cursor-pointer">
-                    {v}
+                    {v.key}
                   </button>
                 ))}
               </div>
@@ -487,11 +487,11 @@ function TemplateSettings() {
             <div className="flex items-center justify-between mb-1.5">
               <label className="text-[13px] font-medium text-muted-foreground">本文</label>
               <div className="flex items-center gap-1.5">
-                {["名前", "会社名"].map((v) => (
-                  <button key={v}
-                    onClick={() => setEditForm((prev) => ({ ...prev, body: prev.body + `{{${v}}}` }))}
+                {variables.map((v) => (
+                  <button key={v.id}
+                    onClick={() => setEditForm((prev) => ({ ...prev, body: prev.body + `{{${v.key}}}` }))}
                     className="rounded-full border border-brand/30 bg-brand/5 px-2.5 py-0.5 text-[12px] font-medium text-brand hover:bg-brand/10 transition-colors cursor-pointer">
-                    {v}
+                    {v.key}
                   </button>
                 ))}
               </div>
@@ -545,22 +545,7 @@ function TemplateSettings() {
       </div>
 
       {templateSubTab === "variables" ? (
-        <div>
-          <p className="text-[13px] text-muted-foreground mb-4">テンプレートで使用できる変数を管理します。変数は {`{{変数名}}`} の形式で本文に挿入できます。</p>
-          <div className="space-y-2">
-            {variables.map((v) => (
-              <div key={v.id} className="flex items-center gap-3 rounded-lg border px-4 py-3.5">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="rounded-full border border-brand/30 bg-brand/5 px-2.5 py-0.5 text-[12px] font-medium text-brand">{`{{${v.key}}}`}</span>
-                    <span className="text-[14px] font-medium">{v.label}</span>
-                  </div>
-                  <p className="text-[12px] text-muted-foreground mt-1">{v.description}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+        <VariableSettings variables={variables} setVariables={setVariables} />
       ) : (
         <>
           <div className="mb-4 flex items-center justify-end">
@@ -639,11 +624,11 @@ function TemplateSettings() {
                     <div className="flex items-center justify-between mb-1.5">
                       <label className="text-[13px] font-medium text-muted-foreground">件名</label>
                       <div className="flex items-center gap-1.5">
-                        {["名前", "会社名"].map((v) => (
-                          <button key={v}
-                            onClick={() => setAddForm((prev) => ({ ...prev, subject: prev.subject + `{{${v}}}` }))}
+                        {variables.map((v) => (
+                          <button key={v.id}
+                            onClick={() => setAddForm((prev) => ({ ...prev, subject: prev.subject + `{{${v.key}}}` }))}
                             className="rounded-full border border-brand/30 bg-brand/5 px-2.5 py-0.5 text-[12px] font-medium text-brand hover:bg-brand/10 transition-colors cursor-pointer">
-                            {v}
+                            {v.key}
                           </button>
                         ))}
                       </div>
@@ -659,11 +644,11 @@ function TemplateSettings() {
                     <div className="flex items-center justify-between mb-1.5">
                       <label className="text-[13px] font-medium text-muted-foreground">本文</label>
                       <div className="flex items-center gap-1.5">
-                        {["名前", "会社名"].map((v) => (
-                          <button key={v}
-                            onClick={() => setAddForm((prev) => ({ ...prev, body: prev.body + `{{${v}}}` }))}
+                        {variables.map((v) => (
+                          <button key={v.id}
+                            onClick={() => setAddForm((prev) => ({ ...prev, body: prev.body + `{{${v.key}}}` }))}
                             className="rounded-full border border-brand/30 bg-brand/5 px-2.5 py-0.5 text-[12px] font-medium text-brand hover:bg-brand/10 transition-colors cursor-pointer">
-                            {v}
+                            {v.key}
                           </button>
                         ))}
                       </div>
@@ -691,6 +676,130 @@ function TemplateSettings() {
             </div>
           )}
         </>
+      )}
+    </div>
+  );
+}
+
+/* ─── Variable Settings ─────────────────── */
+
+function VariableSettings({ variables, setVariables }: {
+  variables: { id: string; label: string; key: string; description: string }[];
+  setVariables: React.Dispatch<React.SetStateAction<{ id: string; label: string; key: string; description: string }[]>>;
+}) {
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState({ key: "", label: "", description: "" });
+
+  const openAdd = () => {
+    setForm({ key: "", label: "", description: "" });
+    setShowAddModal(true);
+  };
+
+  const openEdit = (v: typeof variables[0]) => {
+    setForm({ key: v.key, label: v.label, description: v.description });
+    setEditingId(v.id);
+    setShowAddModal(true);
+  };
+
+  const handleSave = () => {
+    if (!form.key.trim() || !form.label.trim()) return;
+    if (editingId) {
+      setVariables((prev) => prev.map((v) => v.id === editingId ? { ...v, key: form.key.trim(), label: form.label.trim(), description: form.description.trim() } : v));
+    } else {
+      setVariables((prev) => [...prev, { id: `var_${Date.now()}`, key: form.key.trim(), label: form.label.trim(), description: form.description.trim() }]);
+    }
+    setShowAddModal(false);
+    setEditingId(null);
+  };
+
+  const handleDelete = (id: string) => {
+    if (!window.confirm("この変数を削除しますか？")) return;
+    setVariables((prev) => prev.filter((v) => v.id !== id));
+  };
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-[13px] text-muted-foreground">テンプレートで使用できる変数を管理します。変数は {`{{変数名}}`} の形式で本文に挿入できます。</p>
+        <Button size="sm" className="h-8 gap-1.5 text-[13px] bg-brand hover:bg-brand/90 shrink-0 ml-4"
+          onClick={openAdd}>
+          <Plus className="h-3.5 w-3.5" />
+          追加
+        </Button>
+      </div>
+      <div className="space-y-2">
+        {variables.map((v) => (
+          <div key={v.id} className="flex items-center gap-3 rounded-lg border px-4 py-3.5 group">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="rounded-full border border-brand/30 bg-brand/5 px-2.5 py-0.5 text-[12px] font-medium text-brand">{`{{${v.key}}}`}</span>
+                <span className="text-[14px] font-medium">{v.label}</span>
+              </div>
+              {v.description && <p className="text-[12px] text-muted-foreground mt-1">{v.description}</p>}
+            </div>
+            <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button onClick={() => openEdit(v)}
+                className="cursor-pointer rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors">
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+              <button onClick={() => handleDelete(v.id)}
+                className="cursor-pointer rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-destructive transition-colors">
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
+        ))}
+        {variables.length === 0 && (
+          <div className="rounded-lg border border-dashed px-4 py-8 text-center">
+            <p className="text-[14px] text-muted-foreground">変数がありません</p>
+          </div>
+        )}
+      </div>
+
+      {showAddModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/30"
+          onClick={(e) => { if (e.target === e.currentTarget) { setShowAddModal(false); setEditingId(null); } }}>
+          <div className="w-[420px] rounded-xl bg-background p-6 shadow-xl">
+            <div className="mb-5 flex items-center justify-between">
+              <h2 className="text-[19px] font-semibold">{editingId ? "変数を編集" : "変数を追加"}</h2>
+              <button onClick={() => { setShowAddModal(false); setEditingId(null); }}
+                className="cursor-pointer rounded-md p-1.5 text-muted-foreground hover:bg-accent">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="mb-1.5 block text-[13px] font-medium text-muted-foreground">変数キー *</label>
+                <input autoFocus value={form.key} onChange={(e) => setForm((p) => ({ ...p, key: e.target.value }))}
+                  placeholder="例: 名前"
+                  className="w-full rounded-md border px-3 py-2.5 text-[14px] outline-none focus:border-brand/40" />
+                <p className="mt-1 text-[11px] text-muted-foreground">テンプレート内で {`{{${form.key || "キー"}}}`} として使用されます</p>
+              </div>
+              <div>
+                <label className="mb-1.5 block text-[13px] font-medium text-muted-foreground">表示名 *</label>
+                <input value={form.label} onChange={(e) => setForm((p) => ({ ...p, label: e.target.value }))}
+                  placeholder="例: お客様の名前"
+                  className="w-full rounded-md border px-3 py-2.5 text-[14px] outline-none focus:border-brand/40" />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-[13px] font-medium text-muted-foreground">説明</label>
+                <input value={form.description} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
+                  placeholder="例: 連絡先の名前"
+                  className="w-full rounded-md border px-3 py-2.5 text-[14px] outline-none focus:border-brand/40" />
+              </div>
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <Button variant="outline" className="h-9 text-[13px]" onClick={() => { setShowAddModal(false); setEditingId(null); }}>
+                キャンセル
+              </Button>
+              <Button className="h-9 text-[13px] bg-brand hover:bg-brand/90" onClick={handleSave}
+                disabled={!form.key.trim() || !form.label.trim()}>
+                {editingId ? "保存" : "追加"}
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

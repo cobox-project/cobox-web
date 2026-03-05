@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { conversations, accounts, teamMembers } from "@/data/mock";
 import type { Channel } from "@/data/types";
@@ -138,8 +138,9 @@ function BarTooltip({ d, x, y }: { d: ReturnType<typeof generateWeekData>[0]; x:
   );
 }
 
-// Pie chart component
+// Pie chart component with hover tooltips
 function ChannelPieChart() {
+  const [hoveredSlice, setHoveredSlice] = useState<{ channel: Channel; count: number; x: number; y: number } | null>(null);
   const channelCounts = (["instagram", "line", "email", "facebook"] as Channel[]).map((ch) => ({
     channel: ch,
     count: conversations.filter((c) => c.channel === ch).length,
@@ -162,13 +163,20 @@ function ChannelPieChart() {
 
   return (
     <div className="flex items-center gap-4">
-      <svg width="72" height="72" viewBox="0 0 72 72">
+      <svg width="72" height="72" viewBox="0 0 72 72" className="cursor-default">
         {slices.map((s) => {
           const start = polarToCartesian(36, 36, 30, s.startAngle);
           const end = polarToCartesian(36, 36, 30, s.endAngle);
           const largeArc = s.endAngle - s.startAngle > 180 ? 1 : 0;
           const d = `M36,36 L${start.x},${start.y} A30,30 0 ${largeArc},1 ${end.x},${end.y} Z`;
-          return <path key={s.channel} d={d} fill={channelColors[s.channel]} />;
+          return <path key={s.channel} d={d} fill={channelColors[s.channel]}
+            className="transition-opacity hover:opacity-80"
+            onMouseEnter={(e) => {
+              const rect = (e.target as SVGPathElement).closest("svg")!.getBoundingClientRect();
+              setHoveredSlice({ channel: s.channel, count: s.count, x: rect.left + rect.width / 2, y: rect.top });
+            }}
+            onMouseLeave={() => setHoveredSlice(null)}
+          />;
         })}
       </svg>
       <div className="space-y-1">
@@ -179,6 +187,12 @@ function ChannelPieChart() {
           </div>
         ))}
       </div>
+      {hoveredSlice && (
+        <div className="pointer-events-none fixed z-[300] rounded-lg bg-foreground/90 px-3 py-2 text-[12px] text-white shadow-lg"
+          style={{ left: hoveredSlice.x, top: hoveredSlice.y - 8, transform: "translate(-50%, -100%)" }}>
+          {channelLabels[hoveredSlice.channel]}: {hoveredSlice.count}件 ({Math.round((hoveredSlice.count / total) * 100)}%)
+        </div>
+      )}
     </div>
   );
 }
@@ -280,7 +294,7 @@ function SummaryReport({ weekOffset, setWeekOffset, currentMonday, weekEnd }: {
 
   return (
     <>
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex items-center gap-4">
         <h2 className="text-[19px] font-semibold">サマリー</h2>
         <WeekNav weekOffset={weekOffset} setWeekOffset={setWeekOffset} currentMonday={currentMonday} weekEnd={weekEnd} />
       </div>
@@ -317,24 +331,24 @@ function SummaryReport({ weekOffset, setWeekOffset, currentMonday, weekEnd }: {
           <div className="mb-4">
             <h3 className="text-[15px] font-semibold">チャンネル別推移</h3>
           </div>
-          <div className="relative h-52">
-            <svg className="absolute inset-0 w-full h-[180px] pointer-events-none z-10" viewBox="0 0 700 180" preserveAspectRatio="none">
+          <div className="relative h-72">
+            <svg className="absolute inset-0 w-full h-[260px] pointer-events-none z-10" viewBox="0 0 700 260" preserveAspectRatio="none">
               <polyline fill="none" stroke="oklch(0.52 0.17 155)" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round"
                 points={stackedData.map((d, i) => {
                   const x = (i * 100) + 50;
-                  const y = maxResolved > 0 ? 180 - (d.resolved / maxResolved) * 160 : 180;
+                  const y = maxResolved > 0 ? 260 - (d.resolved / maxResolved) * 240 : 260;
                   return `${x},${y}`;
                 }).join(" ")} />
               {stackedData.map((d, i) => {
                 const x = (i * 100) + 50;
-                const y = maxResolved > 0 ? 180 - (d.resolved / maxResolved) * 160 : 180;
+                const y = maxResolved > 0 ? 260 - (d.resolved / maxResolved) * 240 : 260;
                 return <circle key={i} cx={x} cy={y} r="3.5" fill="white" stroke="oklch(0.52 0.17 155)" strokeWidth="2" />;
               })}
             </svg>
-            <div className="relative flex items-end justify-around h-[180px] px-4">
+            <div className="relative flex items-end justify-around h-[260px] px-4">
               {stackedData.map((d, i) => {
                 const barTotal = d.instagram + d.line + d.email + d.facebook;
-                const height = maxStacked > 0 ? (barTotal / maxStacked) * 170 : 0;
+                const height = maxStacked > 0 ? (barTotal / maxStacked) * 250 : 0;
                 return (
                   <div key={i} className="flex-1 flex flex-col items-center max-w-[36px]"
                     onMouseEnter={(e) => { const rect = e.currentTarget.getBoundingClientRect(); setHoveredBar({ d, x: rect.left + rect.width / 2, y: rect.top }); }}
@@ -401,7 +415,7 @@ function SummaryReport({ weekOffset, setWeekOffset, currentMonday, weekEnd }: {
                   const val = heatmapData[dayIdx][hour];
                   const intensity = maxHeat > 0 ? val / maxHeat : 0;
                   return (
-                    <div key={dayIdx} className="flex-1 h-[14px] rounded-sm cursor-default transition-transform hover:scale-110 hover:z-10"
+                    <div key={dayIdx} className="flex-1 h-[9px] rounded-sm cursor-default transition-transform hover:scale-110 hover:z-10"
                       style={{ backgroundColor: val === 0 ? "oklch(0.96 0 0)" : `oklch(0.52 ${0.17 * intensity} 155 / ${0.15 + intensity * 0.85})` }}
                       onMouseEnter={(e) => { const rect = e.currentTarget.getBoundingClientRect(); setHoveredCell({ day, date: heatmapDates[dayIdx], hour, val, x: rect.left + rect.width / 2, y: rect.top }); }}
                       onMouseLeave={() => setHoveredCell(null)} />
@@ -488,7 +502,7 @@ function MemberReport({ weekOffset, setWeekOffset, currentMonday, weekEnd }: {
 }) {
   return (
     <>
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex items-center gap-4">
         <h2 className="text-[19px] font-semibold">メンバー</h2>
         <WeekNav weekOffset={weekOffset} setWeekOffset={setWeekOffset} currentMonday={currentMonday} weekEnd={weekEnd} />
       </div>

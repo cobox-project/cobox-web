@@ -243,7 +243,7 @@ export default function MessagesPage() {
     setDeleteConfirmId(null);
   }, [selectedId]);
 
-  const handleSendMessage = useCallback((id: string, content: string, isInternal: boolean) => {
+  const handleSendMessage = useCallback((id: string, content: string, isInternal: boolean, attachments?: Attachment[]) => {
     const now = new Date();
     const ts = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, "0")}/${String(now.getDate()).padStart(2, "0")} ${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
     setConversations((prev) =>
@@ -256,6 +256,7 @@ export default function MessagesPage() {
           isInbound: false,
           senderName: currentUser.name,
           isInternal,
+          attachments: attachments && attachments.length > 0 ? attachments : undefined,
         };
         return {
           ...c,
@@ -353,11 +354,12 @@ export default function MessagesPage() {
         }
         if (nextIdx !== idx) {
           setSelectedId(filtered[nextIdx].id);
-          // Scroll the item into view
+          // Scroll the item into view and focus it
           const container = conversationListRef.current;
           if (container) {
             const buttons = container.querySelectorAll<HTMLButtonElement>(":scope > button");
             buttons[nextIdx]?.scrollIntoView({ block: "nearest" });
+            buttons[nextIdx]?.focus();
           }
         }
       }
@@ -681,6 +683,32 @@ function SentMessagesView() {
 
   const [selectedSent, setSelectedSent] = useState<string | null>(null);
   const selectedItem = sentItems.find((s) => s.id === selectedSent);
+  const sentListRef = useRef<HTMLDivElement>(null);
+
+  // Keyboard navigation for sent messages
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        const idx = sentItems.findIndex((s) => s.id === selectedSent);
+        let nextIdx = idx;
+        if (e.key === "ArrowDown" && idx < sentItems.length - 1) nextIdx = idx + 1;
+        else if (e.key === "ArrowUp" && idx > 0) nextIdx = idx - 1;
+        if (nextIdx !== idx) {
+          setSelectedSent(sentItems[nextIdx].id);
+          const container = sentListRef.current;
+          if (container) {
+            const buttons = container.querySelectorAll<HTMLButtonElement>(":scope > button");
+            buttons[nextIdx]?.scrollIntoView({ block: "nearest" });
+            buttons[nextIdx]?.focus();
+          }
+        }
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [selectedSent]);
 
   return (
     <div className="flex flex-1 overflow-hidden">
@@ -690,26 +718,28 @@ function SentMessagesView() {
           <h3 className="text-[15px] font-semibold">送信済み</h3>
           <p className="text-[12px] text-muted-foreground mt-0.5">{sentItems.length}件</p>
         </div>
+        <div ref={sentListRef}>
         {sentItems.map((item) => {
           const Icon = channelIcons[item.channel];
+          const isSelected = selectedSent === item.id;
           return (
             <button key={item.id}
               onClick={() => setSelectedSent(item.id)}
               className={cn(
-                "w-full text-left px-4 py-3.5 border-b transition-colors cursor-pointer",
-                selectedSent === item.id ? "bg-brand/5 border-l-2 border-l-brand" : "hover:bg-accent/30"
+                "w-full text-left px-4 py-3.5 border-b transition-colors cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-inset",
+                isSelected ? "bg-brand text-white" : "hover:bg-accent/30"
               )}>
               <div className="flex items-center gap-2 mb-1">
-                <Icon className={cn("h-3.5 w-3.5 shrink-0", channelStyles[item.channel].text)} />
+                <Icon className={cn("h-3.5 w-3.5 shrink-0", isSelected ? "text-white/80" : channelStyles[item.channel].text)} />
                 {item.type === "bulk" && (
-                  <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">一括送信</span>
+                  <span className={cn("rounded-full px-1.5 py-0.5 text-[10px] font-medium", isSelected ? "bg-white/20 text-white" : "bg-amber-100 text-amber-700")}>一括送信</span>
                 )}
-                <span className="text-[11px] text-muted-foreground ml-auto">{item.sentAt}</span>
+                <span className={cn("text-[11px] ml-auto", isSelected ? "text-white/70" : "text-muted-foreground")}>{item.sentAt}</span>
               </div>
-              <p className="text-[14px] font-medium truncate">
+              <p className={cn("text-[14px] font-medium truncate", isSelected && "text-white")}>
                 {item.subject || item.body.slice(0, 40)}
               </p>
-              <p className="text-[12px] text-muted-foreground truncate mt-0.5">
+              <p className={cn("text-[12px] truncate mt-0.5", isSelected ? "text-white/70" : "text-muted-foreground")}>
                 {item.type === "bulk"
                   ? `${item.recipientCount}名に送信`
                   : `${item.recipientName}に送信`}
@@ -717,6 +747,7 @@ function SentMessagesView() {
             </button>
           );
         })}
+        </div>
       </div>
 
       {/* Sent detail */}
@@ -866,7 +897,7 @@ function ConversationItem({ conversation, isSelected, isRecentlyRead, isSelfAssi
         if (isRecentlyRead && onAnimationComplete) onAnimationComplete();
       }}
       className={cn(
-        "flex w-full gap-2.5 border-b px-3 py-2.5 text-left transition-all duration-300 cursor-pointer",
+        "flex w-full gap-2.5 border-b px-3 py-2.5 text-left transition-all duration-300 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-inset",
         isSelected
           ? "bg-brand text-white"
           : isSelfAssigned
@@ -910,10 +941,10 @@ function ConversationItem({ conversation, isSelected, isRecentlyRead, isSelfAssi
         <div className="mt-1.5 flex items-center justify-between">
           <div className="flex items-center gap-1">
             {showStatus ? (
-              <span className={cn("flex items-center gap-1 text-[12px] font-medium",
+              <span className={cn("flex items-center gap-1 text-[12px] font-medium truncate",
                 isSelected ? "text-white/60" : statusColor)}>
                 {statusIcon}
-                {statusLabel}
+                <span className="truncate">{statusLabel}</span>
               </span>
             ) : assignees.length > 0 ? (
               <div className="flex items-center gap-1 min-w-0 overflow-hidden">
@@ -927,10 +958,10 @@ function ConversationItem({ conversation, isSelected, isRecentlyRead, isSelfAssi
                 </span>
               </div>
             ) : (
-              <span className={cn("flex items-center gap-1 text-[12px] font-medium",
+              <span className={cn("flex items-center gap-1 text-[12px] font-medium truncate",
                 isSelected ? "text-white/50" : "text-muted-foreground/60")}>
-                <CircleDashed className="h-4 w-4" />
-                担当者なし
+                <CircleDashed className="h-4 w-4 shrink-0" />
+                <span className="truncate">担当者なし</span>
               </span>
             )}
           </div>
@@ -1049,7 +1080,7 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
   onOpenContactDetail: (contactId: string) => void;
   onToggleFavorite: (id: string) => void;
   onRequestDelete: (id: string) => void;
-  onSendMessage: (id: string, content: string, isInternal: boolean) => void;
+  onSendMessage: (id: string, content: string, isInternal: boolean, attachments?: Attachment[]) => void;
   onLinkConversation: (convId: string, targetId: string) => void;
   onUnlinkConversation: (convId: string, targetId: string) => void;
   onNavigateToContact: (contactId: string) => void;
@@ -1188,7 +1219,14 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
   const handleSendReply = () => {
     if (!replyText.trim() && attachedFiles.length === 0) return;
     const content = replyText.trim() || (attachedFiles.length > 0 ? `[添付ファイル: ${attachedFiles.map(f => f.name).join(", ")}]` : "");
-    onSendMessage(conversation.id, content, false);
+    const msgAttachments: Attachment[] = attachedFiles.map((f, i) => ({
+      id: `att-${Date.now()}-${i}`,
+      name: f.name,
+      type: f.type === "image" ? "image" as const : "file" as const,
+      url: f.url,
+      size: f.size,
+    }));
+    onSendMessage(conversation.id, content, false, msgAttachments);
     setReplyText("");
     setAttachedFiles([]);
   };
@@ -1216,10 +1254,10 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
       {/* Main conversation area */}
       <div className="flex h-full min-w-[400px] flex-1 flex-col bg-background">
         {/* Action bar */}
-        <header className="flex shrink-0 items-center justify-between gap-2 border-b px-5 py-3 min-w-0" style={{ minHeight: "70px" }}>
+        <header className="flex shrink-0 items-center justify-between gap-2 border-b px-5 py-3 min-w-0 overflow-hidden" style={{ minHeight: "70px" }}>
           {/* clicking contact name toggles right pane */}
           <button onClick={onToggleRightPane}
-            className="flex min-w-0 items-center gap-3 cursor-pointer rounded-lg px-2 py-1.5 -ml-2 transition-colors hover:bg-accent active:bg-accent/80 shrink" style={{ minWidth: "120px" }}>
+            className="flex min-w-0 items-center gap-3 cursor-pointer rounded-lg px-2 py-1.5 -ml-2 transition-colors hover:bg-accent active:bg-accent/80 shrink overflow-hidden" style={{ minWidth: "80px" }}>
             <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-full", style.bg)}>
               <Icon className={cn("h-4 w-4", style.text)} />
             </div>
@@ -1231,14 +1269,14 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
             </div>
           </button>
 
-          <div className="flex items-center gap-1.5 shrink-0 justify-end">
+          <div className="flex items-center gap-1.5 shrink-0 justify-end overflow-hidden">
             {/* Assign self + assignee dropdown */}
             <div className="flex items-center">
               {!isSelfAssigned && (
                 <Button variant="outline" size="sm" className="h-9 gap-1.5 text-[14px] px-3 rounded-r-none border-r-0"
                   onClick={() => onAssignSelf(conversation.id)}>
                   <Avatar src={currentUser.avatar} fallback={currentUser.name} size="sm" className="h-4 w-4 text-[6px]" />
-                  <span className="hidden lg:inline">担当する</span>
+                  <span className="hidden xl:inline">担当する</span>
                 </Button>
               )}
               <AssigneePopover
@@ -1262,7 +1300,7 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
                 )}
                 onClick={() => onStatusChange(conversation.id, conversation.status === "completed" ? "open" : "completed")}>
                 <Check className="h-3.5 w-3.5" />
-                <span className="hidden lg:inline">完了</span>
+                <span className="hidden xl:inline">完了</span>
               </Button>
               <Button size="sm"
                 variant={conversation.status === "no_action" ? "default" : "outline"}
@@ -1272,7 +1310,7 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
                 )}
                 onClick={() => onStatusChange(conversation.id, conversation.status === "no_action" ? "open" : "no_action")}>
                 <Ban className="h-3.5 w-3.5" />
-                <span className="hidden lg:inline">対応なし</span>
+                <span className="hidden xl:inline">対応なし</span>
               </Button>
             </div>
 
@@ -1651,7 +1689,7 @@ function ThreadHistoryItem({ conv, CIcon, channelStyle, isLinked, isCurrent, cur
     <div
       className={cn(
         "group relative flex items-center gap-2 rounded-md border px-2.5 py-2 transition-colors",
-        isCurrent ? "border-brand bg-background" : isLinked ? "border-brand/20" : "hover:bg-accent/30",
+        isCurrent ? "border-brand border-2 bg-brand/5" : isLinked ? "border-brand/20" : "hover:bg-accent/30",
         !isCurrent && "cursor-pointer"
       )}
       onClick={() => !isCurrent && onSelect()}
