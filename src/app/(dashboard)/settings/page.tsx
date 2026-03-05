@@ -402,12 +402,15 @@ function TemplateSettings() {
     setShowAddModal(false);
   };
 
-  const handleDragStart = (index: number) => {
+  const handleDragStart = (e: React.DragEvent, index: number) => {
     setDragIndex(index);
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", String(index));
   };
 
   const handleDragOver = (e: React.DragEvent, index: number) => {
     e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
     setDragOverIndex(index);
   };
 
@@ -431,28 +434,6 @@ function TemplateSettings() {
     setDragIndex(null);
     setDragOverIndex(null);
   };
-
-  // Variable buttons component matching compose page style
-  const VariableButtonRow = ({
-    label,
-    onInsert,
-  }: {
-    label: string;
-    onInsert: (variable: string) => void;
-  }) => (
-    <div className="flex items-center gap-2 mt-2">
-      <span className="text-[13px] font-medium text-muted-foreground shrink-0">{label}</span>
-      <div className="flex items-center gap-1.5">
-        {["姓", "名", "会社名"].map((v) => (
-          <button key={v}
-            onClick={() => onInsert(`{{${v}}}`)}
-            className="rounded-full border border-brand/30 bg-brand/5 px-2.5 py-0.5 text-[12px] font-medium text-brand hover:bg-brand/10 transition-colors cursor-pointer">
-            {v}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
 
   // Edit page view
   if (editingId) {
@@ -480,26 +461,44 @@ function TemplateSettings() {
           </div>
 
           <div>
-            <label className="mb-1.5 block text-[13px] font-medium text-muted-foreground">件名</label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-[13px] font-medium text-muted-foreground">件名</label>
+              <div className="flex items-center gap-1.5">
+                {["姓", "名", "会社名"].map((v) => (
+                  <button key={v}
+                    onClick={() => setEditForm((prev) => ({ ...prev, subject: prev.subject + `{{${v}}}` }))}
+                    className="rounded-full border border-brand/30 bg-brand/5 px-2.5 py-0.5 text-[12px] font-medium text-brand hover:bg-brand/10 transition-colors cursor-pointer">
+                    {v}
+                  </button>
+                ))}
+              </div>
+            </div>
             <input
               value={editForm.subject}
               onChange={(e) => setEditForm((prev) => ({ ...prev, subject: e.target.value }))}
               className="w-full rounded-md border px-3 py-2.5 text-[14px] outline-none focus:border-brand/40"
             />
-            <VariableButtonRow label="変数を挿入"
-              onInsert={(v) => setEditForm((prev) => ({ ...prev, subject: prev.subject + v }))} />
           </div>
 
           <div>
-            <label className="mb-1.5 block text-[13px] font-medium text-muted-foreground">本文</label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-[13px] font-medium text-muted-foreground">本文</label>
+              <div className="flex items-center gap-1.5">
+                {["姓", "名", "会社名"].map((v) => (
+                  <button key={v}
+                    onClick={() => setEditForm((prev) => ({ ...prev, body: prev.body + `{{${v}}}` }))}
+                    className="rounded-full border border-brand/30 bg-brand/5 px-2.5 py-0.5 text-[12px] font-medium text-brand hover:bg-brand/10 transition-colors cursor-pointer">
+                    {v}
+                  </button>
+                ))}
+              </div>
+            </div>
             <textarea
               value={editForm.body}
               onChange={(e) => setEditForm((prev) => ({ ...prev, body: e.target.value }))}
               rows={12}
               className="w-full rounded-md border px-3 py-2.5 text-[14px] outline-none focus:border-brand/40 resize-none"
             />
-            <VariableButtonRow label="変数を挿入"
-              onInsert={(v) => setEditForm((prev) => ({ ...prev, body: prev.body + v }))} />
           </div>
 
           <div className="flex justify-end gap-2 pt-2">
@@ -543,7 +542,7 @@ function TemplateSettings() {
         {templates.map((tpl, index) => (
           <div key={tpl.id}
             draggable
-            onDragStart={() => handleDragStart(index)}
+            onDragStart={(e) => handleDragStart(e, index)}
             onDragOver={(e) => handleDragOver(e, index)}
             onDrop={() => handleDrop(index)}
             onDragEnd={handleDragEnd}
@@ -556,8 +555,7 @@ function TemplateSettings() {
           >
             <div className="flex items-start gap-3 px-4 py-4">
               <div className="flex items-center shrink-0 pt-1 text-muted-foreground/40 cursor-grab active:cursor-grabbing"
-                onClick={(e) => e.stopPropagation()}
-                onMouseDown={(e) => e.stopPropagation()}>
+                onClick={(e) => e.stopPropagation()}>
                 <GripVertical className="h-4 w-4" />
               </div>
               <div className="flex-1 min-w-0">
@@ -604,18 +602,38 @@ function TemplateSettings() {
                 />
               </div>
               <div>
-                <label className="mb-1.5 block text-[13px] font-medium text-muted-foreground">件名</label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-[13px] font-medium text-muted-foreground">件名</label>
+                  <div className="flex items-center gap-1.5">
+                    {["姓", "名", "会社名"].map((v) => (
+                      <button key={v}
+                        onClick={() => setAddForm((prev) => ({ ...prev, subject: prev.subject + `{{${v}}}` }))}
+                        className="rounded-full border border-brand/30 bg-brand/5 px-2.5 py-0.5 text-[12px] font-medium text-brand hover:bg-brand/10 transition-colors cursor-pointer">
+                        {v}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <input
                   value={addForm.subject}
                   onChange={(e) => setAddForm((prev) => ({ ...prev, subject: e.target.value }))}
                   placeholder="例: 【ご案内】{{姓}}様へ"
                   className="w-full rounded-md border px-3 py-2.5 text-[14px] outline-none focus:border-brand/40"
                 />
-                <VariableButtonRow label="変数を挿入"
-                  onInsert={(v) => setAddForm((prev) => ({ ...prev, subject: prev.subject + v }))} />
               </div>
               <div>
-                <label className="mb-1.5 block text-[13px] font-medium text-muted-foreground">本文</label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-[13px] font-medium text-muted-foreground">本文</label>
+                  <div className="flex items-center gap-1.5">
+                    {["姓", "名", "会社名"].map((v) => (
+                      <button key={v}
+                        onClick={() => setAddForm((prev) => ({ ...prev, body: prev.body + `{{${v}}}` }))}
+                        className="rounded-full border border-brand/30 bg-brand/5 px-2.5 py-0.5 text-[12px] font-medium text-brand hover:bg-brand/10 transition-colors cursor-pointer">
+                        {v}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <textarea
                   value={addForm.body}
                   onChange={(e) => setAddForm((prev) => ({ ...prev, body: e.target.value }))}
@@ -623,8 +641,6 @@ function TemplateSettings() {
                   placeholder="テンプレートの本文を入力..."
                   className="w-full rounded-md border px-3 py-2.5 text-[14px] outline-none focus:border-brand/40 resize-none"
                 />
-                <VariableButtonRow label="変数を挿入"
-                  onInsert={(v) => setAddForm((prev) => ({ ...prev, body: prev.body + v }))} />
               </div>
             </div>
 

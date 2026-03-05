@@ -109,6 +109,7 @@ export default function MessagesPage() {
   const [accountFilter, setAccountFilter] = useState<string | null>(null);
   const [groupFilter, setGroupFilter] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [personalFolderMode, setPersonalFolderMode] = useState<"active" | "all">("active");
   const [detailContactId, setDetailContactId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [recentlyReadIds, setRecentlyReadIds] = useState<Set<string>>(new Set());
@@ -153,12 +154,15 @@ export default function MessagesPage() {
           break;
         case "mine":
           list = list.filter((c) => c.assignees.some((a) => a.id === currentUser.id));
+          if (personalFolderMode === "active") list = list.filter((c) => c.status === "open");
           break;
         case "mentioned":
           list = list.filter((c) => c.messages.some((m) => m.isInternal && m.content.includes(`@${currentUser.name}`)));
+          if (personalFolderMode === "active") list = list.filter((c) => c.status === "open");
           break;
         case "favorite":
           list = list.filter((c) => c.isFavorite);
+          if (personalFolderMode === "active") list = list.filter((c) => c.status === "open");
           break;
       }
     }
@@ -174,7 +178,7 @@ export default function MessagesPage() {
     }
 
     return list;
-  }, [conversations, folderFilter, accountFilter, groupFilter, searchQuery]);
+  }, [conversations, folderFilter, accountFilter, groupFilter, searchQuery, personalFolderMode]);
 
   const selectedConversation = useMemo(
     () => conversations.find((c) => c.id === selectedId) ?? null,
@@ -329,17 +333,28 @@ export default function MessagesPage() {
     };
   }, [conversations]);
 
-  // Keyboard navigation
+  // Keyboard navigation - scroll into view and move focus
+  const conversationListRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
         if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
         e.preventDefault();
         const idx = filtered.findIndex((c) => c.id === selectedId);
+        let nextIdx = idx;
         if (e.key === "ArrowDown" && idx < filtered.length - 1) {
-          setSelectedId(filtered[idx + 1].id);
+          nextIdx = idx + 1;
         } else if (e.key === "ArrowUp" && idx > 0) {
-          setSelectedId(filtered[idx - 1].id);
+          nextIdx = idx - 1;
+        }
+        if (nextIdx !== idx) {
+          setSelectedId(filtered[nextIdx].id);
+          // Scroll the item into view
+          const container = conversationListRef.current;
+          if (container) {
+            const buttons = container.querySelectorAll<HTMLButtonElement>(":scope > button");
+            buttons[nextIdx]?.scrollIntoView({ block: "nearest" });
+          }
         }
       }
     };
@@ -472,17 +487,37 @@ export default function MessagesPage() {
           </div>
 
           {currentSectionLabel && (
-            <div className="px-1">
+            <div className="px-1 flex items-center justify-between">
               <p className="text-[12px] font-medium text-muted-foreground truncate">{currentSectionLabel}</p>
+              {(folderFilter === "mine" || folderFilter === "mentioned" || folderFilter === "favorite") && !accountFilter && !groupFilter && (
+                <div className="flex rounded-md border overflow-hidden shrink-0">
+                  <button
+                    onClick={() => setPersonalFolderMode("active")}
+                    className={cn(
+                      "px-2 py-0.5 text-[11px] font-medium transition-colors cursor-pointer",
+                      personalFolderMode === "active" ? "bg-brand text-white" : "bg-background text-muted-foreground hover:bg-accent"
+                    )}>
+                    対応中
+                  </button>
+                  <button
+                    onClick={() => setPersonalFolderMode("all")}
+                    className={cn(
+                      "px-2 py-0.5 text-[11px] font-medium transition-colors cursor-pointer",
+                      personalFolderMode === "all" ? "bg-brand text-white" : "bg-background text-muted-foreground hover:bg-accent"
+                    )}>
+                    すべて
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
 
-        <div className="flex-1 overflow-y-auto">
+        <div ref={conversationListRef} className="flex-1 overflow-y-auto">
           {filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
               <Inbox className="mb-2 h-8 w-8 opacity-30" />
-              <p className="text-[14px]">該当するスレッドがありません</p>
+              <p className="text-[14px]">メッセージがありません</p>
             </div>
           ) : (
             filtered.map((conv) => (
@@ -490,6 +525,7 @@ export default function MessagesPage() {
                 isSelected={conv.id === selectedId}
                 isRecentlyRead={recentlyReadIds.has(conv.id)}
                 isSelfAssigned={conv.assignees.some((a) => a.id === currentUser.id)}
+                folderFilter={folderFilter}
                 onSelect={() => setSelectedId(conv.id)}
                 onAnimationComplete={() => {
                   setRecentlyReadIds(s => {
@@ -628,9 +664,10 @@ function FolderItemWithAvatar({ label, count, isActive, onClick }: {
 /* --- Conversation List Item --- */
 /* Change #9: added isSelfAssigned prop for green background */
 
-function ConversationItem({ conversation, isSelected, isRecentlyRead, isSelfAssigned, onSelect, onAnimationComplete }: {
+function ConversationItem({ conversation, isSelected, isRecentlyRead, isSelfAssigned, folderFilter, onSelect, onAnimationComplete }: {
   conversation: Conversation; isSelected: boolean; isRecentlyRead?: boolean;
   isSelfAssigned: boolean;
+  folderFilter: FolderFilter;
   onSelect: () => void; onAnimationComplete?: () => void;
 }) {
   const { contactName, channel, lastMessage, lastMessageAt, assignees, subject } = conversation;
@@ -641,6 +678,13 @@ function ConversationItem({ conversation, isSelected, isRecentlyRead, isSelfAssi
   const isNoAction = conversation.status === "no_action";
 
   const displayText = channel === "email" && subject ? subject : lastMessage;
+
+  // Show status labels for 完了/対応なし/自分が担当 folders
+  const showStatus = folderFilter === "completed" || folderFilter === "no_action" || folderFilter === "mine";
+  const statusLabels: Record<string, string> = { open: "対応中", completed: "完了", no_action: "対応なし" };
+  const statusLabel = statusLabels[conversation.status] ?? "新着";
+  const statusColor = conversation.status === "completed" ? "text-brand" : conversation.status === "no_action" ? "text-muted-foreground" : "text-foreground";
+  const statusIcon = conversation.status === "completed" ? <Check className="h-3.5 w-3.5" /> : conversation.status === "no_action" ? <Ban className="h-3.5 w-3.5" /> : <MessageCircleMore className="h-3.5 w-3.5" />;
 
   return (
     <button onClick={onSelect}
@@ -688,27 +732,23 @@ function ConversationItem({ conversation, isSelected, isRecentlyRead, isSelfAssi
           {displayText}
         </p>
 
-        {/* Assignees */}
+        {/* Assignees / Status */}
         <div className="mt-1.5 flex items-center justify-between">
           <div className="flex items-center gap-1">
-            {assignees.length > 0 ? (
+            {showStatus ? (
+              <span className={cn("flex items-center gap-1 text-[12px] font-medium",
+                isSelected ? "text-white/60" : statusColor)}>
+                {statusIcon}
+                {statusLabel}
+              </span>
+            ) : assignees.length > 0 ? (
               <div className="flex items-center gap-1">
                 {assignees.map((a) => (
-                  <span key={a.id} className={cn("flex items-center gap-1 truncate text-[12px]",
-                    isSelected ? "text-white/60" : "text-muted-foreground")}>
-                    <Avatar src={a.avatar} fallback={a.name} size="sm" className="h-4 w-4 text-[6px]" />
-                  </span>
+                  <Avatar key={a.id} src={a.avatar} fallback={a.name} size="sm" className="h-4 w-4 text-[6px]" />
                 ))}
-                {assignees.length === 1 && (
-                  <span className={cn("text-[12px]", isSelected ? "text-white/60" : "text-muted-foreground")}>
-                    {assignees[0].name}
-                  </span>
-                )}
-                {assignees.length > 1 && (
-                  <span className={cn("text-[12px]", isSelected ? "text-white/60" : "text-muted-foreground")}>
-                    +{assignees.length - 1}
-                  </span>
-                )}
+                <span className={cn("text-[12px]", isSelected ? "text-white/60" : "text-muted-foreground")}>
+                  {assignees.map((a) => a.name).join("、")}
+                </span>
               </div>
             ) : (
               <span className={cn("flex items-center gap-1 text-[12px] font-medium",
@@ -1315,7 +1355,7 @@ function RightSidePane({ conversation, allConversations, contactConversations, l
   return (
     <div className="flex h-full w-[300px] min-w-[260px] shrink-0 flex-col border-l bg-background overflow-y-auto">
       {/* Header with message ID and close button - aligned with main header */}
-      <div className="shrink-0 border-b px-4 py-3 flex items-center justify-between">
+      <div className="shrink-0 px-4 py-3 flex items-center justify-between">
         <span className="text-[13px] font-medium text-muted-foreground">
           メッセージID: {formatMessageNumber(conversation.messageNumber)}
         </span>

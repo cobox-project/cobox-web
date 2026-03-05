@@ -65,12 +65,16 @@ function ComposePageInner() {
   // Track source for back navigation
   const fromContacts = searchParams.get("from") === "contacts";
 
-  // Pre-select group from query param
+  // Pre-select group or individual from query params
   useEffect(() => {
     const groupId = searchParams.get("group");
+    const selectAll = searchParams.get("selectAll");
     if (groupId) {
       setRecipientType("group");
       setSelectedGroupIds([groupId]);
+    } else if (selectAll === "true") {
+      setRecipientType("individual");
+      setSelectedContactIds(contacts.map((c) => c.id));
     }
   }, [searchParams]);
 
@@ -280,6 +284,22 @@ function ComposePageInner() {
                       className="flex-1 bg-transparent text-[14px] outline-none placeholder:text-muted-foreground/50" />
                   </div>
                   <div className="max-h-[200px] overflow-y-auto rounded-lg border">
+                    <label
+                      className="flex items-center gap-2.5 px-3 py-2 cursor-pointer select-none hover:bg-accent/30 transition-colors border-b bg-accent/10">
+                      <input type="checkbox"
+                        checked={filteredContacts.length > 0 && filteredContacts.every((c) => selectedContactIds.includes(c.id))}
+                        onChange={() => {
+                          const allSelected = filteredContacts.every((c) => selectedContactIds.includes(c.id));
+                          if (allSelected) {
+                            setSelectedContactIds([]);
+                          } else {
+                            setSelectedContactIds(filteredContacts.map((c) => c.id));
+                          }
+                        }}
+                        className="h-4 w-4 rounded accent-brand" />
+                      <span className="text-[14px] font-medium">すべてを選択</span>
+                      <span className="text-[12px] text-muted-foreground">({filteredContacts.length}名)</span>
+                    </label>
                     {filteredContacts.map((contact) => (
                       <label key={contact.id}
                         className="flex items-center gap-2.5 px-3 py-2 cursor-pointer select-none hover:bg-accent/30 transition-colors border-b last:border-0">

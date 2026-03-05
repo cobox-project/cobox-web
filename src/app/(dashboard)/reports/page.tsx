@@ -452,19 +452,19 @@ function ChannelReport() {
                 </div>
               </div>
               <div className="grid grid-cols-4 gap-4">
-                <div className="rounded-md border px-4 py-3">
+                <div className="rounded-md bg-accent/30 px-4 py-3">
                   <p className="text-[12px] text-muted-foreground">合計</p>
                   <p className="text-[20px] font-semibold tabular-nums">{convs.length}</p>
                 </div>
-                <div className="rounded-md border px-4 py-3">
+                <div className="rounded-md bg-accent/30 px-4 py-3">
                   <p className="text-[12px] text-muted-foreground">新着</p>
                   <p className="text-[20px] font-semibold tabular-nums">{convs.filter((c) => c.status === "open" && c.assignees.length === 0).length}</p>
                 </div>
-                <div className="rounded-md border px-4 py-3">
+                <div className="rounded-md bg-accent/30 px-4 py-3">
                   <p className="text-[12px] text-muted-foreground">対応中</p>
                   <p className="text-[20px] font-semibold tabular-nums">{convs.filter((c) => c.status === "open" && c.assignees.length > 0).length}</p>
                 </div>
-                <div className="rounded-md border px-4 py-3">
+                <div className="rounded-md bg-accent/30 px-4 py-3">
                   <p className="text-[12px] text-muted-foreground">完了</p>
                   <p className="text-[20px] font-semibold tabular-nums text-brand">{convs.filter((c) => c.status === "completed").length}</p>
                 </div>
@@ -486,33 +486,31 @@ function StaffReport() {
         <h2 className="text-[19px] font-semibold">スタッフ</h2>
       </div>
 
-      <section className="rounded-lg border bg-white p-5">
-        <div className="rounded-lg border">
-          <div className="grid grid-cols-5 gap-4 border-b px-4 py-2.5 text-[13px] font-medium text-muted-foreground">
-            <span>順位</span>
-            <span>スタッフ名</span>
-            <span className="text-center">担当件数</span>
-            <span className="text-center">完了件数</span>
-            <span className="text-center">平均返信速度</span>
-          </div>
-          {teamMembers.map((member, i) => {
-            const assigned = conversations.filter((c) => c.assignees.some((a) => a.id === member.id));
-            const completed = assigned.filter((c) => c.status === "completed").length;
-            const replyTimes = ["18分", "25分", "32分"];
-            return (
-              <div key={member.id} className="grid grid-cols-5 items-center gap-4 border-b last:border-0 px-4 py-3">
-                <span className="text-[16px] font-semibold text-muted-foreground">#{i + 1}</span>
-                <div className="flex items-center gap-2.5">
-                  <Avatar src={member.avatar} fallback={member.name} size="sm" className="h-8 w-8" />
-                  <span className="text-[15px] font-medium">{member.name}</span>
-                </div>
-                <span className="text-center text-[15px] font-medium tabular-nums">{assigned.length}</span>
-                <span className="text-center text-[15px] font-semibold tabular-nums text-brand">{completed}</span>
-                <span className="text-center text-[15px] tabular-nums">{replyTimes[i]}</span>
-              </div>
-            );
-          })}
+      <section className="rounded-lg border bg-white">
+        <div className="grid grid-cols-5 gap-4 border-b px-5 py-2.5 text-[13px] font-medium text-muted-foreground">
+          <span>順位</span>
+          <span>スタッフ名</span>
+          <span className="text-center">担当件数</span>
+          <span className="text-center">完了件数</span>
+          <span className="text-center">平均返信速度</span>
         </div>
+        {teamMembers.map((member, i) => {
+          const assigned = conversations.filter((c) => c.assignees.some((a) => a.id === member.id));
+          const completed = assigned.filter((c) => c.status === "completed").length;
+          const replyTimes = ["18分", "25分", "32分"];
+          return (
+            <div key={member.id} className="grid grid-cols-5 items-center gap-4 border-b last:border-0 px-5 py-3">
+              <span className="text-[16px] font-semibold text-muted-foreground">#{i + 1}</span>
+              <div className="flex items-center gap-2.5">
+                <Avatar src={member.avatar} fallback={member.name} size="sm" className="h-8 w-8" />
+                <span className="text-[15px] font-medium">{member.name}</span>
+              </div>
+              <span className="text-center text-[15px] font-medium tabular-nums">{assigned.length}</span>
+              <span className="text-center text-[15px] font-semibold tabular-nums text-brand">{completed}</span>
+              <span className="text-center text-[15px] tabular-nums">{replyTimes[i]}</span>
+            </div>
+          );
+        })}
       </section>
     </>
   );

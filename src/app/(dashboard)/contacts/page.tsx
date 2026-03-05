@@ -275,11 +275,11 @@ export default function ContactsPage() {
                 連絡先追加
               </button>
               <button
-                onClick={() => router.push("/messages/compose?from=contacts")}
+                onClick={() => router.push("/messages/compose?from=contacts&selectAll=true")}
                 className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-brand/30 bg-brand/5 px-3 py-2.5 text-[14px] text-brand hover:bg-brand/10 transition-colors cursor-pointer"
               >
                 <Send className="h-4 w-4" />
-                メール作成
+                一括送信
               </button>
             </div>
           ) : (
@@ -297,7 +297,7 @@ export default function ContactsPage() {
                 className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-brand/30 bg-brand/5 px-3 py-2.5 text-[14px] text-brand hover:bg-brand/10 transition-colors cursor-pointer"
               >
                 <Send className="h-4 w-4" />
-                メール作成
+                一括送信
               </button>
             </div>
           )}
