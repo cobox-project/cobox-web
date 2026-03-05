@@ -381,7 +381,7 @@ export default function MessagesPage() {
     mine: "自分が担当",
     mentioned: "メンションされた",
     favorite: "お気に入り",
-    sent: "送信済み",
+    sent: "一括送信済み",
   };
 
   const currentSectionLabel = useMemo(() => {
@@ -418,7 +418,7 @@ export default function MessagesPage() {
             <FolderItem icon={Ban} label="対応なし" count={0}
               isActive={folderFilter === "no_action" && !accountFilter && !groupFilter}
               onClick={() => { setFolderFilter("no_action"); setAccountFilter(null); setGroupFilter(null); }} />
-            <FolderItem icon={Send} label="送信済み" count={0}
+            <FolderItem icon={Send} label="一括送信済み" count={0}
               isActive={folderFilter === "sent" && !accountFilter && !groupFilter}
               onClick={() => { setFolderFilter("sent"); setAccountFilter(null); setGroupFilter(null); }} />
           </div>
@@ -785,11 +785,11 @@ function SentMessagesView() {
           <div className="flex items-center gap-2 rounded-xl border px-3 py-2">
             <Search className="h-4 w-4 text-muted-foreground" />
             <input value={sentSearch} onChange={(e) => setSentSearch(e.target.value)}
-              placeholder="送信済みを検索..."
+              placeholder="一括送信済みを検索..."
               className="flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted-foreground/50" />
           </div>
           <div className="px-1">
-            <p className="text-[12px] font-medium text-muted-foreground truncate">送信済み</p>
+            <p className="text-[12px] font-medium text-muted-foreground truncate">一括送信済み</p>
           </div>
         </div>
 
@@ -1451,7 +1451,7 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
         <header ref={headerRef} className="relative flex shrink-0 items-center justify-between gap-2 border-b px-5 py-3 min-w-0" style={{ minHeight: "70px" }}>
           {/* clicking contact name toggles right pane */}
           <button onClick={onToggleRightPane}
-            className="flex min-w-0 items-center gap-3 cursor-pointer rounded-lg px-2 py-1.5 -ml-2 transition-colors hover:bg-accent active:bg-accent/80 shrink-0" style={{ maxWidth: "40%" }}>
+            className="flex min-w-0 items-center gap-3 cursor-pointer rounded-lg px-2 py-1.5 -ml-2 transition-colors hover:bg-accent active:bg-accent/80" style={{ maxWidth: "40%" }}>
             <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-full", style.bg)}>
               <Icon className={cn("h-4 w-4", style.text)} />
             </div>
@@ -1759,7 +1759,7 @@ function RightSidePane({ conversation, allConversations, contactConversations, l
   const contactGroups_ = contactGroups.filter((g) => g.contactIds.includes(conversation.contactId));
 
   return (
-    <div className="relative z-10 flex h-full w-[300px] min-w-[260px] shrink-0 flex-col border-l bg-background overflow-y-auto">
+    <div className="relative z-[60] flex h-full w-[300px] min-w-[260px] shrink-0 flex-col border-l bg-background overflow-y-auto">
       {/* Header with message ID and close button */}
       <div className="shrink-0 px-4 flex items-center justify-between" style={{ height: "70px" }}>
         <span className="text-[13px] font-medium text-muted-foreground">
@@ -1932,7 +1932,7 @@ function ThreadHistoryItem({ conv, CIcon, channelStyle, isLinked, isCurrent, cur
             <div className="absolute right-0 top-8 z-[200] w-auto rounded-lg border bg-popover p-1 shadow-lg">
               {isLinked ? (
                 <button onClick={(e) => { e.stopPropagation(); onUnlink(); setShowMenu(false); }}
-                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-[14px] text-left text-foreground hover:bg-accent transition-colors cursor-pointer">
+                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-[14px] text-left text-foreground hover:bg-accent transition-colors cursor-pointer whitespace-nowrap">
                   <Link2 className="h-3.5 w-3.5 text-destructive shrink-0" />
                   関連づけを解除する
                 </button>

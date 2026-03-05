@@ -12,12 +12,13 @@ import {
   Facebook,
 
   Inbox,
-  CheckCircle2,
+  Check,
   ChevronLeft,
   ChevronRight,
   BarChart3,
   Users,
   LayoutDashboard,
+  Link2,
 } from "lucide-react";
 
 const channelIcons: Record<Channel, React.ElementType> = {
@@ -202,7 +203,7 @@ type ReportTab = "summary" | "channel" | "staff";
 
 const reportTabs = [
   { id: "summary" as ReportTab, label: "サマリー", icon: LayoutDashboard },
-  { id: "channel" as ReportTab, label: "チャネル", icon: BarChart3 },
+  { id: "channel" as ReportTab, label: "チャネル", icon: Link2 },
   { id: "staff" as ReportTab, label: "メンバー", icon: Users },
 ];
 
@@ -311,11 +312,11 @@ function SummaryReport({ weekOffset, setWeekOffset, currentMonday, weekEnd }: {
         </div>
         <div className="rounded-lg border bg-white px-5 py-5 flex flex-col justify-between h-full">
           <div className="flex items-center gap-2 mb-2">
-            <CheckCircle2 className="h-4 w-4 text-brand" />
+            <Check className="h-4 w-4 text-muted-foreground" />
             <span className="text-[13px] text-muted-foreground">完了数</span>
           </div>
-          <p className="text-[28px] font-semibold tabular-nums text-brand">{resolvedCount}</p>
-          <div className="mt-2 text-[12px] text-muted-foreground">前週比 <span className="text-brand font-medium">+8%</span></div>
+          <p className="text-[28px] font-semibold tabular-nums">{resolvedCount}</p>
+          <div className="mt-2 text-[12px] text-muted-foreground">前週比 <span className="text-foreground font-medium">+8%</span></div>
         </div>
         <div className="rounded-lg border bg-white px-5 py-5">
           <div className="flex items-center gap-2 mb-3">
@@ -331,31 +332,34 @@ function SummaryReport({ weekOffset, setWeekOffset, currentMonday, weekEnd }: {
         {/* Stacked bar chart */}
         <section className="rounded-lg border bg-white p-5 flex flex-col">
           <div className="mb-4">
-            <h3 className="text-[15px] font-semibold">チャンネル別推移</h3>
+            <h3 className="text-[15px] font-semibold">新着と完了数の推移</h3>
           </div>
           <div className="relative flex-1 min-h-[260px]">
-            <svg className="absolute inset-0 w-full h-full pointer-events-none z-10" viewBox="0 0 700 260" preserveAspectRatio="none">
+            {/* SVG polyline overlay - uses same grid positioning as bars */}
+            <svg className="absolute inset-0 w-full h-full pointer-events-none z-10" viewBox={`0 0 ${stackedData.length * 100} 260`} preserveAspectRatio="none">
               <polyline fill="none" stroke="oklch(0.52 0.17 155)" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round"
+                vectorEffect="non-scaling-stroke"
                 points={stackedData.map((d, i) => {
-                  const x = (i * 100) + 50;
+                  const x = (i + 0.5) / stackedData.length * stackedData.length * 100;
                   const y = maxResolved > 0 ? 260 - (d.resolved / maxResolved) * 240 : 260;
                   return `${x},${y}`;
                 }).join(" ")} />
               {stackedData.map((d, i) => {
-                const x = (i * 100) + 50;
+                const x = (i + 0.5) / stackedData.length * stackedData.length * 100;
                 const y = maxResolved > 0 ? 260 - (d.resolved / maxResolved) * 240 : 260;
-                return <circle key={i} cx={x} cy={y} r="3.5" fill="white" stroke="oklch(0.52 0.17 155)" strokeWidth="2" />;
+                return <circle key={i} cx={x} cy={y} r="4" fill="white" stroke="oklch(0.52 0.17 155)" strokeWidth="2" vectorEffect="non-scaling-stroke" />;
               })}
             </svg>
-            <div className="relative flex items-end justify-around h-[260px] px-4">
+            {/* Bars grid - equal columns */}
+            <div className="relative grid h-[260px]" style={{ gridTemplateColumns: `repeat(${stackedData.length}, 1fr)` }}>
               {stackedData.map((d, i) => {
                 const barTotal = d.instagram + d.line + d.email + d.facebook;
                 const height = maxStacked > 0 ? (barTotal / maxStacked) * 250 : 0;
                 return (
-                  <div key={i} className="flex-1 flex flex-col items-center max-w-[36px]"
+                  <div key={i} className="flex items-end justify-center"
                     onMouseEnter={(e) => { const rect = e.currentTarget.getBoundingClientRect(); setHoveredBar({ d, x: rect.left + rect.width / 2, y: rect.top }); }}
                     onMouseLeave={() => setHoveredBar(null)}>
-                    <div className={cn("w-full flex flex-col-reverse rounded-t overflow-hidden transition-opacity",
+                    <div className={cn("w-[36px] flex flex-col-reverse rounded-t overflow-hidden transition-opacity",
                       hoveredBar && hoveredBar.d.date !== d.date ? "opacity-40" : "opacity-100"
                     )} style={{ height: `${height}px` }}>
                       {d.email > 0 && <div className="bg-channel-email" style={{ height: `${(d.email / barTotal) * 100}%` }} />}
@@ -367,9 +371,10 @@ function SummaryReport({ weekOffset, setWeekOffset, currentMonday, weekEnd }: {
                 );
               })}
             </div>
-            <div className="flex justify-around mt-1 px-4">
+            {/* Date labels grid - same columns */}
+            <div className="grid mt-1" style={{ gridTemplateColumns: `repeat(${stackedData.length}, 1fr)` }}>
               {stackedData.map((d, i) => (
-                <div key={i} className="flex-1 max-w-[36px] text-center">
+                <div key={i} className="text-center">
                   <div className="text-[11px] text-muted-foreground leading-tight">{d.date}</div>
                   <div className="text-[10px] text-muted-foreground/60">{d.label}</div>
                 </div>
@@ -394,7 +399,7 @@ function SummaryReport({ weekOffset, setWeekOffset, currentMonday, weekEnd }: {
         {/* Heatmap - axes swapped: columns=days, rows=hours */}
         <section className="rounded-lg border bg-white p-5">
           <div className="mb-4">
-            <h3 className="text-[15px] font-semibold">新着時間ヒートマップ</h3>
+            <h3 className="text-[15px] font-semibold">新着の時間別ヒートマップ</h3>
           </div>
           <div>
             {/* Day labels header */}
