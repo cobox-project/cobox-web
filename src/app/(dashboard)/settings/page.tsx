@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { accounts, teamMembers, memberPermissions as initialPermissions, composeTemplates } from "@/data/mock";
 import type { Channel, ComposeTemplate } from "@/data/types";
@@ -57,7 +58,24 @@ const channelStyles: Record<Channel, { bg: string; text: string }> = {
 };
 
 export default function SettingsPage() {
-  const [activeTab, setActiveTab] = useState<TabId>("accounts");
+  return (
+    <Suspense fallback={<div className="flex h-full items-center justify-center text-muted-foreground">読み込み中...</div>}>
+      <SettingsPageInner />
+    </Suspense>
+  );
+}
+
+function SettingsPageInner() {
+  const searchParams = useSearchParams();
+  const initialTab = (searchParams.get("tab") as TabId) || "accounts";
+  const [activeTab, setActiveTab] = useState<TabId>(initialTab);
+
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (activeTab !== "accounts") params.set("tab", activeTab);
+    const qs = params.toString();
+    window.history.replaceState(null, "", `/settings${qs ? `?${qs}` : ""}`);
+  }, [activeTab]);
 
   return (
     <div className="flex h-full">
@@ -542,7 +560,7 @@ function TemplateSettings() {
         <button onClick={() => setTemplateSubTab("variables")}
           className={cn("flex-1 rounded-md px-3 py-1.5 text-[14px] font-medium transition-colors cursor-pointer",
             templateSubTab === "variables" ? "bg-accent text-foreground" : "text-muted-foreground hover:text-foreground")}>
-          変数
+          連絡先・定型文
         </button>
       </div>
 
@@ -717,19 +735,19 @@ function VariableSettings({ defaultVariables, customVariables, setCustomVariable
   };
 
   const handleDelete = (id: string) => {
-    if (!window.confirm("この変数を削除しますか？")) return;
+    if (!window.confirm("この定型文を削除しますか？")) return;
     setCustomVariables((prev) => prev.filter((v) => v.id !== id));
   };
 
   return (
     <div>
       <div className="mb-5">
-        <p className="text-[13px] text-muted-foreground">メール作成時に使用できる変数を管理します。変数は {`{{変数名}}`} の形式で本文に挿入できます。</p>
+        <p className="text-[13px] text-muted-foreground">メール作成時に使用できる連絡先変数と定型文を管理します。{`{{キー名}}`} の形式で本文に挿入できます。</p>
       </div>
 
       {/* Default variables */}
       <div className="mb-6">
-        <h3 className="text-[14px] font-semibold mb-3">デフォルト変数</h3>
+        <h3 className="text-[14px] font-semibold mb-3">連絡先</h3>
         <div className="space-y-2">
           {defaultVariables.map((v) => (
             <div key={v.id} className="flex items-center gap-3 rounded-lg border bg-accent/20 px-4 py-3.5">
@@ -748,7 +766,7 @@ function VariableSettings({ defaultVariables, customVariables, setCustomVariable
       {/* Custom variables */}
       <div>
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-[14px] font-semibold">カスタム変数</h3>
+          <h3 className="text-[14px] font-semibold">定型文</h3>
           <Button size="sm" className="h-8 gap-1.5 text-[13px] bg-brand hover:bg-brand/90 shrink-0"
             onClick={openAdd}>
             <Plus className="h-3.5 w-3.5" />
@@ -778,7 +796,7 @@ function VariableSettings({ defaultVariables, customVariables, setCustomVariable
           ))}
           {customVariables.length === 0 && (
             <div className="rounded-lg border border-dashed px-4 py-8 text-center">
-              <p className="text-[14px] text-muted-foreground">カスタム変数がありません</p>
+              <p className="text-[14px] text-muted-foreground">定型文がありません</p>
             </div>
           )}
         </div>
@@ -789,7 +807,7 @@ function VariableSettings({ defaultVariables, customVariables, setCustomVariable
           onClick={(e) => { if (e.target === e.currentTarget) { setShowAddModal(false); setEditingId(null); } }}>
           <div className="w-[420px] rounded-xl bg-background p-6 shadow-xl">
             <div className="mb-5 flex items-center justify-between">
-              <h2 className="text-[19px] font-semibold">{editingId ? "変数を編集" : "変数を追加"}</h2>
+              <h2 className="text-[19px] font-semibold">{editingId ? "定型文を編集" : "定型文を追加"}</h2>
               <button onClick={() => { setShowAddModal(false); setEditingId(null); }}
                 className="cursor-pointer rounded-md p-1.5 text-muted-foreground hover:bg-accent">
                 <X className="h-4 w-4" />
@@ -797,7 +815,7 @@ function VariableSettings({ defaultVariables, customVariables, setCustomVariable
             </div>
             <div className="space-y-4">
               <div>
-                <label className="mb-1.5 block text-[13px] font-medium text-muted-foreground">変数キー *</label>
+                <label className="mb-1.5 block text-[13px] font-medium text-muted-foreground">定型文キー *</label>
                 <input autoFocus value={form.key} onChange={(e) => setForm((p) => ({ ...p, key: e.target.value }))}
                   placeholder="例: 会社の住所"
                   className="w-full rounded-md border px-3 py-2.5 text-[14px] outline-none focus:border-brand/40" />

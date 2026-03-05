@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useMemo, useCallback, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useMemo, useCallback, useEffect, useRef, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
   accounts,
@@ -101,14 +101,28 @@ function formatMessageNumber(n: number): string {
 }
 
 export default function MessagesPage() {
-  const router = useRouter();
-  const [conversations, setConversations] = useState(allConversations);
-  const [selectedId, setSelectedId] = useState<string | null>(
-    allConversations[0]?.id ?? null
+  return (
+    <Suspense fallback={<div className="flex h-full items-center justify-center text-muted-foreground">読み込み中...</div>}>
+      <MessagesPageInner />
+    </Suspense>
   );
-  const [folderFilter, setFolderFilter] = useState<FolderFilter>("new");
-  const [accountFilter, setAccountFilter] = useState<string | null>(null);
-  const [groupFilter, setGroupFilter] = useState<string | null>(null);
+}
+
+function MessagesPageInner() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // Initialize state from URL params
+  const initialFolder = (searchParams.get("folder") as FolderFilter) || "new";
+  const initialAccount = searchParams.get("account") || null;
+  const initialGroup = searchParams.get("group") || null;
+  const initialSelected = searchParams.get("id") || (allConversations[0]?.id ?? null);
+
+  const [conversations, setConversations] = useState(allConversations);
+  const [selectedId, setSelectedId] = useState<string | null>(initialSelected);
+  const [folderFilter, setFolderFilter] = useState<FolderFilter>(initialFolder);
+  const [accountFilter, setAccountFilter] = useState<string | null>(initialAccount);
+  const [groupFilter, setGroupFilter] = useState<string | null>(initialGroup);
   const [searchQuery, setSearchQuery] = useState("");
   const [personalFolderMode, setPersonalFolderMode] = useState<"active" | "all">("active");
   const [detailContactId, setDetailContactId] = useState<string | null>(null);
@@ -118,6 +132,18 @@ export default function MessagesPage() {
   const [accountsExpanded, setAccountsExpanded] = useState(true);
   const [groupsExpanded, setGroupsExpanded] = useState(true);
   const [showRightPane, setShowRightPane] = useState(true);
+
+  // Sync URL when state changes
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (folderFilter !== "new") params.set("folder", folderFilter);
+    if (accountFilter) params.set("account", accountFilter);
+    if (groupFilter) params.set("group", groupFilter);
+    if (selectedId) params.set("id", selectedId);
+    const qs = params.toString();
+    const url = `/messages${qs ? `?${qs}` : ""}`;
+    window.history.replaceState(null, "", url);
+  }, [folderFilter, accountFilter, groupFilter, selectedId]);
 
   // Image preview modal
   const [previewImage, setPreviewImage] = useState<string | null>(null);
@@ -1692,6 +1718,7 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
                     (memoRef as React.MutableRefObject<HTMLTextAreaElement | null>).current = el;
                     if (el) { el.style.height = "auto"; el.style.height = Math.min(el.scrollHeight, 80) + "px"; }
                   }} />
+                <MemoListPopover conversation={conversation} onDeleteMemo={(msgId) => onDeleteMemo(conversation.id, msgId)} />
               </div>
               {memoText.trim() && (
                 <div className="flex justify-end px-3 pb-2.5">
@@ -1949,6 +1976,64 @@ function ThreadHistoryItem({ conv, CIcon, channelStyle, isLinked, isCurrent, cur
               )}
             </div>
           )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* --- Memo List Popover --- */
+
+function MemoListPopover({ conversation, onDeleteMemo }: {
+  conversation: Conversation;
+  onDeleteMemo: (messageId: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const memos = conversation.messages.filter((m) => m.isInternal);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  if (memos.length === 0) return null;
+
+  return (
+    <div ref={ref} className="relative shrink-0">
+      <button
+        onClick={() => setOpen(!open)}
+        className="cursor-pointer rounded-md px-2 py-0.5 text-[12px] font-medium text-amber-600 hover:bg-amber-100/60 transition-colors whitespace-nowrap"
+      >
+        メモ：{memos.length}件
+      </button>
+      {open && (
+        <div className="absolute bottom-full right-0 mb-2 w-[360px] max-h-[320px] overflow-y-auto rounded-lg border bg-popover p-3 shadow-lg z-[300]">
+          <p className="text-[12px] font-semibold text-muted-foreground mb-2">チーム内メモ一覧</p>
+          <div className="space-y-2">
+            {memos.map((memo) => (
+              <div key={memo.id} className="group/memoitem rounded-md border border-amber-200/60 bg-amber-50/40 px-3 py-2">
+                <p className="text-[13px] leading-relaxed text-amber-900/70 whitespace-pre-wrap">{renderMentions(memo.content)}</p>
+                <div className="mt-1.5 flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <Avatar src={teamMembers.find((m) => m.name === memo.senderName)?.avatar} fallback={memo.senderName} size="sm" className="h-4 w-4 text-[5px]" />
+                    <span className="text-[11px] text-muted-foreground">{memo.senderName}</span>
+                    <span className="text-[11px] text-muted-foreground/50">{memo.timestamp}</span>
+                  </div>
+                  <button
+                    onClick={() => onDeleteMemo(memo.id)}
+                    className="hidden group-hover/memoitem:flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:text-destructive cursor-pointer"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>

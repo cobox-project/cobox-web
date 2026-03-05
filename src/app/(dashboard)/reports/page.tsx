@@ -1,10 +1,9 @@
 "use client";
 
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { cn } from "@/lib/utils";
-import { conversations, accounts, teamMembers } from "@/data/mock";
+import { conversations, accounts } from "@/data/mock";
 import type { Channel } from "@/data/types";
-import { Avatar } from "@/components/ui/avatar";
 import {
   Instagram,
   MessageCircle,
@@ -16,9 +15,6 @@ import {
   ChevronLeft,
   ChevronRight,
   BarChart3,
-  Users,
-  LayoutDashboard,
-  Link2,
 } from "lucide-react";
 
 const channelIcons: Record<Channel, React.ElementType> = {
@@ -69,31 +65,19 @@ function getMonday(d: Date): Date {
 }
 
 function generateWeekData(weekStart: Date) {
+  const today = new Date();
+  today.setHours(23, 59, 59, 999);
   return dayLabels.map((label, i) => {
     const date = new Date(weekStart);
     date.setDate(weekStart.getDate() + i);
+    const isFuture = date > today;
     const seed = date.getDate() + date.getMonth() * 31;
-    const instagram = ((seed * 3 + 7) % 5) + 1;
-    const line = ((seed * 5 + 3) % 4) + 1;
-    const email = ((seed * 7 + 2) % 6) + 1;
-    const facebook = (seed * 11) % 3;
-    const resolved = Math.max(0, Math.floor((instagram + line + email + facebook) * 0.4 + ((seed * 13) % 3) - 1));
-    return { label, date: formatDate(date), fullDate: date, instagram, line, email, facebook, resolved };
-  });
-}
-
-function generateHeatmapData(weekStart: Date): number[][] {
-  return dayLabels.map((_, dayIdx) => {
-    const date = new Date(weekStart);
-    date.setDate(weekStart.getDate() + dayIdx);
-    const baseSeed = date.getDate() + date.getMonth() * 31;
-    return Array.from({ length: 24 }, (_, hour) => {
-      if (hour < 6) return 0;
-      if (hour > 20) return 0;
-      const seed = baseSeed + hour * 7;
-      const peak = hour >= 9 && hour <= 17 ? 3 : 0;
-      return Math.max(0, ((seed * 3 + hour * 5) % 7) - 1 + peak);
-    });
+    const instagram = isFuture ? 0 : ((seed * 3 + 7) % 5) + 1;
+    const line = isFuture ? 0 : ((seed * 5 + 3) % 4) + 1;
+    const email = isFuture ? 0 : ((seed * 7 + 2) % 6) + 1;
+    const facebook = isFuture ? 0 : (seed * 11) % 3;
+    const resolved = isFuture ? 0 : Math.max(0, Math.floor((instagram + line + email + facebook) * 0.4 + ((seed * 13) % 3) - 1));
+    return { label, date: formatDate(date), fullDate: date, instagram, line, email, facebook, resolved, isFuture };
   });
 }
 
@@ -198,17 +182,7 @@ function ChannelPieChart() {
   );
 }
 
-// Sub-navigation tabs
-type ReportTab = "summary" | "channel" | "staff";
-
-const reportTabs = [
-  { id: "summary" as ReportTab, label: "サマリー", icon: LayoutDashboard },
-  { id: "channel" as ReportTab, label: "チャネル", icon: Link2 },
-  { id: "staff" as ReportTab, label: "メンバー", icon: Users },
-];
-
 export default function ReportsPage() {
-  const [activeTab, setActiveTab] = useState<ReportTab>("summary");
   const [weekOffset, setWeekOffset] = useState(0);
 
   const currentMonday = useMemo(() => {
@@ -225,41 +199,15 @@ export default function ReportsPage() {
 
   return (
     <div className="flex h-full">
-      {/* Left sub-navigation */}
+      {/* Left sub-navigation - just "レポート" title, no sub-tabs */}
       <div className="w-[220px] shrink-0 border-r bg-background px-3 py-4">
         <h1 className="mb-4 px-2.5 text-[15px] font-semibold">レポート</h1>
-        <nav className="space-y-0.5">
-          {reportTabs.map((tab) => {
-            const Icon = tab.icon;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={cn(
-                  "flex w-full items-center gap-2.5 rounded-md px-2.5 py-[7px] text-[15px] font-medium transition-colors cursor-pointer",
-                  activeTab === tab.id
-                    ? "bg-accent text-foreground"
-                    : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
-                )}
-              >
-                <Icon className="h-[15px] w-[15px] shrink-0" />
-                {tab.label}
-              </button>
-            );
-          })}
-        </nav>
       </div>
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto">
         <div className="w-full px-8 py-8">
-          {activeTab === "summary" && (
-            <SummaryReport weekOffset={weekOffset} setWeekOffset={setWeekOffset} currentMonday={currentMonday} weekEnd={weekEnd} />
-          )}
-          {activeTab === "channel" && <ChannelReport />}
-          {activeTab === "staff" && (
-            <MemberReport weekOffset={weekOffset} setWeekOffset={setWeekOffset} currentMonday={currentMonday} weekEnd={weekEnd} />
-          )}
+          <SummaryReport weekOffset={weekOffset} setWeekOffset={setWeekOffset} currentMonday={currentMonday} weekEnd={weekEnd} />
         </div>
       </div>
     </div>
@@ -279,19 +227,7 @@ function SummaryReport({ weekOffset, setWeekOffset, currentMonday, weekEnd }: {
   const maxStacked = Math.max(...stackedData.map((d) => d.instagram + d.line + d.email + d.facebook));
   const maxResolved = Math.max(...stackedData.map((d) => d.resolved));
 
-  const heatmapData = useMemo(() => generateHeatmapData(currentMonday), [currentMonday]);
-  const maxHeat = Math.max(...heatmapData.flat());
-
   const [hoveredBar, setHoveredBar] = useState<{ d: typeof stackedData[0]; x: number; y: number } | null>(null);
-  const [hoveredCell, setHoveredCell] = useState<{ day: string; date: string; hour: number; val: number; x: number; y: number } | null>(null);
-
-  const heatmapDates = useMemo(() => {
-    return dayLabels.map((_, i) => {
-      const date = new Date(currentMonday);
-      date.setDate(currentMonday.getDate() + i);
-      return formatDate(date);
-    });
-  }, [currentMonday]);
 
   return (
     <>
@@ -327,213 +263,71 @@ function SummaryReport({ weekOffset, setWeekOffset, currentMonday, weekEnd }: {
         </div>
       </div>
 
-      {/* Charts */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 mb-8">
-        {/* Stacked bar chart */}
-        <section className="rounded-lg border bg-white p-5 flex flex-col">
-          <div className="mb-4">
-            <h3 className="text-[15px] font-semibold">新着と完了数の推移</h3>
-          </div>
-          <div className="relative flex-1 min-h-[260px]">
-            {/* SVG polyline overlay - uses same grid positioning as bars */}
-            <svg className="absolute inset-0 w-full h-full pointer-events-none z-10" viewBox={`0 0 ${stackedData.length * 100} 260`} preserveAspectRatio="none">
-              <polyline fill="none" stroke="oklch(0.52 0.17 155)" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round"
-                vectorEffect="non-scaling-stroke"
-                points={stackedData.map((d, i) => {
-                  const x = (i + 0.5) / stackedData.length * stackedData.length * 100;
-                  const y = maxResolved > 0 ? 260 - (d.resolved / maxResolved) * 240 : 260;
-                  return `${x},${y}`;
-                }).join(" ")} />
-              {stackedData.map((d, i) => {
+      {/* Chart - single full-width stacked bar chart with line overlay */}
+      <section className="rounded-lg border bg-white p-5 flex flex-col">
+        <div className="mb-4">
+          <h3 className="text-[15px] font-semibold">新着と完了数の推移</h3>
+        </div>
+        <div className="relative flex-1 min-h-[260px]">
+          {/* SVG polyline overlay - uses same grid positioning as bars */}
+          <svg className="absolute inset-0 w-full h-full pointer-events-none z-10" viewBox={`0 0 ${stackedData.length * 100} 260`} preserveAspectRatio="none">
+            <polyline fill="none" stroke="oklch(0.52 0.17 155)" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round"
+              vectorEffect="non-scaling-stroke"
+              points={stackedData.map((d, i) => {
                 const x = (i + 0.5) / stackedData.length * stackedData.length * 100;
                 const y = maxResolved > 0 ? 260 - (d.resolved / maxResolved) * 240 : 260;
-                return <circle key={i} cx={x} cy={y} r="4" fill="white" stroke="oklch(0.52 0.17 155)" strokeWidth="2" vectorEffect="non-scaling-stroke" />;
-              })}
-            </svg>
-            {/* Bars grid - equal columns */}
-            <div className="relative grid h-[260px]" style={{ gridTemplateColumns: `repeat(${stackedData.length}, 1fr)` }}>
-              {stackedData.map((d, i) => {
-                const barTotal = d.instagram + d.line + d.email + d.facebook;
-                const height = maxStacked > 0 ? (barTotal / maxStacked) * 250 : 0;
-                return (
-                  <div key={i} className="flex items-end justify-center"
-                    onMouseEnter={(e) => { const rect = e.currentTarget.getBoundingClientRect(); setHoveredBar({ d, x: rect.left + rect.width / 2, y: rect.top }); }}
-                    onMouseLeave={() => setHoveredBar(null)}>
-                    <div className={cn("w-[36px] flex flex-col-reverse rounded-t overflow-hidden transition-opacity",
-                      hoveredBar && hoveredBar.d.date !== d.date ? "opacity-40" : "opacity-100"
-                    )} style={{ height: `${height}px` }}>
-                      {d.email > 0 && <div className="bg-channel-email" style={{ height: `${(d.email / barTotal) * 100}%` }} />}
-                      {d.line > 0 && <div className="bg-channel-line" style={{ height: `${(d.line / barTotal) * 100}%` }} />}
-                      {d.instagram > 0 && <div className="bg-channel-instagram" style={{ height: `${(d.instagram / barTotal) * 100}%` }} />}
-                      {d.facebook > 0 && <div className="bg-channel-facebook" style={{ height: `${(d.facebook / barTotal) * 100}%` }} />}
-                    </div>
+                return `${x},${y}`;
+              }).join(" ")} />
+            {stackedData.map((d, i) => {
+              const x = (i + 0.5) / stackedData.length * stackedData.length * 100;
+              const y = maxResolved > 0 ? 260 - (d.resolved / maxResolved) * 240 : 260;
+              return <circle key={i} cx={x} cy={y} r="4" fill="white" stroke="oklch(0.52 0.17 155)" strokeWidth="2" vectorEffect="non-scaling-stroke" />;
+            })}
+          </svg>
+          {/* Bars grid - equal columns */}
+          <div className="relative grid h-[260px]" style={{ gridTemplateColumns: `repeat(${stackedData.length}, 1fr)` }}>
+            {stackedData.map((d, i) => {
+              const barTotal = d.instagram + d.line + d.email + d.facebook;
+              const height = maxStacked > 0 ? (barTotal / maxStacked) * 250 : 0;
+              return (
+                <div key={i} className={cn("flex items-end justify-center", d.isFuture && "opacity-20")}
+                  onMouseEnter={(e) => { if (!d.isFuture) { const rect = e.currentTarget.getBoundingClientRect(); setHoveredBar({ d, x: rect.left + rect.width / 2, y: rect.top }); } }}
+                  onMouseLeave={() => setHoveredBar(null)}>
+                  <div className={cn("w-[36px] flex flex-col-reverse rounded-t overflow-hidden transition-opacity",
+                    hoveredBar && hoveredBar.d.date !== d.date ? "opacity-40" : "opacity-100"
+                  )} style={{ height: `${height}px` }}>
+                    {d.email > 0 && <div className="bg-channel-email" style={{ height: `${(d.email / barTotal) * 100}%` }} />}
+                    {d.line > 0 && <div className="bg-channel-line" style={{ height: `${(d.line / barTotal) * 100}%` }} />}
+                    {d.instagram > 0 && <div className="bg-channel-instagram" style={{ height: `${(d.instagram / barTotal) * 100}%` }} />}
+                    {d.facebook > 0 && <div className="bg-channel-facebook" style={{ height: `${(d.facebook / barTotal) * 100}%` }} />}
                   </div>
-                );
-              })}
-            </div>
-            {/* Date labels grid - same columns */}
-            <div className="grid mt-1" style={{ gridTemplateColumns: `repeat(${stackedData.length}, 1fr)` }}>
-              {stackedData.map((d, i) => (
-                <div key={i} className="text-center">
-                  <div className="text-[11px] text-muted-foreground leading-tight">{d.date}</div>
-                  <div className="text-[10px] text-muted-foreground/60">{d.label}</div>
                 </div>
-              ))}
-            </div>
+              );
+            })}
           </div>
-          {hoveredBar && <BarTooltip d={hoveredBar.d} x={hoveredBar.x} y={hoveredBar.y} />}
-          <div className="mt-3 flex items-center gap-4">
-            {(["instagram", "line", "email", "facebook"] as Channel[]).map((ch) => (
-              <div key={ch} className="flex items-center gap-1.5">
-                <div className={cn("h-3 w-3 rounded-sm", channelBgClasses[ch])} />
-                <span className="text-[12px] text-muted-foreground">{channelLabels[ch]}</span>
-              </div>
-            ))}
-            <div className="flex items-center gap-1.5">
-              <div className="h-0.5 w-3 rounded-full bg-brand" />
-              <span className="text-[12px] text-muted-foreground">完了</span>
-            </div>
-          </div>
-        </section>
-
-        {/* Heatmap - axes swapped: columns=days, rows=hours */}
-        <section className="rounded-lg border bg-white p-5">
-          <div className="mb-4">
-            <h3 className="text-[15px] font-semibold">新着の時間別ヒートマップ</h3>
-          </div>
-          <div>
-            {/* Day labels header */}
-            <div className="flex items-center mb-0.5">
-              <span className="w-8 shrink-0" />
-              {dayLabels.map((day, dayIdx) => (
-                <span key={dayIdx} className="flex-1 text-center text-[11px] text-muted-foreground">
-                  <span>{heatmapDates[dayIdx]}</span>
-                  <span className="ml-0.5 text-muted-foreground/50">{day}</span>
-                </span>
-              ))}
-            </div>
-            {/* Hour rows - no gaps */}
-            {Array.from({ length: 24 }, (_, hour) => (
-              <div key={hour} className="flex items-center">
-                <span className="w-8 shrink-0 text-[10px] text-muted-foreground text-right pr-1">
-                  {hour % 3 === 0 ? `${hour}:00` : ""}
-                </span>
-                {dayLabels.map((day, dayIdx) => {
-                  const val = heatmapData[dayIdx][hour];
-                  const intensity = maxHeat > 0 ? val / maxHeat : 0;
-                  return (
-                    <div key={dayIdx} className="flex-1 h-[9px] cursor-default transition-transform hover:scale-110 hover:z-10"
-                      style={{ backgroundColor: val === 0 ? "oklch(0.96 0 0)" : `oklch(0.52 ${0.17 * intensity} 155 / ${0.15 + intensity * 0.85})` }}
-                      onMouseEnter={(e) => { const rect = e.currentTarget.getBoundingClientRect(); setHoveredCell({ day, date: heatmapDates[dayIdx], hour, val, x: rect.left + rect.width / 2, y: rect.top }); }}
-                      onMouseLeave={() => setHoveredCell(null)} />
-                  );
-                })}
+          {/* Date labels grid - same columns */}
+          <div className="grid mt-1" style={{ gridTemplateColumns: `repeat(${stackedData.length}, 1fr)` }}>
+            {stackedData.map((d, i) => (
+              <div key={i} className={cn("text-center", d.isFuture && "opacity-30")}>
+                <div className="text-[11px] text-muted-foreground leading-tight">{d.date}</div>
+                <div className="text-[10px] text-muted-foreground/60">{d.label}</div>
               </div>
             ))}
           </div>
-          {hoveredCell && (
-            <div className="pointer-events-none fixed z-[300] rounded-lg bg-foreground/90 px-3 py-2 text-[12px] text-white shadow-lg"
-              style={{ left: hoveredCell.x, top: hoveredCell.y - 8, transform: "translate(-50%, -100%)" }}>
-              {hoveredCell.date}（{hoveredCell.day}） {hoveredCell.hour}:00 — {hoveredCell.val}件
-            </div>
-          )}
-          <div className="mt-3 flex items-center gap-1.5 text-[12px] text-muted-foreground">
-            <span>少</span>
-            {[0.1, 0.3, 0.5, 0.7, 1].map((v, i) => (
-              <div key={i} className="h-3 w-3 rounded-sm"
-                style={{ backgroundColor: `oklch(0.52 ${0.17 * v} 155 / ${0.15 + v * 0.85})` }} />
-            ))}
-            <span>多</span>
-          </div>
-        </section>
-      </div>
-    </>
-  );
-}
-
-/* ─── Channel Report ─────────────────────── */
-
-function ChannelReport() {
-  return (
-    <>
-      <div className="mb-6">
-        <h2 className="text-[19px] font-semibold">チャネル</h2>
-      </div>
-
-      <div className="space-y-4">
-        {accounts.map((account) => {
-          const convs = conversations.filter((c) => c.accountId === account.id);
-          const Icon = channelIcons[account.channel];
-          return (
-            <section key={account.id} className="rounded-lg border bg-white p-5">
-              <div className="flex items-center gap-3 mb-4">
-                <div className={cn("flex h-10 w-10 items-center justify-center rounded-lg", `bg-channel-${account.channel}/10`)}>
-                  <Icon className={cn("h-5 w-5", `text-channel-${account.channel}`)} />
-                </div>
-                <div>
-                  <p className="text-[16px] font-semibold">{account.name}</p>
-                  <p className="text-[13px] text-muted-foreground">{channelLabels[account.channel]} · {account.description}</p>
-                </div>
-              </div>
-              <div className="grid grid-cols-4 gap-4">
-                <div className="rounded-md bg-accent/30 px-4 py-3">
-                  <p className="text-[12px] text-muted-foreground">合計</p>
-                  <p className="text-[20px] font-semibold tabular-nums">{convs.length}</p>
-                </div>
-                <div className="rounded-md bg-accent/30 px-4 py-3">
-                  <p className="text-[12px] text-muted-foreground">新着</p>
-                  <p className="text-[20px] font-semibold tabular-nums">{convs.filter((c) => c.status === "open" && c.assignees.length === 0).length}</p>
-                </div>
-                <div className="rounded-md bg-accent/30 px-4 py-3">
-                  <p className="text-[12px] text-muted-foreground">対応中</p>
-                  <p className="text-[20px] font-semibold tabular-nums">{convs.filter((c) => c.status === "open" && c.assignees.length > 0).length}</p>
-                </div>
-                <div className="rounded-md bg-accent/30 px-4 py-3">
-                  <p className="text-[12px] text-muted-foreground">完了</p>
-                  <p className="text-[20px] font-semibold tabular-nums text-brand">{convs.filter((c) => c.status === "completed").length}</p>
-                </div>
-              </div>
-            </section>
-          );
-        })}
-      </div>
-    </>
-  );
-}
-
-/* ─── Member Report (renamed from Staff) ───── */
-
-function MemberReport({ weekOffset, setWeekOffset, currentMonday, weekEnd }: {
-  weekOffset: number; setWeekOffset: (fn: (p: number) => number) => void;
-  currentMonday: Date; weekEnd: Date;
-}) {
-  return (
-    <>
-      <div className="mb-6 flex items-center gap-4">
-        <h2 className="text-[19px] font-semibold">メンバー</h2>
-        <WeekNav weekOffset={weekOffset} setWeekOffset={setWeekOffset} currentMonday={currentMonday} weekEnd={weekEnd} />
-      </div>
-
-      <section className="rounded-lg border bg-white">
-        <div className="grid grid-cols-3 gap-4 border-b px-5 py-2.5 text-[13px] font-medium text-muted-foreground">
-          <span>メンバー</span>
-          <span className="text-center">担当件数</span>
-          <span className="text-center">完了件数</span>
         </div>
-        {teamMembers.map((member, i) => {
-          const assigned = conversations.filter((c) => c.assignees.some((a) => a.id === member.id));
-          const completed = assigned.filter((c) => c.status === "completed").length;
-          return (
-            <div key={member.id} className="grid grid-cols-3 items-center gap-4 border-b last:border-0 px-5 py-3">
-              <div className="flex items-center gap-2.5">
-                <Avatar src={member.avatar} fallback={member.name} size="sm" className="h-8 w-8" />
-                <span className="text-[15px] font-medium">{member.name}</span>
-              </div>
-              <span className="text-center text-[15px] font-medium tabular-nums">{assigned.length}</span>
-              <span className="text-center text-[15px] font-semibold tabular-nums text-brand">{completed}</span>
+        {hoveredBar && <BarTooltip d={hoveredBar.d} x={hoveredBar.x} y={hoveredBar.y} />}
+        <div className="mt-3 flex items-center gap-4">
+          {(["instagram", "line", "email", "facebook"] as Channel[]).map((ch) => (
+            <div key={ch} className="flex items-center gap-1.5">
+              <div className={cn("h-3 w-3 rounded-sm", channelBgClasses[ch])} />
+              <span className="text-[12px] text-muted-foreground">{channelLabels[ch]}</span>
             </div>
-          );
-        })}
+          ))}
+          <div className="flex items-center gap-1.5">
+            <div className="h-0.5 w-3 rounded-full bg-brand" />
+            <span className="text-[12px] text-muted-foreground">完了</span>
+          </div>
+        </div>
       </section>
     </>
   );
