@@ -930,13 +930,13 @@ function SentMessagesView() {
               <div className="rounded-lg border bg-white">
                 <div className="flex border-b">
                   <button onClick={() => setBodyTab("template")}
-                    className={cn("flex-1 px-4 py-2.5 text-[13px] font-medium transition-colors cursor-pointer",
-                      bodyTab === "template" ? "text-foreground border-b-2 border-brand" : "text-muted-foreground hover:text-foreground"
-                    )}>テンプレート本文</button>
+                    className={cn("flex-1 px-4 py-2.5 text-[13px] font-medium transition-colors cursor-pointer -mb-px",
+                      bodyTab === "template" ? "text-foreground border-b-2 border-brand" : "text-muted-foreground hover:text-foreground border-b-2 border-transparent"
+                    )}>入力した本文</button>
                   <button onClick={() => setBodyTab("preview")}
-                    className={cn("flex-1 px-4 py-2.5 text-[13px] font-medium transition-colors cursor-pointer",
-                      bodyTab === "preview" ? "text-foreground border-b-2 border-brand" : "text-muted-foreground hover:text-foreground"
-                    )}>送信プレビュー</button>
+                    className={cn("flex-1 px-4 py-2.5 text-[13px] font-medium transition-colors cursor-pointer -mb-px",
+                      bodyTab === "preview" ? "text-foreground border-b-2 border-brand" : "text-muted-foreground hover:text-foreground border-b-2 border-transparent"
+                    )}>実際の文面</button>
                 </div>
                 {bodyTab === "template" ? (
                   <div className="p-5">
