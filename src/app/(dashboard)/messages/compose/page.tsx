@@ -21,8 +21,7 @@ import {
 } from "lucide-react";
 
 const variableButtons = [
-  { label: "姓", variable: "{{姓}}" },
-  { label: "名", variable: "{{名}}" },
+  { label: "名前", variable: "{{名前}}" },
   { label: "会社名", variable: "{{会社名}}" },
 ];
 
@@ -98,10 +97,8 @@ function ComposePageInner() {
 
   const resolveVariables = (text: string, contact?: Contact) => {
     if (!contact) return text;
-    const nameParts = contact.name.split(/\s+/);
     return text
-      .replace(/\{\{姓\}\}/g, nameParts[0] ?? "")
-      .replace(/\{\{名\}\}/g, nameParts[1] ?? "")
+      .replace(/\{\{名前\}\}/g, contact.name)
       .replace(/\{\{会社名\}\}/g, contact.company ?? "");
   };
 
@@ -260,10 +257,10 @@ function ComposePageInner() {
               </div>
 
               {recipientType === "group" ? (
-                <div className="space-y-1.5">
+                <div className="rounded-lg border">
                   {contactGroups.map((group) => (
                     <label key={group.id}
-                      className="flex items-center gap-2.5 rounded-lg border px-3 py-2.5 cursor-pointer select-none hover:bg-accent/30 transition-colors">
+                      className="flex items-center gap-2.5 px-3 py-2.5 cursor-pointer select-none hover:bg-accent/30 transition-colors border-b last:border-0">
                       <input type="checkbox"
                         checked={selectedGroupIds.includes(group.id)}
                         onChange={() => toggleGroup(group.id)}

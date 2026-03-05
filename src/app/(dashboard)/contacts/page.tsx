@@ -24,6 +24,7 @@ import {
   UserPlus,
   Check,
   Send,
+  Phone,
 } from "lucide-react";
 
 const channelIcons: Record<Channel, React.ElementType> = {
@@ -597,7 +598,7 @@ function ContactDetail({
   const handleSave = () => {
     // New contacts require name
     if (isAdd && !editName.trim()) {
-      window.alert("氏名を入力してください。");
+      window.alert("名前を入力してください。");
       return;
     }
     const updated: Contact = {
@@ -653,14 +654,14 @@ function ContactDetail({
             <section>
               <div className="space-y-4">
                 <div>
-                  <label className="mb-1 block text-[13px] text-muted-foreground">氏名</label>
+                  <label className="mb-1 block text-[13px] text-muted-foreground">名前</label>
                   <input value={editName} onChange={(e) => { setEditName(e.target.value); markChanged(); }}
                     className="w-full rounded-md border px-3 py-2.5 text-[15px] outline-none focus:border-brand/40" autoFocus />
                 </div>
                 <div>
-                  <label className="mb-1 block text-[13px] text-muted-foreground">氏名フリガナ</label>
+                  <label className="mb-1 block text-[13px] text-muted-foreground">ふりがな</label>
                   <input value={editNameFurigana} onChange={(e) => { setEditNameFurigana(e.target.value); markChanged(); }}
-                    className="w-full rounded-md border px-3 py-2.5 text-[15px] outline-none focus:border-brand/40" placeholder="ヤマダ タロウ" />
+                    className="w-full rounded-md border px-3 py-2.5 text-[15px] outline-none focus:border-brand/40" placeholder="やまだ たろう" />
                 </div>
               </div>
             </section>
@@ -681,20 +682,34 @@ function ContactDetail({
             </section>
 
             <section>
-              <h3 className="mb-3 text-[13px] font-medium text-muted-foreground">連絡先</h3>
+              <h3 className="mb-3 text-[15px] font-semibold text-foreground">連絡先</h3>
               <div className="space-y-4">
                 <div>
-                  <label className="mb-1 block text-[13px] text-muted-foreground">電話番号</label>
+                  <div className="mb-1 flex items-center justify-between">
+                    <label className="flex items-center gap-1.5 text-[13px] text-muted-foreground">
+                      <Phone className="h-3.5 w-3.5" />
+                      電話番号
+                    </label>
+                    <button className="flex items-center gap-0.5 text-[12px] text-brand hover:text-brand/80 cursor-pointer transition-colors">
+                      <Plus className="h-3 w-3" />
+                    </button>
+                  </div>
                   <input value={editPhone} onChange={(e) => { setEditPhone(e.target.value); markChanged(); }}
                     className="w-full rounded-md border px-3 py-2.5 text-[15px] outline-none focus:border-brand/40" />
                 </div>
                 <div>
-                  <label className="mb-1 flex items-center gap-2 text-[13px] text-muted-foreground">
-                    メールアドレス
-                    {editChannels.some((ch) => ch.channel === "email" && ch.isAutoLinked) && (
-                      <span className="text-[11px] text-brand bg-brand/10 px-1.5 py-0.5 rounded">自動連携</span>
-                    )}
-                  </label>
+                  <div className="mb-1 flex items-center justify-between">
+                    <label className="flex items-center gap-1.5 text-[13px] text-muted-foreground">
+                      <Mail className="h-3.5 w-3.5 text-channel-email" />
+                      メールアドレス
+                      {editChannels.some((ch) => ch.channel === "email" && ch.isAutoLinked) && (
+                        <span className="text-[11px] text-brand bg-brand/10 px-1.5 py-0.5 rounded">自動連携</span>
+                      )}
+                    </label>
+                    <button className="flex items-center gap-0.5 text-[12px] text-brand hover:text-brand/80 cursor-pointer transition-colors">
+                      <Plus className="h-3 w-3" />
+                    </button>
+                  </div>
                   <input value={editEmail} onChange={(e) => { setEditEmail(e.target.value); markChanged(); }}
                     disabled={editChannels.some((ch) => ch.channel === "email" && ch.isAutoLinked)}
                     className="w-full rounded-md border px-3 py-2.5 text-[15px] outline-none focus:border-brand/40 disabled:bg-accent/30 disabled:text-muted-foreground" />
@@ -705,11 +720,16 @@ function ContactDetail({
                   const isAutoLinked = existing?.isAutoLinked;
                   return (
                     <div key={channel}>
-                      <label className="mb-1 flex items-center gap-2 text-[13px] text-muted-foreground">
-                        <Icon className="h-3.5 w-3.5" />
-                        {channel === "instagram" ? "Instagram" : channel === "line" ? "LINE" : "Facebook"}
-                        {isAutoLinked && <span className="text-[11px] text-brand bg-brand/10 px-1.5 py-0.5 rounded">自動連携</span>}
-                      </label>
+                      <div className="mb-1 flex items-center justify-between">
+                        <label className="flex items-center gap-1.5 text-[13px] text-muted-foreground">
+                          <Icon className="h-3.5 w-3.5" />
+                          {channel === "instagram" ? "Instagram" : channel === "line" ? "LINE" : "Facebook"}
+                          {isAutoLinked && <span className="text-[11px] text-brand bg-brand/10 px-1.5 py-0.5 rounded">自動連携</span>}
+                        </label>
+                        <button className="flex items-center gap-0.5 text-[12px] text-brand hover:text-brand/80 cursor-pointer transition-colors">
+                          <Plus className="h-3 w-3" />
+                        </button>
+                      </div>
                       <input
                         value={existing?.handle ?? ""}
                         onChange={(e) => {
@@ -731,7 +751,7 @@ function ContactDetail({
             </section>
 
             <section>
-              <h3 className="mb-3 text-[13px] font-medium text-muted-foreground">グループ</h3>
+              <h3 className="mb-3 text-[15px] font-semibold text-foreground">グループ</h3>
               <div className="space-y-2">
                 {groups.map((g) => (
                   <label key={g.id} className="flex items-center gap-2.5 cursor-pointer select-none">
@@ -748,7 +768,7 @@ function ContactDetail({
             </section>
 
             <section>
-              <h3 className="mb-3 text-[13px] font-medium text-muted-foreground">メモ</h3>
+              <h3 className="mb-3 text-[15px] font-semibold text-foreground">メモ</h3>
               <textarea value={editNote} onChange={(e) => { setEditNote(e.target.value); markChanged(); }}
                 placeholder="メモを入力..." rows={4}
                 className="w-full resize-none rounded-md border px-3 py-2.5 text-[15px] outline-none focus:border-brand/40 placeholder:text-muted-foreground/50" />
@@ -784,7 +804,10 @@ function ContactDetail({
               <div className="space-y-2">
                 {contact.phone && (
                   <div className="flex items-center gap-2.5 text-[17px]">
-                    <span className="text-muted-foreground text-[15px] w-24 shrink-0">電話番号</span>
+                    <span className="text-muted-foreground text-[15px] w-24 shrink-0 flex items-center gap-1">
+                      <Phone className="h-3.5 w-3.5" />
+                      電話番号
+                    </span>
                     <span>{contact.phone}</span>
                   </div>
                 )}

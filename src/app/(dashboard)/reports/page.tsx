@@ -11,10 +11,8 @@ import {
   Mail,
   Facebook,
 
-  Clock,
   Inbox,
   CheckCircle2,
-  UserCheck,
   ChevronLeft,
   ChevronRight,
   BarChart3,
@@ -125,7 +123,7 @@ function BarTooltip({ d, x, y }: { d: ReturnType<typeof generateWeekData>[0]; x:
       className="pointer-events-none fixed z-[300] rounded-lg bg-foreground/90 px-3 py-2 text-[12px] text-white shadow-lg"
       style={{ left: x, top: y - 8, transform: "translate(-50%, -100%)" }}
     >
-      <p className="font-semibold mb-1">{d.date}（{d.label}） — 合計 {total}件 / 解決 {d.resolved}件</p>
+      <p className="font-semibold mb-1">{d.date}（{d.label}） — 合計 {total}件 / 完了 {d.resolved}件</p>
       {(["instagram", "line", "email", "facebook"] as Channel[]).map((ch) => {
         const val = d[ch as keyof typeof d] as number;
         if (val === 0) return null;
@@ -140,21 +138,79 @@ function BarTooltip({ d, x, y }: { d: ReturnType<typeof generateWeekData>[0]; x:
   );
 }
 
-// 【9】Sub-navigation tabs
+// Pie chart component
+function ChannelPieChart() {
+  const channelCounts = (["instagram", "line", "email", "facebook"] as Channel[]).map((ch) => ({
+    channel: ch,
+    count: conversations.filter((c) => c.channel === ch).length,
+  }));
+  const total = channelCounts.reduce((sum, c) => sum + c.count, 0);
+  if (total === 0) return null;
+
+  let cumulative = 0;
+  const slices = channelCounts.filter((c) => c.count > 0).map((c) => {
+    const startAngle = (cumulative / total) * 360;
+    cumulative += c.count;
+    const endAngle = (cumulative / total) * 360;
+    return { ...c, startAngle, endAngle };
+  });
+
+  const polarToCartesian = (cx: number, cy: number, r: number, angleDeg: number) => {
+    const rad = ((angleDeg - 90) * Math.PI) / 180;
+    return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+  };
+
+  return (
+    <div className="flex items-center gap-4">
+      <svg width="72" height="72" viewBox="0 0 72 72">
+        {slices.map((s) => {
+          const start = polarToCartesian(36, 36, 30, s.startAngle);
+          const end = polarToCartesian(36, 36, 30, s.endAngle);
+          const largeArc = s.endAngle - s.startAngle > 180 ? 1 : 0;
+          const d = `M36,36 L${start.x},${start.y} A30,30 0 ${largeArc},1 ${end.x},${end.y} Z`;
+          return <path key={s.channel} d={d} fill={channelColors[s.channel]} />;
+        })}
+      </svg>
+      <div className="space-y-1">
+        {slices.map((s) => (
+          <div key={s.channel} className="flex items-center gap-1.5">
+            <div className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: channelColors[s.channel] }} />
+            <span className="text-[12px] text-muted-foreground">{channelLabels[s.channel]} {s.count}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Sub-navigation tabs
 type ReportTab = "summary" | "channel" | "staff";
 
 const reportTabs = [
   { id: "summary" as ReportTab, label: "サマリー", icon: LayoutDashboard },
   { id: "channel" as ReportTab, label: "チャネル", icon: BarChart3 },
-  { id: "staff" as ReportTab, label: "スタッフ", icon: Users },
+  { id: "staff" as ReportTab, label: "メンバー", icon: Users },
 ];
 
 export default function ReportsPage() {
   const [activeTab, setActiveTab] = useState<ReportTab>("summary");
+  const [weekOffset, setWeekOffset] = useState(0);
+
+  const currentMonday = useMemo(() => {
+    const monday = getMonday(new Date());
+    monday.setDate(monday.getDate() + weekOffset * 7);
+    return monday;
+  }, [weekOffset]);
+
+  const weekEnd = useMemo(() => {
+    const sun = new Date(currentMonday);
+    sun.setDate(currentMonday.getDate() + 6);
+    return sun;
+  }, [currentMonday]);
 
   return (
     <div className="flex h-full">
-      {/* 【9】Left sub-navigation */}
+      {/* Left sub-navigation */}
       <div className="w-[220px] shrink-0 border-r bg-background px-3 py-4">
         <h1 className="mb-4 px-2.5 text-[15px] font-semibold">レポート</h1>
         <nav className="space-y-0.5">
@@ -182,129 +238,75 @@ export default function ReportsPage() {
       {/* Content */}
       <div className="flex-1 overflow-y-auto">
         <div className="w-full px-8 py-8">
-          {activeTab === "summary" && <SummaryReport />}
+          {activeTab === "summary" && (
+            <SummaryReport weekOffset={weekOffset} setWeekOffset={setWeekOffset} currentMonday={currentMonday} weekEnd={weekEnd} />
+          )}
           {activeTab === "channel" && <ChannelReport />}
-          {activeTab === "staff" && <StaffReport />}
+          {activeTab === "staff" && (
+            <MemberReport weekOffset={weekOffset} setWeekOffset={setWeekOffset} currentMonday={currentMonday} weekEnd={weekEnd} />
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-/* ─── Summary Report (existing dashboard) ────── */
+/* ─── Summary Report ────── */
 
-function SummaryReport() {
+function SummaryReport({ weekOffset, setWeekOffset, currentMonday, weekEnd }: {
+  weekOffset: number; setWeekOffset: (fn: (p: number) => number) => void;
+  currentMonday: Date; weekEnd: Date;
+}) {
   const total = conversations.length;
-  const assignedCount = conversations.filter((c) => c.assignees.length > 0).length;
   const resolvedCount = conversations.filter((c) => c.status === "completed").length;
-  const avgReplyTime = "23分";
 
-  const prevTotal = total - 2;
-  const prevAssigned = assignedCount - 1;
-  const prevResolved = resolvedCount + 1;
-
-  const [chartWeekOffset, setChartWeekOffset] = useState(0);
-  const chartMonday = useMemo(() => {
-    const monday = getMonday(new Date());
-    monday.setDate(monday.getDate() + chartWeekOffset * 7);
-    return monday;
-  }, [chartWeekOffset]);
-  const chartWeekEnd = useMemo(() => {
-    const sun = new Date(chartMonday);
-    sun.setDate(chartMonday.getDate() + 6);
-    return sun;
-  }, [chartMonday]);
-
-  const [heatmapWeekOffset, setHeatmapWeekOffset] = useState(0);
-  const heatmapMonday = useMemo(() => {
-    const monday = getMonday(new Date());
-    monday.setDate(monday.getDate() + heatmapWeekOffset * 7);
-    return monday;
-  }, [heatmapWeekOffset]);
-  const heatmapWeekEnd = useMemo(() => {
-    const sun = new Date(heatmapMonday);
-    sun.setDate(heatmapMonday.getDate() + 6);
-    return sun;
-  }, [heatmapMonday]);
-
-  const stackedData = useMemo(() => generateWeekData(chartMonday), [chartMonday]);
+  const stackedData = useMemo(() => generateWeekData(currentMonday), [currentMonday]);
   const maxStacked = Math.max(...stackedData.map((d) => d.instagram + d.line + d.email + d.facebook));
   const maxResolved = Math.max(...stackedData.map((d) => d.resolved));
 
-  const heatmapData = useMemo(() => generateHeatmapData(heatmapMonday), [heatmapMonday]);
+  const heatmapData = useMemo(() => generateHeatmapData(currentMonday), [currentMonday]);
   const maxHeat = Math.max(...heatmapData.flat());
 
   const [hoveredBar, setHoveredBar] = useState<{ d: typeof stackedData[0]; x: number; y: number } | null>(null);
   const [hoveredCell, setHoveredCell] = useState<{ day: string; date: string; hour: number; val: number; x: number; y: number } | null>(null);
 
-  const calcChange = (current: number, prev: number) => {
-    if (prev === 0) return current > 0 ? "+100%" : "—";
-    const pct = Math.round(((current - prev) / prev) * 100);
-    return pct >= 0 ? `+${pct}%` : `${pct}%`;
-  };
-
   const heatmapDates = useMemo(() => {
     return dayLabels.map((_, i) => {
-      const date = new Date(heatmapMonday);
-      date.setDate(heatmapMonday.getDate() + i);
+      const date = new Date(currentMonday);
+      date.setDate(currentMonday.getDate() + i);
       return formatDate(date);
     });
-  }, [heatmapMonday]);
+  }, [currentMonday]);
 
   return (
     <>
-      <div className="mb-6">
+      <div className="mb-6 flex items-center justify-between">
         <h2 className="text-[19px] font-semibold">サマリー</h2>
+        <WeekNav weekOffset={weekOffset} setWeekOffset={setWeekOffset} currentMonday={currentMonday} weekEnd={weekEnd} />
       </div>
 
-      {/* Top metrics */}
-      <div className="mb-8 grid grid-cols-4 gap-4">
+      {/* Top metrics - 3 cards */}
+      <div className="mb-8 grid grid-cols-3 gap-4">
         <div className="rounded-lg border bg-white px-5 py-5">
           <div className="flex items-center gap-2 mb-2">
             <Inbox className="h-4 w-4 text-muted-foreground" />
-            <span className="text-[13px] text-muted-foreground">本日の新着</span>
+            <span className="text-[13px] text-muted-foreground">新着</span>
           </div>
-          <div className="flex items-baseline gap-2">
-            <p className="text-[28px] font-semibold tabular-nums">{total}</p>
-            <span className={cn("text-[13px] font-medium", total >= prevTotal ? "text-brand" : "text-destructive")}>
-              {calcChange(total, prevTotal)}
-            </span>
-          </div>
-          <p className="mt-1 text-[12px] text-muted-foreground">前日比 {prevTotal}件</p>
-        </div>
-        <div className="rounded-lg border bg-white px-5 py-5">
-          <div className="flex items-center gap-2 mb-2">
-            <UserCheck className="h-4 w-4 text-amber-500" />
-            <span className="text-[13px] text-muted-foreground">アサイン中</span>
-          </div>
-          <div className="flex items-baseline gap-2">
-            <p className="text-[28px] font-semibold tabular-nums text-amber-600">{assignedCount}</p>
-            <span className={cn("text-[13px] font-medium", assignedCount >= prevAssigned ? "text-amber-500" : "text-brand")}>
-              {calcChange(assignedCount, prevAssigned)}
-            </span>
-          </div>
-          <p className="mt-1 text-[12px] text-muted-foreground">前日比 {prevAssigned}件</p>
+          <p className="text-[28px] font-semibold tabular-nums">{total}</p>
         </div>
         <div className="rounded-lg border bg-white px-5 py-5">
           <div className="flex items-center gap-2 mb-2">
             <CheckCircle2 className="h-4 w-4 text-brand" />
-            <span className="text-[13px] text-muted-foreground">本日完了にした数</span>
+            <span className="text-[13px] text-muted-foreground">完了数</span>
           </div>
-          <div className="flex items-baseline gap-2">
-            <p className="text-[28px] font-semibold tabular-nums text-brand">{resolvedCount}</p>
-            <span className={cn("text-[13px] font-medium", resolvedCount >= prevResolved ? "text-brand" : "text-destructive")}>
-              {calcChange(resolvedCount, prevResolved)}
-            </span>
-          </div>
-          <p className="mt-1 text-[12px] text-muted-foreground">前日比 {prevResolved}件</p>
+          <p className="text-[28px] font-semibold tabular-nums text-brand">{resolvedCount}</p>
         </div>
         <div className="rounded-lg border bg-white px-5 py-5">
-          <div className="flex items-center gap-2 mb-2">
-            <Clock className="h-4 w-4 text-muted-foreground" />
-            <span className="text-[13px] text-muted-foreground">平均初動返信</span>
+          <div className="flex items-center gap-2 mb-3">
+            <BarChart3 className="h-4 w-4 text-muted-foreground" />
+            <span className="text-[13px] text-muted-foreground">チャネル比率</span>
           </div>
-          <p className="text-[28px] font-semibold tabular-nums">{avgReplyTime}</p>
-          <p className="mt-1 text-[12px] text-muted-foreground">問い合わせ受信から最初の返信まで</p>
+          <ChannelPieChart />
         </div>
       </div>
 
@@ -312,9 +314,8 @@ function SummaryReport() {
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 mb-8">
         {/* Stacked bar chart */}
         <section className="rounded-lg border bg-white p-5">
-          <div className="mb-4 flex items-center justify-between">
+          <div className="mb-4">
             <h3 className="text-[15px] font-semibold">チャンネル別推移</h3>
-            <WeekNav weekOffset={chartWeekOffset} setWeekOffset={setChartWeekOffset} currentMonday={chartMonday} weekEnd={chartWeekEnd} />
           </div>
           <div className="relative h-52">
             <svg className="absolute inset-0 w-full h-[180px] pointer-events-none z-10" viewBox="0 0 700 180" preserveAspectRatio="none">
@@ -374,31 +375,33 @@ function SummaryReport() {
           </div>
         </section>
 
-        {/* Heatmap */}
+        {/* Heatmap - axes swapped: columns=days, rows=hours */}
         <section className="rounded-lg border bg-white p-5">
-          <div className="mb-4 flex items-center justify-between">
-            <h3 className="text-[15px] font-semibold">応答ヒートマップ</h3>
-            <WeekNav weekOffset={heatmapWeekOffset} setWeekOffset={setHeatmapWeekOffset} currentMonday={heatmapMonday} weekEnd={heatmapWeekEnd} />
+          <div className="mb-4">
+            <h3 className="text-[15px] font-semibold">新着時間ヒートマップ</h3>
           </div>
-          <div className="space-y-1">
+          <div className="space-y-0.5">
+            {/* Day labels header */}
             <div className="flex items-center">
-              <span className="w-14 shrink-0" />
-              {Array.from({ length: 24 }, (_, i) => (
-                <span key={i} className="flex-1 text-center text-[10px] text-muted-foreground/60">
-                  {i % 3 === 0 ? `${i}` : ""}
-                </span>
-              ))}
-            </div>
-            {dayLabels.map((day, dayIdx) => (
-              <div key={day} className="flex items-center gap-0.5">
-                <span className="w-14 shrink-0 text-[12px] text-muted-foreground text-right pr-2">
+              <span className="w-10 shrink-0" />
+              {dayLabels.map((day, dayIdx) => (
+                <span key={dayIdx} className="flex-1 text-center text-[11px] text-muted-foreground">
                   <span>{heatmapDates[dayIdx]}</span>
                   <span className="ml-0.5 text-muted-foreground/50">{day}</span>
                 </span>
-                {heatmapData[dayIdx].map((val, hour) => {
+              ))}
+            </div>
+            {/* Hour rows */}
+            {Array.from({ length: 24 }, (_, hour) => (
+              <div key={hour} className="flex items-center gap-0.5">
+                <span className="w-10 shrink-0 text-[11px] text-muted-foreground text-right pr-1.5">
+                  {hour}:00
+                </span>
+                {dayLabels.map((day, dayIdx) => {
+                  const val = heatmapData[dayIdx][hour];
                   const intensity = maxHeat > 0 ? val / maxHeat : 0;
                   return (
-                    <div key={hour} className="flex-1 aspect-square rounded-sm cursor-default transition-transform hover:scale-125 hover:z-10"
+                    <div key={dayIdx} className="flex-1 h-[14px] rounded-sm cursor-default transition-transform hover:scale-110 hover:z-10"
                       style={{ backgroundColor: val === 0 ? "oklch(0.96 0 0)" : `oklch(0.52 ${0.17 * intensity} 155 / ${0.15 + intensity * 0.85})` }}
                       onMouseEnter={(e) => { const rect = e.currentTarget.getBoundingClientRect(); setHoveredCell({ day, date: heatmapDates[dayIdx], hour, val, x: rect.left + rect.width / 2, y: rect.top }); }}
                       onMouseLeave={() => setHoveredCell(null)} />
@@ -477,37 +480,36 @@ function ChannelReport() {
   );
 }
 
-/* ─── Staff Report ───────────────────────── */
+/* ─── Member Report (renamed from Staff) ───── */
 
-function StaffReport() {
+function MemberReport({ weekOffset, setWeekOffset, currentMonday, weekEnd }: {
+  weekOffset: number; setWeekOffset: (fn: (p: number) => number) => void;
+  currentMonday: Date; weekEnd: Date;
+}) {
   return (
     <>
-      <div className="mb-6">
-        <h2 className="text-[19px] font-semibold">スタッフ</h2>
+      <div className="mb-6 flex items-center justify-between">
+        <h2 className="text-[19px] font-semibold">メンバー</h2>
+        <WeekNav weekOffset={weekOffset} setWeekOffset={setWeekOffset} currentMonday={currentMonday} weekEnd={weekEnd} />
       </div>
 
       <section className="rounded-lg border bg-white">
-        <div className="grid grid-cols-5 gap-4 border-b px-5 py-2.5 text-[13px] font-medium text-muted-foreground">
-          <span>順位</span>
-          <span>スタッフ名</span>
+        <div className="grid grid-cols-3 gap-4 border-b px-5 py-2.5 text-[13px] font-medium text-muted-foreground">
+          <span>メンバー</span>
           <span className="text-center">担当件数</span>
           <span className="text-center">完了件数</span>
-          <span className="text-center">平均返信速度</span>
         </div>
         {teamMembers.map((member, i) => {
           const assigned = conversations.filter((c) => c.assignees.some((a) => a.id === member.id));
           const completed = assigned.filter((c) => c.status === "completed").length;
-          const replyTimes = ["18分", "25分", "32分"];
           return (
-            <div key={member.id} className="grid grid-cols-5 items-center gap-4 border-b last:border-0 px-5 py-3">
-              <span className="text-[16px] font-semibold text-muted-foreground">#{i + 1}</span>
+            <div key={member.id} className="grid grid-cols-3 items-center gap-4 border-b last:border-0 px-5 py-3">
               <div className="flex items-center gap-2.5">
                 <Avatar src={member.avatar} fallback={member.name} size="sm" className="h-8 w-8" />
                 <span className="text-[15px] font-medium">{member.name}</span>
               </div>
               <span className="text-center text-[15px] font-medium tabular-nums">{assigned.length}</span>
               <span className="text-center text-[15px] font-semibold tabular-nums text-brand">{completed}</span>
-              <span className="text-center text-[15px] tabular-nums">{replyTimes[i]}</span>
             </div>
           );
         })}

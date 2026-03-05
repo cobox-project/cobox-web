@@ -78,7 +78,8 @@ type FolderFilter =
   | "no_action"   // 対応なし
   | "mine"        // 自分が担当
   | "mentioned"   // メンションされた
-  | "favorite";   // お気に入り
+  | "favorite"   // お気に入り
+  | "sent";      // 送信済み
 
 function isUnread(conv: Conversation): boolean {
   return conv.isRead === false || conv.unreadCount > 0;
@@ -163,6 +164,9 @@ export default function MessagesPage() {
         case "favorite":
           list = list.filter((c) => c.isFavorite);
           if (personalFolderMode === "active") list = list.filter((c) => c.status === "open");
+          break;
+        case "sent":
+          list = [];
           break;
       }
     }
@@ -375,6 +379,7 @@ export default function MessagesPage() {
     mine: "自分が担当",
     mentioned: "メンションされた",
     favorite: "お気に入り",
+    sent: "送信済み",
   };
 
   const currentSectionLabel = useMemo(() => {
@@ -411,6 +416,9 @@ export default function MessagesPage() {
             <FolderItem icon={Ban} label="対応なし" count={0}
               isActive={folderFilter === "no_action" && !accountFilter && !groupFilter}
               onClick={() => { setFolderFilter("no_action"); setAccountFilter(null); setGroupFilter(null); }} />
+            <FolderItem icon={Send} label="送信済み" count={0}
+              isActive={folderFilter === "sent" && !accountFilter && !groupFilter}
+              onClick={() => { setFolderFilter("sent"); setAccountFilter(null); setGroupFilter(null); }} />
           </div>
 
           {/* Separator */}
@@ -476,6 +484,11 @@ export default function MessagesPage() {
         {/* Change #2: Removed bottom 新規作成 button */}
       </div>
 
+      {folderFilter === "sent" && !accountFilter && !groupFilter ? (
+        /* Sent messages view - replaces thread list + detail */
+        <SentMessagesView />
+      ) : (
+        <>
       {/* Layer 3: Thread list (280px) */}
       <div className="flex h-full w-[280px] shrink-0 flex-col border-r bg-background">
         <div className="shrink-0 px-3 pt-3 pb-2 space-y-2">
@@ -605,6 +618,167 @@ export default function MessagesPage() {
               <X className="h-5 w-5" />
             </button>
             <img src={previewImage} alt="Preview" className="max-w-full max-h-[85vh] rounded-lg shadow-2xl" />
+          </div>
+        </div>
+      )}
+      </>
+      )}
+    </div>
+  );
+}
+
+/* --- Sent Messages View --- */
+
+function SentMessagesView() {
+  const sentItems = [
+    {
+      id: "sent_1",
+      type: "bulk" as const,
+      subject: "【春の新商品】特別先行セールのご案内",
+      body: "いつもご利用いただきありがとうございます。この度、春の新商品ラインナップが完成いたしましたので、お得意様限定の先行セールをご案内いたします...",
+      recipientCount: 24,
+      recipientGroups: ["VIP顧客"],
+      variables: { "名前": "連絡先名", "会社名": "会社名" },
+      sentAt: "2026-03-05 14:30",
+      sentBy: "田中 美咲",
+      channel: "email" as Channel,
+    },
+    {
+      id: "sent_2",
+      type: "individual" as const,
+      subject: "Re: 商品に関するお問い合わせ",
+      body: "山田様\n\nお問い合わせいただきありがとうございます。ご質問の件について回答いたします...",
+      recipientCount: 1,
+      recipientName: "山田 太郎",
+      sentAt: "2026-03-05 11:15",
+      sentBy: "田中 美咲",
+      channel: "email" as Channel,
+    },
+    {
+      id: "sent_3",
+      type: "bulk" as const,
+      subject: "メンテナンスのお知らせ",
+      body: "システムメンテナンスを以下の日程で実施いたします。ご不便をおかけしますが、ご了承ください...",
+      recipientCount: 156,
+      recipientGroups: ["全顧客", "パートナー"],
+      variables: { "名前": "連絡先名" },
+      sentAt: "2026-03-04 09:00",
+      sentBy: "佐藤 健一",
+      channel: "email" as Channel,
+    },
+    {
+      id: "sent_4",
+      type: "individual" as const,
+      subject: "",
+      body: "ありがとうございます！確認いたしました。",
+      recipientCount: 1,
+      recipientName: "鈴木 花子",
+      sentAt: "2026-03-03 16:45",
+      sentBy: "田中 美咲",
+      channel: "line" as Channel,
+    },
+  ];
+
+  const [selectedSent, setSelectedSent] = useState<string | null>(null);
+  const selectedItem = sentItems.find((s) => s.id === selectedSent);
+
+  return (
+    <div className="flex flex-1 overflow-hidden">
+      {/* Sent list */}
+      <div className="w-[400px] shrink-0 border-r overflow-y-auto">
+        <div className="px-4 py-3 border-b">
+          <h3 className="text-[15px] font-semibold">送信済み</h3>
+          <p className="text-[12px] text-muted-foreground mt-0.5">{sentItems.length}件</p>
+        </div>
+        {sentItems.map((item) => {
+          const Icon = channelIcons[item.channel];
+          return (
+            <button key={item.id}
+              onClick={() => setSelectedSent(item.id)}
+              className={cn(
+                "w-full text-left px-4 py-3.5 border-b transition-colors cursor-pointer",
+                selectedSent === item.id ? "bg-brand/5 border-l-2 border-l-brand" : "hover:bg-accent/30"
+              )}>
+              <div className="flex items-center gap-2 mb-1">
+                <Icon className={cn("h-3.5 w-3.5 shrink-0", channelStyles[item.channel].text)} />
+                {item.type === "bulk" && (
+                  <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">一括送信</span>
+                )}
+                <span className="text-[11px] text-muted-foreground ml-auto">{item.sentAt}</span>
+              </div>
+              <p className="text-[14px] font-medium truncate">
+                {item.subject || item.body.slice(0, 40)}
+              </p>
+              <p className="text-[12px] text-muted-foreground truncate mt-0.5">
+                {item.type === "bulk"
+                  ? `${item.recipientCount}名に送信`
+                  : `${item.recipientName}に送信`}
+              </p>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Sent detail */}
+      {selectedItem ? (
+        <div className="flex-1 overflow-y-auto p-6">
+          <div className="max-w-2xl">
+            <div className="flex items-center gap-2 mb-4">
+              {(() => { const Icon = channelIcons[selectedItem.channel]; return <Icon className={cn("h-4 w-4", channelStyles[selectedItem.channel].text)} />; })()}
+              {selectedItem.type === "bulk" && (
+                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700">一括送信</span>
+              )}
+              <span className="text-[13px] text-muted-foreground">{selectedItem.sentAt}</span>
+              <span className="text-[13px] text-muted-foreground">· 送信者: {selectedItem.sentBy}</span>
+            </div>
+
+            {selectedItem.subject && (
+              <h2 className="text-[18px] font-semibold mb-4">{selectedItem.subject}</h2>
+            )}
+
+            {/* Recipients info */}
+            <div className="rounded-lg border bg-accent/20 p-4 mb-4">
+              <p className="text-[13px] font-medium mb-2">宛先</p>
+              {selectedItem.type === "bulk" ? (
+                <div className="space-y-1">
+                  <p className="text-[14px]">{selectedItem.recipientCount}名</p>
+                  {selectedItem.recipientGroups && (
+                    <div className="flex items-center gap-1.5">
+                      <FolderOpen className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span className="text-[13px] text-muted-foreground">{selectedItem.recipientGroups.join(", ")}</span>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="text-[14px]">{selectedItem.recipientName}</p>
+              )}
+            </div>
+
+            {/* Variables used (for bulk) */}
+            {selectedItem.type === "bulk" && selectedItem.variables && (
+              <div className="rounded-lg border bg-accent/20 p-4 mb-4">
+                <p className="text-[13px] font-medium mb-2">使用変数</p>
+                <div className="flex items-center gap-2">
+                  {Object.entries(selectedItem.variables).map(([key, val]) => (
+                    <span key={key} className="rounded-full border border-brand/30 bg-brand/5 px-2.5 py-0.5 text-[12px] font-medium text-brand">
+                      {`{{${key}}}`} → {val}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Message body */}
+            <div className="rounded-lg border bg-white p-5">
+              <div className="text-[15px] leading-relaxed whitespace-pre-wrap">{selectedItem.body}</div>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-1 items-center justify-center text-muted-foreground">
+          <div className="text-center">
+            <Send className="mx-auto mb-3 h-10 w-10 opacity-20" />
+            <p className="text-[15px]">送信メッセージを選択してください</p>
           </div>
         </div>
       )}
@@ -742,12 +916,14 @@ function ConversationItem({ conversation, isSelected, isRecentlyRead, isSelfAssi
                 {statusLabel}
               </span>
             ) : assignees.length > 0 ? (
-              <div className="flex items-center gap-1">
-                {assignees.map((a) => (
-                  <Avatar key={a.id} src={a.avatar} fallback={a.name} size="sm" className="h-4 w-4 text-[6px]" />
-                ))}
-                <span className={cn("text-[12px]", isSelected ? "text-white/60" : "text-muted-foreground")}>
-                  {assignees.map((a) => a.name).join("、")}
+              <div className="flex items-center gap-1 min-w-0 overflow-hidden">
+                <div className="flex items-center shrink-0">
+                  {assignees.map((a) => (
+                    <Avatar key={a.id} src={a.avatar} fallback={a.name} size="sm" className="h-4 w-4 text-[6px]" />
+                  ))}
+                </div>
+                <span className={cn("text-[12px] truncate", isSelected ? "text-white/60" : "text-muted-foreground")}>
+                  {assignees[0].name}{assignees.length > 1 ? ` +${assignees.length - 1}` : ""}
                 </span>
               </div>
             ) : (
@@ -1040,10 +1216,10 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
       {/* Main conversation area */}
       <div className="flex h-full min-w-[400px] flex-1 flex-col bg-background">
         {/* Action bar */}
-        <header className="flex shrink-0 items-center justify-between gap-2 border-b px-5 py-3 min-w-0">
+        <header className="flex shrink-0 items-center justify-between gap-2 border-b px-5 py-3 min-w-0" style={{ minHeight: "70px" }}>
           {/* clicking contact name toggles right pane */}
           <button onClick={onToggleRightPane}
-            className="flex min-w-0 items-center gap-3 cursor-pointer rounded-lg px-2 py-1.5 -ml-2 transition-colors hover:bg-accent active:bg-accent/80 shrink">
+            className="flex min-w-0 items-center gap-3 cursor-pointer rounded-lg px-2 py-1.5 -ml-2 transition-colors hover:bg-accent active:bg-accent/80 shrink" style={{ minWidth: "120px" }}>
             <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-full", style.bg)}>
               <Icon className={cn("h-4 w-4", style.text)} />
             </div>
@@ -1055,14 +1231,14 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
             </div>
           </button>
 
-          <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
+          <div className="flex items-center gap-1.5 shrink-0 justify-end">
             {/* Assign self + assignee dropdown */}
             <div className="flex items-center">
               {!isSelfAssigned && (
                 <Button variant="outline" size="sm" className="h-9 gap-1.5 text-[14px] px-3 rounded-r-none border-r-0"
                   onClick={() => onAssignSelf(conversation.id)}>
                   <Avatar src={currentUser.avatar} fallback={currentUser.name} size="sm" className="h-4 w-4 text-[6px]" />
-                  担当する
+                  <span className="hidden lg:inline">担当する</span>
                 </Button>
               )}
               <AssigneePopover
@@ -1086,7 +1262,7 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
                 )}
                 onClick={() => onStatusChange(conversation.id, conversation.status === "completed" ? "open" : "completed")}>
                 <Check className="h-3.5 w-3.5" />
-                完了
+                <span className="hidden lg:inline">完了</span>
               </Button>
               <Button size="sm"
                 variant={conversation.status === "no_action" ? "default" : "outline"}
@@ -1096,7 +1272,7 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
                 )}
                 onClick={() => onStatusChange(conversation.id, conversation.status === "no_action" ? "open" : "no_action")}>
                 <Ban className="h-3.5 w-3.5" />
-                対応なし
+                <span className="hidden lg:inline">対応なし</span>
               </Button>
             </div>
 
@@ -1117,21 +1293,16 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
         {/* Messages + inline reply */}
         <div className="flex-1 overflow-y-auto px-5 py-5">
           <div className="mx-auto max-w-2xl space-y-4">
-            {/* Change #18: Linked messages banner at top */}
-            {linkedConversations.length > 0 && (
-              <div className="rounded-lg border border-brand/20 bg-brand/5 px-4 py-2.5">
-                <div className="flex items-center gap-2 mb-1.5">
-                  <Link2 className="h-3.5 w-3.5 text-brand" />
-                  <span className="text-[13px] font-medium text-brand">紐づけられたメッセージ</span>
-                </div>
-                <div className="space-y-1">
-                  {linkedConversations.map((lc) => (
-                    <button key={lc.id} onClick={() => onSelectConversation(lc.id)}
-                      className="block w-full text-left text-[13px] text-brand hover:text-brand/70 hover:underline cursor-pointer truncate">
-                      {lc.channel === "email" ? (lc.subject || lc.lastMessage) : (lc.messages[0]?.content || lc.lastMessage)}
-                    </button>
-                  ))}
-                </div>
+            {/* Related messages - single line format */}
+            {linkedConversations.length > 0 && linkedConversations.some((lc) => new Date(lc.lastMessageAt) <= new Date(conversation.messages[0]?.timestamp ?? "")) && (
+              <div className="space-y-1">
+                {linkedConversations.filter((lc) => new Date(lc.lastMessageAt) <= new Date(conversation.messages[0]?.timestamp ?? "")).map((lc) => (
+                  <button key={lc.id} onClick={() => onSelectConversation(lc.id)}
+                    className="flex items-center gap-2 text-[13px] text-muted-foreground hover:text-foreground cursor-pointer transition-colors truncate w-full text-left">
+                    <Link2 className="h-3 w-3 shrink-0" />
+                    <span className="truncate">関連メッセージ：{lc.channel === "email" ? (lc.subject || lc.lastMessage) : (lc.messages[0]?.content || lc.lastMessage)}</span>
+                  </button>
+                ))}
               </div>
             )}
 
@@ -1244,21 +1415,16 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
               </div>
             </div>
 
-            {/* Change #18: Linked messages banner at bottom */}
-            {linkedConversations.length > 0 && (
-              <div className="rounded-lg border border-brand/20 bg-brand/5 px-4 py-2.5">
-                <div className="flex items-center gap-2 mb-1.5">
-                  <Link2 className="h-3.5 w-3.5 text-brand" />
-                  <span className="text-[13px] font-medium text-brand">紐づけられたメッセージ</span>
-                </div>
-                <div className="space-y-1">
-                  {linkedConversations.map((lc) => (
-                    <button key={lc.id} onClick={() => onSelectConversation(lc.id)}
-                      className="block w-full text-left text-[13px] text-brand hover:text-brand/70 hover:underline cursor-pointer truncate">
-                      {lc.channel === "email" ? (lc.subject || lc.lastMessage) : (lc.messages[0]?.content || lc.lastMessage)}
-                    </button>
-                  ))}
-                </div>
+            {/* Related messages at bottom - only newer ones */}
+            {linkedConversations.length > 0 && linkedConversations.some((lc) => new Date(lc.lastMessageAt) > new Date(conversation.messages[0]?.timestamp ?? "")) && (
+              <div className="space-y-1">
+                {linkedConversations.filter((lc) => new Date(lc.lastMessageAt) > new Date(conversation.messages[0]?.timestamp ?? "")).map((lc) => (
+                  <button key={lc.id} onClick={() => onSelectConversation(lc.id)}
+                    className="flex items-center gap-2 text-[13px] text-muted-foreground hover:text-foreground cursor-pointer transition-colors truncate w-full text-left">
+                    <Link2 className="h-3 w-3 shrink-0" />
+                    <span className="truncate">関連メッセージ：{lc.channel === "email" ? (lc.subject || lc.lastMessage) : (lc.messages[0]?.content || lc.lastMessage)}</span>
+                  </button>
+                ))}
               </div>
             )}
 
@@ -1354,8 +1520,8 @@ function RightSidePane({ conversation, allConversations, contactConversations, l
 
   return (
     <div className="flex h-full w-[300px] min-w-[260px] shrink-0 flex-col border-l bg-background overflow-y-auto">
-      {/* Header with message ID and close button - aligned with main header */}
-      <div className="shrink-0 px-4 py-3 flex items-center justify-between">
+      {/* Header with message ID and close button */}
+      <div className="shrink-0 px-4 flex items-center justify-between" style={{ height: "70px" }}>
         <span className="text-[13px] font-medium text-muted-foreground">
           メッセージID: {formatMessageNumber(conversation.messageNumber)}
         </span>
@@ -1485,10 +1651,9 @@ function ThreadHistoryItem({ conv, CIcon, channelStyle, isLinked, isCurrent, cur
     <div
       className={cn(
         "group relative flex items-center gap-2 rounded-md border px-2.5 py-2 transition-colors",
-        isCurrent ? "border-brand border-l-[3px] bg-background shadow-sm" : isLinked ? "border-brand/20" : "hover:bg-accent/30",
+        isCurrent ? "border-brand bg-background" : isLinked ? "border-brand/20" : "hover:bg-accent/30",
         !isCurrent && "cursor-pointer"
       )}
-      style={isCurrent ? { borderLeftColor: "var(--brand)", marginLeft: "-4px", paddingLeft: "calc(0.625rem + 1px)" } : undefined}
       onClick={() => !isCurrent && onSelect()}
     >
       <div className={cn("flex h-5 w-5 shrink-0 items-center justify-center rounded-full", channelStyle.bg)}>
@@ -1511,10 +1676,12 @@ function ThreadHistoryItem({ conv, CIcon, channelStyle, isLinked, isCurrent, cur
               <Link2 className="h-4 w-4" />
             </button>
           ) : (
-            /* Not linked: show ... on hover, click opens link popover */
+            /* Not linked: show ... on hover or when menu open */
             <button
               onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
-              className="hidden group-hover:flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent cursor-pointer self-center"
+              className={cn("h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent cursor-pointer self-center",
+                showMenu ? "flex" : "hidden group-hover:flex"
+              )}
             >
               <MoreHorizontal className="h-4 w-4" />
             </button>
@@ -1525,13 +1692,13 @@ function ThreadHistoryItem({ conv, CIcon, channelStyle, isLinked, isCurrent, cur
                 <button onClick={(e) => { e.stopPropagation(); onUnlink(); setShowMenu(false); }}
                   className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-[14px] text-left text-foreground hover:bg-accent transition-colors cursor-pointer">
                   <Link2 className="h-3.5 w-3.5 text-destructive shrink-0" />
-                  紐づけを解除
+                  関連づけを解除する
                 </button>
               ) : (
                 <button onClick={(e) => { e.stopPropagation(); onLink(); setShowMenu(false); }}
                   className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-[14px] text-left text-foreground hover:bg-accent transition-colors cursor-pointer whitespace-nowrap">
                   <Link2 className="h-3.5 w-3.5 text-brand shrink-0" />
-                  このメッセージと紐づける
+                  このメッセージと関連づける
                 </button>
               )}
             </div>
@@ -1624,10 +1791,10 @@ function MessageBubble({ message, channel, contactEmail, onPreviewImage, onDelet
               </button>
               {headerExpanded && (
                 <div className="mt-2 space-y-1 text-[14px] text-muted-foreground">
-                  {isInbound && (contactEmail || senderName) && (
+                  {(contactEmail || senderName) && (
                     <div className="flex items-center gap-2">
                       <span className="w-10 shrink-0 text-right font-medium text-[13px]">From</span>
-                      <span>{contactEmail || senderName}</span>
+                      <span>{isInbound ? (contactEmail || senderName) : senderName}</span>
                     </div>
                   )}
                   {emailHeader.to && (
@@ -1762,28 +1929,26 @@ function ReplyHeader({ channel, channelLabel, accountName, isEmail,
         <div className="mt-2 space-y-1 text-[14px] text-muted-foreground">
           <div className="flex items-center gap-2">
             <span className="w-10 shrink-0 text-right font-medium text-[13px]">From</span>
-            <input value={emailFrom} onChange={(e) => setEmailFrom(e.target.value)}
-              className="flex-1 rounded bg-transparent px-1.5 py-0.5 outline-none text-[14px] hover:text-muted-foreground focus:text-foreground transition-colors" />
+            <span className="flex-1 rounded-md bg-accent/40 px-2 py-0.5 text-[14px] text-muted-foreground">{emailFrom}</span>
           </div>
           <div className="flex items-center gap-2">
             <span className="w-10 shrink-0 text-right font-medium text-[13px]">To</span>
-            <input value={emailTo} onChange={(e) => setEmailTo(e.target.value)}
-              className="flex-1 rounded bg-transparent px-1.5 py-0.5 outline-none text-[14px] hover:text-muted-foreground focus:text-foreground transition-colors" />
+            <span className="flex-1 rounded-md bg-accent/40 px-2 py-0.5 text-[14px] text-muted-foreground">{emailTo}</span>
           </div>
           <div className="flex items-center gap-2">
             <span className="w-10 shrink-0 text-right font-medium text-[13px]">CC</span>
             <input value={emailCc} onChange={(e) => setEmailCc(e.target.value)} placeholder="任意"
-              className="flex-1 rounded bg-transparent px-1.5 py-0.5 outline-none text-[14px] hover:text-muted-foreground focus:text-foreground transition-colors placeholder:text-muted-foreground/30" />
+              className="flex-1 rounded-md bg-transparent px-2 py-0.5 outline-none text-[14px] border border-transparent hover:border-border focus:border-brand/30 transition-colors placeholder:text-muted-foreground/30" />
           </div>
           <div className="flex items-center gap-2">
             <span className="w-10 shrink-0 text-right font-medium text-[13px]">BCC</span>
             <input value={emailBcc} onChange={(e) => setEmailBcc(e.target.value)} placeholder="任意"
-              className="flex-1 rounded bg-transparent px-1.5 py-0.5 outline-none text-[14px] hover:text-muted-foreground focus:text-foreground transition-colors placeholder:text-muted-foreground/30" />
+              className="flex-1 rounded-md bg-transparent px-2 py-0.5 outline-none text-[14px] border border-transparent hover:border-border focus:border-brand/30 transition-colors placeholder:text-muted-foreground/30" />
           </div>
           <div className="flex items-center gap-2">
             <span className="w-10 shrink-0 text-right font-medium text-[13px]">件名</span>
             <input value={emailSubject} onChange={(e) => setEmailSubject(e.target.value)}
-              className="flex-1 rounded bg-transparent px-1.5 py-0.5 outline-none text-[14px] hover:text-muted-foreground focus:text-foreground transition-colors" />
+              className="flex-1 rounded-md bg-transparent px-2 py-0.5 outline-none text-[14px] border border-transparent hover:border-border focus:border-brand/30 transition-colors" />
           </div>
         </div>
       )}

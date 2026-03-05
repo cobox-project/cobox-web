@@ -102,7 +102,6 @@ function AccountsSettings() {
       <div className="mb-4 flex items-center justify-between">
         <div>
           <h2 className="text-[17px] font-semibold">チャネル接続</h2>
-          <p className="mt-0.5 text-[13px] text-muted-foreground">メッセージを受信するチャネルを管理</p>
         </div>
         <Button size="sm" className="h-8 gap-1.5 text-[13px] bg-brand hover:bg-brand/90"
           onClick={() => setShowAddModal(true)}>
@@ -256,8 +255,7 @@ function TeamSettings() {
 
   return (
     <div>
-      <h2 className="text-[17px] font-semibold mb-1">チーム</h2>
-      <p className="mb-5 text-[13px] text-muted-foreground">チームメンバーとチャネル権限を管理</p>
+      <h2 className="text-[17px] font-semibold mb-5">チーム</h2>
 
       <div className="mb-8">
         <label className="mb-1.5 block text-[13px] font-medium text-muted-foreground">チーム名</label>
@@ -348,10 +346,15 @@ function TeamSettings() {
 /* ─── Template Settings ─────────────────── */
 
 function TemplateSettings() {
+  const [templateSubTab, setTemplateSubTab] = useState<"templates" | "variables">("templates");
   const [templates, setTemplates] = useState<ComposeTemplate[]>([...composeTemplates]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [addForm, setAddForm] = useState({ name: "", subject: "", body: "" });
+  const [variables, setVariables] = useState([
+    { id: "name", label: "名前", key: "名前", description: "連絡先の名前" },
+    { id: "company", label: "会社名", key: "会社名", description: "連絡先の会社名" },
+  ]);
 
   const [editForm, setEditForm] = useState<{ name: string; subject: string; body: string }>({
     name: "",
@@ -464,7 +467,7 @@ function TemplateSettings() {
             <div className="flex items-center justify-between mb-1.5">
               <label className="text-[13px] font-medium text-muted-foreground">件名</label>
               <div className="flex items-center gap-1.5">
-                {["姓", "名", "会社名"].map((v) => (
+                {["名前", "会社名"].map((v) => (
                   <button key={v}
                     onClick={() => setEditForm((prev) => ({ ...prev, subject: prev.subject + `{{${v}}}` }))}
                     className="rounded-full border border-brand/30 bg-brand/5 px-2.5 py-0.5 text-[12px] font-medium text-brand hover:bg-brand/10 transition-colors cursor-pointer">
@@ -484,7 +487,7 @@ function TemplateSettings() {
             <div className="flex items-center justify-between mb-1.5">
               <label className="text-[13px] font-medium text-muted-foreground">本文</label>
               <div className="flex items-center gap-1.5">
-                {["姓", "名", "会社名"].map((v) => (
+                {["名前", "会社名"].map((v) => (
                   <button key={v}
                     onClick={() => setEditForm((prev) => ({ ...prev, body: prev.body + `{{${v}}}` }))}
                     className="rounded-full border border-brand/30 bg-brand/5 px-2.5 py-0.5 text-[12px] font-medium text-brand hover:bg-brand/10 transition-colors cursor-pointer">
@@ -525,136 +528,169 @@ function TemplateSettings() {
 
   return (
     <div>
-      <div className="mb-4 flex items-center justify-between">
+      <h2 className="text-[17px] font-semibold mb-4">テンプレート</h2>
+
+      {/* Sub-tabs */}
+      <div className="flex gap-1 rounded-lg border p-1 mb-5">
+        <button onClick={() => setTemplateSubTab("templates")}
+          className={cn("flex-1 rounded-md px-3 py-1.5 text-[14px] font-medium transition-colors cursor-pointer",
+            templateSubTab === "templates" ? "bg-accent text-foreground" : "text-muted-foreground hover:text-foreground")}>
+          メッセージテンプレート
+        </button>
+        <button onClick={() => setTemplateSubTab("variables")}
+          className={cn("flex-1 rounded-md px-3 py-1.5 text-[14px] font-medium transition-colors cursor-pointer",
+            templateSubTab === "variables" ? "bg-accent text-foreground" : "text-muted-foreground hover:text-foreground")}>
+          変数設定
+        </button>
+      </div>
+
+      {templateSubTab === "variables" ? (
         <div>
-          <h2 className="text-[17px] font-semibold">メッセージテンプレート</h2>
-          <p className="mt-0.5 text-[13px] text-muted-foreground">メッセージ作成時に使用するテンプレートを管理</p>
-        </div>
-        <Button size="sm" className="h-8 gap-1.5 text-[13px] bg-brand hover:bg-brand/90"
-          onClick={() => setShowAddModal(true)}>
-          <Plus className="h-3.5 w-3.5" />
-          追加
-        </Button>
-      </div>
-
-      {/* Template list - clickable to edit, drag & drop reorder */}
-      <div className="space-y-2">
-        {templates.map((tpl, index) => (
-          <div key={tpl.id}
-            draggable
-            onDragStart={(e) => handleDragStart(e, index)}
-            onDragOver={(e) => handleDragOver(e, index)}
-            onDrop={() => handleDrop(index)}
-            onDragEnd={handleDragEnd}
-            className={cn(
-              "rounded-lg border transition-all cursor-pointer hover:bg-accent/20",
-              dragOverIndex === index && dragIndex !== index && "border-brand border-dashed",
-              dragIndex === index && "opacity-50"
-            )}
-            onClick={() => startEditing(tpl)}
-          >
-            <div className="flex items-start gap-3 px-4 py-4">
-              <div className="flex items-center shrink-0 pt-1 text-muted-foreground/40 cursor-grab active:cursor-grabbing"
-                onClick={(e) => e.stopPropagation()}>
-                <GripVertical className="h-4 w-4" />
+          <p className="text-[13px] text-muted-foreground mb-4">テンプレートで使用できる変数を管理します。変数は {`{{変数名}}`} の形式で本文に挿入できます。</p>
+          <div className="space-y-2">
+            {variables.map((v) => (
+              <div key={v.id} className="flex items-center gap-3 rounded-lg border px-4 py-3.5">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="rounded-full border border-brand/30 bg-brand/5 px-2.5 py-0.5 text-[12px] font-medium text-brand">{`{{${v.key}}}`}</span>
+                    <span className="text-[14px] font-medium">{v.label}</span>
+                  </div>
+                  <p className="text-[12px] text-muted-foreground mt-1">{v.description}</p>
+                </div>
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[15px] font-medium">{tpl.name}</p>
-                {tpl.subject && (
-                  <p className="text-[13px] text-muted-foreground truncate">{tpl.subject}</p>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="mb-4 flex items-center justify-end">
+            <Button size="sm" className="h-8 gap-1.5 text-[13px] bg-brand hover:bg-brand/90"
+              onClick={() => setShowAddModal(true)}>
+              <Plus className="h-3.5 w-3.5" />
+              追加
+            </Button>
+          </div>
+
+          {/* Template list */}
+          <div className="space-y-2">
+            {templates.map((tpl, index) => (
+              <div key={tpl.id}
+                draggable
+                onDragStart={(e) => handleDragStart(e, index)}
+                onDragOver={(e) => handleDragOver(e, index)}
+                onDrop={() => handleDrop(index)}
+                onDragEnd={handleDragEnd}
+                className={cn(
+                  "rounded-lg border transition-all cursor-pointer hover:bg-accent/20",
+                  dragOverIndex === index && dragIndex !== index && "border-brand border-dashed",
+                  dragIndex === index && "opacity-50"
                 )}
-                <p className="text-[13px] text-muted-foreground truncate mt-0.5 line-clamp-2" style={{ minHeight: "2.5em" }}>
-                  {tpl.body.length > 120 ? tpl.body.slice(0, 120) + "…" : tpl.body}
-                </p>
-              </div>
-            </div>
-          </div>
-        ))}
-
-        {templates.length === 0 && (
-          <div className="rounded-lg border border-dashed px-4 py-8 text-center">
-            <p className="text-[14px] text-muted-foreground">テンプレートがありません</p>
-          </div>
-        )}
-      </div>
-
-      {/* Add modal */}
-      {showAddModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/30"
-          onClick={(e) => { if (e.target === e.currentTarget) setShowAddModal(false); }}>
-          <div className="w-[520px] rounded-xl bg-background p-6 shadow-xl">
-            <div className="mb-5 flex items-center justify-between">
-              <h2 className="text-[19px] font-semibold">テンプレートを追加</h2>
-              <button onClick={() => setShowAddModal(false)}
-                className="cursor-pointer rounded-md p-1.5 text-muted-foreground hover:bg-accent">
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            <div className="space-y-5">
-              <div>
-                <label className="mb-1.5 block text-[13px] font-medium text-muted-foreground">テンプレート名</label>
-                <input
-                  value={addForm.name}
-                  onChange={(e) => setAddForm((prev) => ({ ...prev, name: e.target.value }))}
-                  placeholder="例: 新商品のお知らせ"
-                  className="w-full rounded-md border px-3 py-2.5 text-[14px] outline-none focus:border-brand/40"
-                />
-              </div>
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-[13px] font-medium text-muted-foreground">件名</label>
-                  <div className="flex items-center gap-1.5">
-                    {["姓", "名", "会社名"].map((v) => (
-                      <button key={v}
-                        onClick={() => setAddForm((prev) => ({ ...prev, subject: prev.subject + `{{${v}}}` }))}
-                        className="rounded-full border border-brand/30 bg-brand/5 px-2.5 py-0.5 text-[12px] font-medium text-brand hover:bg-brand/10 transition-colors cursor-pointer">
-                        {v}
-                      </button>
-                    ))}
+                onClick={() => startEditing(tpl)}
+              >
+                <div className="flex items-start gap-3 px-4 py-4">
+                  <div className="flex items-center shrink-0 pt-1 text-muted-foreground/40 cursor-grab active:cursor-grabbing"
+                    onClick={(e) => e.stopPropagation()}>
+                    <GripVertical className="h-4 w-4" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[15px] font-medium">{tpl.name}</p>
+                    {tpl.subject && (
+                      <p className="text-[13px] text-muted-foreground truncate">{tpl.subject}</p>
+                    )}
+                    <p className="text-[13px] text-muted-foreground truncate mt-0.5 line-clamp-2" style={{ minHeight: "2.5em" }}>
+                      {tpl.body.length > 120 ? tpl.body.slice(0, 120) + "…" : tpl.body}
+                    </p>
                   </div>
                 </div>
-                <input
-                  value={addForm.subject}
-                  onChange={(e) => setAddForm((prev) => ({ ...prev, subject: e.target.value }))}
-                  placeholder="例: 【ご案内】{{姓}}様へ"
-                  className="w-full rounded-md border px-3 py-2.5 text-[14px] outline-none focus:border-brand/40"
-                />
               </div>
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-[13px] font-medium text-muted-foreground">本文</label>
-                  <div className="flex items-center gap-1.5">
-                    {["姓", "名", "会社名"].map((v) => (
-                      <button key={v}
-                        onClick={() => setAddForm((prev) => ({ ...prev, body: prev.body + `{{${v}}}` }))}
-                        className="rounded-full border border-brand/30 bg-brand/5 px-2.5 py-0.5 text-[12px] font-medium text-brand hover:bg-brand/10 transition-colors cursor-pointer">
-                        {v}
-                      </button>
-                    ))}
+            ))}
+
+            {templates.length === 0 && (
+              <div className="rounded-lg border border-dashed px-4 py-8 text-center">
+                <p className="text-[14px] text-muted-foreground">テンプレートがありません</p>
+              </div>
+            )}
+          </div>
+
+          {/* Add modal */}
+          {showAddModal && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/30"
+              onClick={(e) => { if (e.target === e.currentTarget) setShowAddModal(false); }}>
+              <div className="w-[520px] rounded-xl bg-background p-6 shadow-xl">
+                <div className="mb-5 flex items-center justify-between">
+                  <h2 className="text-[19px] font-semibold">テンプレートを追加</h2>
+                  <button onClick={() => setShowAddModal(false)}
+                    className="cursor-pointer rounded-md p-1.5 text-muted-foreground hover:bg-accent">
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <div className="space-y-5">
+                  <div>
+                    <label className="mb-1.5 block text-[13px] font-medium text-muted-foreground">テンプレート名</label>
+                    <input
+                      value={addForm.name}
+                      onChange={(e) => setAddForm((prev) => ({ ...prev, name: e.target.value }))}
+                      placeholder="例: 新商品のお知らせ"
+                      className="w-full rounded-md border px-3 py-2.5 text-[14px] outline-none focus:border-brand/40"
+                    />
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-[13px] font-medium text-muted-foreground">件名</label>
+                      <div className="flex items-center gap-1.5">
+                        {["名前", "会社名"].map((v) => (
+                          <button key={v}
+                            onClick={() => setAddForm((prev) => ({ ...prev, subject: prev.subject + `{{${v}}}` }))}
+                            className="rounded-full border border-brand/30 bg-brand/5 px-2.5 py-0.5 text-[12px] font-medium text-brand hover:bg-brand/10 transition-colors cursor-pointer">
+                            {v}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <input
+                      value={addForm.subject}
+                      onChange={(e) => setAddForm((prev) => ({ ...prev, subject: e.target.value }))}
+                      placeholder="例: 【ご案内】{{名前}}様へ"
+                      className="w-full rounded-md border px-3 py-2.5 text-[14px] outline-none focus:border-brand/40"
+                    />
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-[13px] font-medium text-muted-foreground">本文</label>
+                      <div className="flex items-center gap-1.5">
+                        {["名前", "会社名"].map((v) => (
+                          <button key={v}
+                            onClick={() => setAddForm((prev) => ({ ...prev, body: prev.body + `{{${v}}}` }))}
+                            className="rounded-full border border-brand/30 bg-brand/5 px-2.5 py-0.5 text-[12px] font-medium text-brand hover:bg-brand/10 transition-colors cursor-pointer">
+                            {v}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <textarea
+                      value={addForm.body}
+                      onChange={(e) => setAddForm((prev) => ({ ...prev, body: e.target.value }))}
+                      rows={10}
+                      placeholder="テンプレートの本文を入力..."
+                      className="w-full rounded-md border px-3 py-2.5 text-[14px] outline-none focus:border-brand/40 resize-none"
+                    />
                   </div>
                 </div>
-                <textarea
-                  value={addForm.body}
-                  onChange={(e) => setAddForm((prev) => ({ ...prev, body: e.target.value }))}
-                  rows={10}
-                  placeholder="テンプレートの本文を入力..."
-                  className="w-full rounded-md border px-3 py-2.5 text-[14px] outline-none focus:border-brand/40 resize-none"
-                />
+
+                <div className="mt-5 flex justify-end gap-2">
+                  <Button variant="outline" className="h-9 text-[13px]" onClick={() => setShowAddModal(false)}>
+                    キャンセル
+                  </Button>
+                  <Button className="h-9 text-[13px] bg-brand hover:bg-brand/90" onClick={addTemplate}
+                    disabled={!addForm.name.trim()}>
+                    保存
+                  </Button>
+                </div>
               </div>
             </div>
-
-            <div className="mt-5 flex justify-end gap-2">
-              <Button variant="outline" className="h-9 text-[13px]" onClick={() => setShowAddModal(false)}>
-                キャンセル
-              </Button>
-              <Button className="h-9 text-[13px] bg-brand hover:bg-brand/90" onClick={addTemplate}
-                disabled={!addForm.name.trim()}>
-                保存
-              </Button>
-            </div>
-          </div>
-        </div>
+          )}
+        </>
       )}
     </div>
   );
@@ -719,8 +755,7 @@ function BillingSettings() {
 
   return (
     <div>
-      <h2 className="text-[17px] font-semibold mb-1">支払い</h2>
-      <p className="mb-5 text-[13px] text-muted-foreground">プランと請求情報を管理</p>
+      <h2 className="text-[17px] font-semibold mb-5">支払い</h2>
 
       <section className="mb-8">
         <h3 className="text-[15px] font-medium mb-3">現在のプラン</h3>
