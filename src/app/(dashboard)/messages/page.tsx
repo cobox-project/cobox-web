@@ -11,21 +11,20 @@ import {
   contacts,
   contactGroups,
 } from "@/data/mock";
-import type { Conversation, Message, Status, Channel, Contact } from "@/data/types";
+import type { Conversation, Message, Status, Channel, Contact, Attachment } from "@/data/types";
 import { Dropdown, DropdownItem } from "@/components/ui/dropdown";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Tooltip } from "@/components/ui/tooltip";
 import { Avatar } from "@/components/ui/avatar";
 import {
   Instagram,
   MessageCircle,
+  MessageCircleMore,
   Mail,
   Facebook,
   Send,
   Paperclip,
   MoreHorizontal,
-  UserPlus,
   Check,
   CircleDashed,
   MessageSquareText,
@@ -36,9 +35,17 @@ import {
   X,
   Trash2,
   Star,
-  Ban,
-  AlertTriangle,
   AtSign,
+  Smile,
+  Link2,
+  FileText,
+  Download,
+  Image as ImageIcon,
+  Plus,
+  UserPlus,
+  FolderOpen,
+  Ban,
+  User,
 } from "lucide-react";
 
 const channelIcons: Record<Channel, React.ElementType> = {
@@ -54,12 +61,25 @@ const channelStyles: Record<Channel, { bg: string; text: string }> = {
   email: { bg: "bg-channel-email/10", text: "text-channel-email" },
   facebook: { bg: "bg-channel-facebook/10", text: "text-channel-facebook" },
 };
+// LINE stamp labels (displayed as styled placeholders, not emoji)
+const lineStampLabels = [
+  "OK", "ハート", "にこ", "笑", "お願い", "バイバイ",
+  "お祝い", "ガッツ", "泣", "ハグ", "好き", "うるうる",
+  "キラキラ", "炎", "桜", "太陽", "バンザイ", "クール",
+  "ラブ", "握手", "拍手", "ありがとう", "爆笑", "しくしく",
+];
+const lineStampIds = lineStampLabels.map((_, i) => `stamp_${i}`);
 
-type FolderFilter = "all" | "mine" | "mentioned" | "resolved" | "favorite" | "spam";
-
-function getAccountName(accountId: string): string {
-  return accounts.find((a) => a.id === accountId)?.name ?? "";
-}
+// folder structure
+type FolderFilter =
+  | "new"        // 新着（未アサイン）
+  | "in_progress" // 対応中（アサイン済み未完了）
+  | "completed"   // 完了
+  | "no_action"   // 対応なし
+  | "mine"        // 自分が担当
+  | "mentioned"   // メンションされた
+  | "favorite"   // お気に入り
+  | "sent";      // 送信済み
 
 function isUnread(conv: Conversation): boolean {
   return conv.isRead === false || conv.unreadCount > 0;
@@ -76,26 +96,34 @@ function renderMentions(text: string): React.ReactNode {
   );
 }
 
+function formatMessageNumber(n: number): string {
+  return `#${String(n).padStart(5, "0")}`;
+}
+
 export default function MessagesPage() {
   const router = useRouter();
   const [conversations, setConversations] = useState(allConversations);
   const [selectedId, setSelectedId] = useState<string | null>(
     allConversations[0]?.id ?? null
   );
-  const [folderFilter, setFolderFilter] = useState<FolderFilter>("all");
+  const [folderFilter, setFolderFilter] = useState<FolderFilter>("new");
   const [accountFilter, setAccountFilter] = useState<string | null>(null);
   const [groupFilter, setGroupFilter] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [personalFolderMode, setPersonalFolderMode] = useState<"active" | "all">("active");
   const [detailContactId, setDetailContactId] = useState<string | null>(null);
-  const [unreadOnly, setUnreadOnly] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [recentlyReadIds, setRecentlyReadIds] = useState<Set<string>>(new Set());
+  const [undoStack, setUndoStack] = useState<{ id: string; unreadCount: number }[]>([]);
+  const [accountsExpanded, setAccountsExpanded] = useState(true);
+  const [groupsExpanded, setGroupsExpanded] = useState(true);
+  const [showRightPane, setShowRightPane] = useState(true);
+
+  // Image preview modal
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     let list = conversations;
-
-    if (folderFilter !== "spam") {
-      list = list.filter((c) => !c.isSpam);
-    }
 
     // Account filter
     if (accountFilter) {
@@ -110,28 +138,37 @@ export default function MessagesPage() {
       }
     }
 
-    switch (folderFilter) {
-      case "all":
-        break;
-      case "mine":
-        list = list.filter((c) => c.assignee?.id === currentUser.id);
-        break;
-      case "mentioned":
-        list = list.filter((c) => c.messages.some((m) => m.isInternal && m.content.includes(`@${currentUser.name}`)));
-        break;
-      case "resolved":
-        list = list.filter((c) => c.status === "resolved");
-        break;
-      case "favorite":
-        list = list.filter((c) => c.isFavorite);
-        break;
-      case "spam":
-        list = list.filter((c) => c.isSpam);
-        break;
-    }
-
-    if (unreadOnly) {
-      list = list.filter(isUnread);
+    // Folder filtering logic
+    if (!accountFilter && !groupFilter) {
+      switch (folderFilter) {
+        case "new":
+          list = list.filter((c) => c.status === "open" && c.assignees.length === 0);
+          break;
+        case "in_progress":
+          list = list.filter((c) => c.status === "open" && c.assignees.length > 0);
+          break;
+        case "completed":
+          list = list.filter((c) => c.status === "completed");
+          break;
+        case "no_action":
+          list = list.filter((c) => c.status === "no_action");
+          break;
+        case "mine":
+          list = list.filter((c) => c.assignees.some((a) => a.id === currentUser.id));
+          if (personalFolderMode === "active") list = list.filter((c) => c.status === "open");
+          break;
+        case "mentioned":
+          list = list.filter((c) => c.messages.some((m) => m.isInternal && m.content.includes(`@${currentUser.name}`)));
+          if (personalFolderMode === "active") list = list.filter((c) => c.status === "open");
+          break;
+        case "favorite":
+          list = list.filter((c) => c.isFavorite);
+          if (personalFolderMode === "active") list = list.filter((c) => c.status === "open");
+          break;
+        case "sent":
+          list = [];
+          break;
+      }
     }
 
     if (searchQuery.trim()) {
@@ -145,7 +182,7 @@ export default function MessagesPage() {
     }
 
     return list;
-  }, [conversations, folderFilter, accountFilter, groupFilter, searchQuery, unreadOnly]);
+  }, [conversations, folderFilter, accountFilter, groupFilter, searchQuery, personalFolderMode]);
 
   const selectedConversation = useMemo(
     () => conversations.find((c) => c.id === selectedId) ?? null,
@@ -156,47 +193,46 @@ export default function MessagesPage() {
     setConversations((prev) =>
       prev.map((c) => {
         if (c.id !== id) return c;
-        const updated = { ...c, status };
-        // If resolved, remove assignee
-        if (status === "resolved") {
-          return { ...updated, assignee: undefined, needsAction: false };
-        }
-        return updated;
+        return { ...c, status };
       })
     );
   }, []);
 
-  const handleAssigneeChange = useCallback(
-    (id: string, assigneeId: string | null) => {
-      setConversations((prev) =>
-        prev.map((c) => {
-          if (c.id !== id) return c;
-          return {
-            ...c,
-            assignee: assigneeId
-              ? teamMembers.find((m) => m.id === assigneeId)
-              : undefined,
-            // Auto set needsAction when assigned
-            needsAction: assigneeId ? true : c.needsAction,
-          };
-        })
-      );
-    },
-    []
-  );
+  const handleAssignSelf = useCallback((id: string) => {
+    setConversations((prev) =>
+      prev.map((c) => {
+        if (c.id !== id) return c;
+        if (c.assignees.some((a) => a.id === currentUser.id)) return c;
+        return { ...c, assignees: [...c.assignees, currentUser], status: "open" as Status };
+      })
+    );
+  }, []);
+
+  const handleRemoveAssignee = useCallback((id: string, assigneeId: string) => {
+    setConversations((prev) =>
+      prev.map((c) => {
+        if (c.id !== id) return c;
+        return { ...c, assignees: c.assignees.filter((a) => a.id !== assigneeId) };
+      })
+    );
+  }, []);
+
+  const handleSetAssignee = useCallback((id: string, assigneeId: string) => {
+    setConversations((prev) =>
+      prev.map((c) => {
+        if (c.id !== id) return c;
+        const member = teamMembers.find((m) => m.id === assigneeId);
+        if (!member) return c;
+        if (c.assignees.some((a) => a.id === assigneeId)) return c;
+        return { ...c, assignees: [...c.assignees, member] };
+      })
+    );
+  }, []);
 
   const handleToggleFavorite = useCallback((id: string) => {
     setConversations((prev) =>
       prev.map((c) =>
         c.id === id ? { ...c, isFavorite: !c.isFavorite } : c
-      )
-    );
-  }, []);
-
-  const handleMarkSpam = useCallback((id: string) => {
-    setConversations((prev) =>
-      prev.map((c) =>
-        c.id === id ? { ...c, isSpam: true } : c
       )
     );
   }, []);
@@ -207,40 +243,70 @@ export default function MessagesPage() {
     setDeleteConfirmId(null);
   }, [selectedId]);
 
-  const handleToggleNeedsAction = useCallback((id: string) => {
-    setConversations((prev) =>
-      prev.map((c) =>
-        c.id === id ? { ...c, needsAction: !c.needsAction } : c
-      )
-    );
-  }, []);
-
-  const handleMarkUnread = useCallback((id: string) => {
-    setConversations((prev) =>
-      prev.map((c) =>
-        c.id === id ? { ...c, isRead: false, unreadCount: Math.max(1, c.unreadCount) } : c
-      )
-    );
-  }, []);
-
-  const handleSendMessage = useCallback((id: string, content: string, isInternal: boolean) => {
+  const handleSendMessage = useCallback((id: string, content: string, isInternal: boolean, attachments?: Attachment[]) => {
+    const now = new Date();
+    const ts = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, "0")}/${String(now.getDate()).padStart(2, "0")} ${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
     setConversations((prev) =>
       prev.map((c) => {
         if (c.id !== id) return c;
         const newMsg: Message = {
           id: `msg-${Date.now()}`,
           content,
-          timestamp: "今",
+          timestamp: ts,
           isInbound: false,
           senderName: currentUser.name,
           isInternal,
+          attachments: attachments && attachments.length > 0 ? attachments : undefined,
         };
         return {
           ...c,
           messages: [...c.messages, newMsg],
           lastMessage: isInternal ? c.lastMessage : content,
-          lastMessageAt: "今",
+          lastMessageAt: ts,
         };
+      })
+    );
+  }, []);
+
+  // Link conversations
+  const handleLinkConversation = useCallback((convId: string, targetId: string) => {
+    setConversations((prev) =>
+      prev.map((c) => {
+        if (c.id === convId) {
+          const existing = c.linkedConversationIds ?? [];
+          if (existing.includes(targetId)) return c;
+          return { ...c, linkedConversationIds: [...existing, targetId] };
+        }
+        if (c.id === targetId) {
+          const existing = c.linkedConversationIds ?? [];
+          if (existing.includes(convId)) return c;
+          return { ...c, linkedConversationIds: [...existing, convId] };
+        }
+        return c;
+      })
+    );
+  }, []);
+
+  const handleDeleteMemo = useCallback((convId: string, messageId: string) => {
+    setConversations((prev) =>
+      prev.map((c) =>
+        c.id === convId
+          ? { ...c, messages: c.messages.filter((m) => m.id !== messageId) }
+          : c
+      )
+    );
+  }, []);
+
+  const handleUnlinkConversation = useCallback((convId: string, targetId: string) => {
+    setConversations((prev) =>
+      prev.map((c) => {
+        if (c.id === convId) {
+          return { ...c, linkedConversationIds: (c.linkedConversationIds ?? []).filter((id) => id !== targetId) };
+        }
+        if (c.id === targetId) {
+          return { ...c, linkedConversationIds: (c.linkedConversationIds ?? []).filter((id) => id !== convId) };
+        }
+        return c;
       })
     );
   }, []);
@@ -248,40 +314,53 @@ export default function MessagesPage() {
   // Track which conversation was viewed, mark as read when navigating away
   const prevSelectedRef = useRef<string | null>(null);
   useEffect(() => {
-    // Mark the previously viewed conversation as read when selection changes
     if (prevSelectedRef.current && prevSelectedRef.current !== selectedId) {
       const prevId = prevSelectedRef.current;
-      setConversations((prev) =>
-        prev.map((c) =>
+      setConversations((prev) => {
+        return prev.map((c) =>
           c.id === prevId ? { ...c, isRead: true, unreadCount: 0 } : c
-        )
-      );
+        );
+      });
     }
     prevSelectedRef.current = selectedId;
   }, [selectedId]);
 
+  // Counts for folder badges
   const counts = useMemo(() => {
-    const nonSpam = conversations.filter((c) => !c.isSpam);
     return {
-      all: nonSpam.length,
-      mine: nonSpam.filter((c) => c.assignee?.id === currentUser.id).length,
-      mentioned: nonSpam.filter((c) => c.messages.some((m) => m.isInternal && m.content.includes(`@${currentUser.name}`))).length,
-      resolved: nonSpam.filter((c) => c.status === "resolved").length,
-      favorite: nonSpam.filter((c) => c.isFavorite).length,
-      spam: conversations.filter((c) => c.isSpam).length,
+      new: conversations.filter((c) => c.status === "open" && c.assignees.length === 0).length,
+      in_progress: conversations.filter((c) => c.status === "open" && c.assignees.length > 0).length,
+      completed: conversations.filter((c) => c.status === "completed").length,
+      no_action: conversations.filter((c) => c.status === "no_action").length,
+      mine: conversations.filter((c) => c.assignees.some((a) => a.id === currentUser.id)).length,
+      mentioned: conversations.filter((c) => c.messages.some((m) => m.isInternal && m.content.includes(`@${currentUser.name}`))).length,
+      favorite: conversations.filter((c) => c.isFavorite).length,
     };
   }, [conversations]);
 
-  // Keyboard navigation
+  // Keyboard navigation - scroll into view and move focus
+  const conversationListRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
         e.preventDefault();
         const idx = filtered.findIndex((c) => c.id === selectedId);
+        let nextIdx = idx;
         if (e.key === "ArrowDown" && idx < filtered.length - 1) {
-          setSelectedId(filtered[idx + 1].id);
+          nextIdx = idx + 1;
         } else if (e.key === "ArrowUp" && idx > 0) {
-          setSelectedId(filtered[idx - 1].id);
+          nextIdx = idx - 1;
+        }
+        if (nextIdx !== idx) {
+          setSelectedId(filtered[nextIdx].id);
+          // Scroll the item into view and focus it
+          const container = conversationListRef.current;
+          if (container) {
+            const buttons = container.querySelectorAll<HTMLButtonElement>(":scope > button");
+            buttons[nextIdx]?.scrollIntoView({ block: "nearest" });
+            buttons[nextIdx]?.focus();
+          }
         }
       }
     };
@@ -293,95 +372,127 @@ export default function MessagesPage() {
     ? contacts.find((c) => c.id === detailContactId) ?? null
     : null;
 
-  // Current first-level label for title header (null means "all" = no header)
+  // Change #8: Also return folder name when no account/group is selected
+  const folderLabels: Record<FolderFilter, string> = {
+    new: "新着",
+    in_progress: "対応中",
+    completed: "完了",
+    no_action: "対応なし",
+    mine: "自分が担当",
+    mentioned: "メンションされた",
+    favorite: "お気に入り",
+    sent: "一括送信済み",
+  };
+
   const currentSectionLabel = useMemo(() => {
     if (accountFilter) return accounts.find((a) => a.id === accountFilter)?.name ?? null;
     if (groupFilter) return contactGroups.find((g) => g.id === groupFilter)?.name ?? null;
-    const folderLabels: Record<FolderFilter, string | null> = {
-      all: null,
-      mine: "自分のアサイン分",
-      mentioned: "メンションされた",
-      resolved: "解決済み",
-      favorite: "お気に入り",
-      spam: "スパム",
-    };
     return folderLabels[folderFilter];
-  }, [folderFilter, accountFilter, groupFilter]);
+  }, [accountFilter, groupFilter, folderFilter]);
 
   return (
     <div className="flex h-full overflow-x-auto">
-      {/* ── Layer 2: Folders (220px) ── */}
+      {/* Layer 2: Folders (220px) */}
       <div className="flex h-full w-[220px] shrink-0 flex-col border-r bg-background">
-        <div className="shrink-0 px-3 pt-4 pb-2">
-          <h2 className="px-2 text-[15px] font-semibold text-foreground">
-            メッセージ
-          </h2>
+        {/* Change #2: Add page title and compose button */}
+        <div className="shrink-0 px-3 pt-4 pb-2 flex items-center justify-between">
+          <h2 className="px-2 text-[15px] font-semibold text-foreground">メッセージ</h2>
+          <button onClick={() => router.push("/messages/compose")} className="cursor-pointer rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors">
+            <Plus className="h-4 w-4" />
+          </button>
         </div>
 
         <nav className="flex-1 overflow-y-auto px-2">
+          {/* Status folders - Change #3: icons, Change #4: no count on completed */}
           <div className="space-y-0.5">
-            <FolderItem icon={Inbox} label="すべて" count={counts.all}
-              isActive={folderFilter === "all" && !accountFilter && !groupFilter}
-              onClick={() => { setFolderFilter("all"); setAccountFilter(null); setGroupFilter(null); }} />
-            <FolderItemWithAvatar label="自分のアサイン分" count={counts.mine}
-              isActive={folderFilter === "mine"}
+            <FolderItem icon={Inbox} label="新着" count={counts.new}
+              isActive={folderFilter === "new" && !accountFilter && !groupFilter}
+              onClick={() => { setFolderFilter("new"); setAccountFilter(null); setGroupFilter(null); }} />
+            <FolderItem icon={MessageCircleMore} label="対応中" count={counts.in_progress}
+              isActive={folderFilter === "in_progress" && !accountFilter && !groupFilter}
+              onClick={() => { setFolderFilter("in_progress"); setAccountFilter(null); setGroupFilter(null); }} />
+            <FolderItem icon={Check} label="完了"
+              count={0}
+              isActive={folderFilter === "completed" && !accountFilter && !groupFilter}
+              onClick={() => { setFolderFilter("completed"); setAccountFilter(null); setGroupFilter(null); }} />
+            <FolderItem icon={Ban} label="対応なし" count={0}
+              isActive={folderFilter === "no_action" && !accountFilter && !groupFilter}
+              onClick={() => { setFolderFilter("no_action"); setAccountFilter(null); setGroupFilter(null); }} />
+            <FolderItem icon={Send} label="一括送信済み" count={0}
+              isActive={folderFilter === "sent" && !accountFilter && !groupFilter}
+              onClick={() => { setFolderFilter("sent"); setAccountFilter(null); setGroupFilter(null); }} />
+          </div>
+
+          {/* Separator */}
+          <div className="my-3 border-t" />
+
+          {/* Personal folders */}
+          <div className="space-y-0.5">
+            <FolderItemWithAvatar label="自分が担当" count={counts.mine}
+              isActive={folderFilter === "mine" && !accountFilter && !groupFilter}
               onClick={() => { setFolderFilter("mine"); setAccountFilter(null); setGroupFilter(null); }} />
             <FolderItem icon={AtSign} label="メンションされた" count={counts.mentioned}
-              isActive={folderFilter === "mentioned"}
+              isActive={folderFilter === "mentioned" && !accountFilter && !groupFilter}
               onClick={() => { setFolderFilter("mentioned"); setAccountFilter(null); setGroupFilter(null); }} />
-            <FolderItem icon={Check} label="解決済み" count={0}
-              isActive={folderFilter === "resolved"}
-              onClick={() => { setFolderFilter("resolved"); setAccountFilter(null); setGroupFilter(null); }} />
             <FolderItem icon={Star} label="お気に入り" count={counts.favorite}
-              isActive={folderFilter === "favorite"}
+              isActive={folderFilter === "favorite" && !accountFilter && !groupFilter}
               onClick={() => { setFolderFilter("favorite"); setAccountFilter(null); setGroupFilter(null); }} />
-            <FolderItem icon={Ban} label="スパム" count={0}
-              isActive={folderFilter === "spam"}
-              onClick={() => { setFolderFilter("spam"); setAccountFilter(null); setGroupFilter(null); }} />
           </div>
 
-          {/* Accounts section */}
+          {/* Change #6: Rename to チャネル, Change #5: no count on account items */}
           <div className="mt-5">
-            <h3 className="mb-1 px-2 text-[12px] font-medium uppercase tracking-wider text-muted-foreground">
-              アカウント
-            </h3>
-            <div className="space-y-0.5">
-              {accounts.map((account) => {
-                const Icon = channelIcons[account.channel];
-                const nonSpam = conversations.filter((c) => !c.isSpam && c.accountId === account.id);
-                return (
-                  <FolderItem key={account.id} icon={Icon} label={account.name} count={nonSpam.length}
-                    isActive={accountFilter === account.id}
-                    onClick={() => { setAccountFilter(account.id); setFolderFilter("all"); setGroupFilter(null); }}
-                    iconColor={channelStyles[account.channel].text} />
-                );
-              })}
-            </div>
+            <button
+              onClick={() => setAccountsExpanded(!accountsExpanded)}
+              className="mb-1 flex w-full items-center gap-1 px-2 text-[12px] font-medium uppercase tracking-wider text-muted-foreground cursor-pointer hover:text-foreground transition-colors"
+            >
+              <ChevronDown className={cn("h-3 w-3 transition-transform", !accountsExpanded && "-rotate-90")} />
+              チャネル
+            </button>
+            {accountsExpanded && (
+              <div className="space-y-0.5">
+                {accounts.map((account) => {
+                  const Icon = channelIcons[account.channel];
+                  return (
+                    <FolderItem key={account.id} icon={Icon} label={account.name} count={0}
+                      isActive={accountFilter === account.id}
+                      onClick={() => { setAccountFilter(account.id); setFolderFilter("new"); setGroupFilter(null); }}
+                      iconColor={channelStyles[account.channel].text} />
+                  );
+                })}
+              </div>
+            )}
           </div>
 
-          {/* Groups section */}
+          {/* Groups section - Change #7: FolderOpen icon, Change #5: no count */}
           <div className="mt-5">
-            <h3 className="mb-1 px-2 text-[12px] font-medium uppercase tracking-wider text-muted-foreground">
+            <button
+              onClick={() => setGroupsExpanded(!groupsExpanded)}
+              className="mb-1 flex w-full items-center gap-1 px-2 text-[12px] font-medium uppercase tracking-wider text-muted-foreground cursor-pointer hover:text-foreground transition-colors"
+            >
+              <ChevronDown className={cn("h-3 w-3 transition-transform", !groupsExpanded && "-rotate-90")} />
               グループ
-            </h3>
-            <div className="space-y-0.5">
-              {contactGroups.map((group) => {
-                const groupConvCount = conversations.filter(
-                  (c) => !c.isSpam && group.contactIds.includes(c.contactId)
-                ).length;
-                return (
-                  <FolderItem key={group.id} icon={Inbox} label={group.name} count={groupConvCount}
+            </button>
+            {groupsExpanded && (
+              <div className="space-y-0.5">
+                {contactGroups.map((group) => (
+                  <FolderItem key={group.id} icon={FolderOpen} label={group.name} count={0}
                     isActive={groupFilter === group.id}
-                    onClick={() => { setGroupFilter(group.id); setFolderFilter("all"); setAccountFilter(null); }} />
-                );
-              })}
-            </div>
+                    onClick={() => { setGroupFilter(group.id); setFolderFilter("new"); setAccountFilter(null); }} />
+                ))}
+              </div>
+            )}
           </div>
         </nav>
+        {/* Change #2: Removed bottom 新規作成 button */}
       </div>
 
-      {/* ── Layer 3: Thread list (320px) ── */}
-      <div className="flex h-full w-[320px] shrink-0 flex-col border-r bg-background">
+      {folderFilter === "sent" && !accountFilter && !groupFilter ? (
+        /* Sent messages view - replaces thread list + detail */
+        <SentMessagesView />
+      ) : (
+        <>
+      {/* Layer 3: Thread list (280px) */}
+      <div className="flex h-full w-[280px] shrink-0 flex-col border-r bg-background">
         <div className="shrink-0 px-3 pt-3 pb-2 space-y-2">
           <div className="flex items-center gap-2 rounded-xl border px-3 py-2">
             <Search className="h-4 w-4 text-muted-foreground" />
@@ -390,63 +501,83 @@ export default function MessagesPage() {
               className="flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted-foreground/50" />
           </div>
 
-          {/* Section title header */}
           {currentSectionLabel && (
-            <div className="px-1">
+            <div className="px-1 flex items-center justify-between">
               <p className="text-[12px] font-medium text-muted-foreground truncate">{currentSectionLabel}</p>
+              {(folderFilter === "mine" || folderFilter === "mentioned" || folderFilter === "favorite") && !accountFilter && !groupFilter && (
+                <div className="flex rounded-md border overflow-hidden shrink-0">
+                  <button
+                    onClick={() => setPersonalFolderMode("active")}
+                    className={cn(
+                      "px-2 py-0.5 text-[11px] font-medium transition-colors cursor-pointer",
+                      personalFolderMode === "active" ? "bg-brand text-white" : "bg-background text-muted-foreground hover:bg-accent"
+                    )}>
+                    対応中
+                  </button>
+                  <button
+                    onClick={() => setPersonalFolderMode("all")}
+                    className={cn(
+                      "px-2 py-0.5 text-[11px] font-medium transition-colors cursor-pointer",
+                      personalFolderMode === "all" ? "bg-brand text-white" : "bg-background text-muted-foreground hover:bg-accent"
+                    )}>
+                    すべて
+                  </button>
+                </div>
+              )}
             </div>
           )}
-
-          {/* Unread only - prominent button style */}
-          <button
-            onClick={() => setUnreadOnly(!unreadOnly)}
-            className={cn(
-              "flex w-full items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-[14px] font-medium transition-colors cursor-pointer",
-              unreadOnly
-                ? "bg-brand text-white border-brand"
-                : "bg-accent/40 text-muted-foreground border-border/60 hover:bg-accent/60"
-            )}
-          >
-            <input type="checkbox" checked={unreadOnly} readOnly
-              className="h-4 w-4 rounded accent-brand pointer-events-none" />
-            未読のみ
-          </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto">
+        <div ref={conversationListRef} className="flex-1 overflow-y-auto">
           {filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
               <Inbox className="mb-2 h-8 w-8 opacity-30" />
-              <p className="text-[14px]">該当するスレッドがありません</p>
+              <p className="text-[14px]">メッセージがありません</p>
             </div>
           ) : (
             filtered.map((conv) => (
               <ConversationItem key={conv.id} conversation={conv}
                 isSelected={conv.id === selectedId}
-                unreadOnly={unreadOnly}
-                onSelect={() => setSelectedId(conv.id)} />
+                isRecentlyRead={recentlyReadIds.has(conv.id)}
+                isSelfAssigned={conv.assignees.some((a) => a.id === currentUser.id)}
+                folderFilter={folderFilter}
+                onSelect={() => setSelectedId(conv.id)}
+                onAnimationComplete={() => {
+                  setRecentlyReadIds(s => {
+                    const next = new Set(s);
+                    next.delete(conv.id);
+                    return next;
+                  });
+                }} />
             ))
           )}
         </div>
       </div>
 
-      {/* ── Layer 4: Thread detail ── */}
+      {/* Layer 4: Thread detail */}
       {selectedConversation ? (
         <ConversationDetail
+          key={selectedConversation.id}
           conversation={selectedConversation}
           conversations={conversations}
           onStatusChange={handleStatusChange}
-          onAssigneeChange={handleAssigneeChange}
+          onAssignSelf={handleAssignSelf}
+          onRemoveAssignee={handleRemoveAssignee}
+          onSetAssignee={handleSetAssignee}
           onOpenContactDetail={(contactId) => setDetailContactId(contactId)}
           onToggleFavorite={handleToggleFavorite}
-          onMarkSpam={handleMarkSpam}
           onRequestDelete={(id) => setDeleteConfirmId(id)}
-          onToggleNeedsAction={handleToggleNeedsAction}
-          onMarkUnread={handleMarkUnread}
           onSendMessage={handleSendMessage}
+          onLinkConversation={handleLinkConversation}
+          onUnlinkConversation={handleUnlinkConversation}
+          onDeleteMemo={handleDeleteMemo}
           onNavigateToContact={(contactId) => {
             router.push(`/contacts?contact=${contactId}&edit=true`);
           }}
+          onSelectConversation={(id) => setSelectedId(id)}
+          onPreviewImage={setPreviewImage}
+          showRightPane={showRightPane}
+          onToggleRightPane={() => setShowRightPane(!showRightPane)}
         />
       ) : (
         <div className="flex flex-1 items-center justify-center text-muted-foreground">
@@ -457,30 +588,14 @@ export default function MessagesPage() {
         </div>
       )}
 
-      {/* Contact detail slide panel */}
-      {detailContact && (
-        <ContactSlidePanel
-          contact={detailContact}
-          onClose={() => setDetailContactId(null)}
-          onNavigateToContact={(contactId) => {
-            router.push(`/contacts?contact=${contactId}&edit=true`);
-          }}
-        />
-      )}
-
       {/* Delete confirmation */}
       {deleteConfirmId && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/30"
           onClick={(e) => { if (e.target === e.currentTarget) setDeleteConfirmId(null); }}>
           <div className="w-[380px] rounded-xl bg-background p-6 shadow-xl">
-            <div className="mb-4 flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-destructive/10">
-                <AlertTriangle className="h-5 w-5 text-destructive" />
-              </div>
-              <div>
-                <h3 className="text-[16px] font-semibold">完全に削除しますか？</h3>
-                <p className="text-[13px] text-muted-foreground">この操作は取り消せません。</p>
-              </div>
+            <div className="mb-4">
+              <h3 className="text-[16px] font-semibold">完全に削除しますか？</h3>
+              <p className="text-[13px] text-muted-foreground mt-1">この操作は取り消せません。</p>
             </div>
             <div className="flex justify-end gap-2">
               <Button variant="outline" size="sm" className="h-9 px-4 text-[14px]" onClick={() => setDeleteConfirmId(null)}>
@@ -494,11 +609,390 @@ export default function MessagesPage() {
           </div>
         </div>
       )}
+
+      {/* Image preview modal - overlay click to close */}
+      {previewImage && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60"
+          onClick={() => setPreviewImage(null)}>
+          <div className="relative max-w-[90vw] max-h-[90vh]">
+            <button onClick={() => setPreviewImage(null)}
+              className="absolute -top-10 right-0 rounded-full bg-white/20 p-2 text-white hover:bg-white/30 cursor-pointer">
+              <X className="h-5 w-5" />
+            </button>
+            <img src={previewImage} alt="Preview" className="max-w-full max-h-[85vh] rounded-lg shadow-2xl" />
+          </div>
+        </div>
+      )}
+      </>
+      )}
     </div>
   );
 }
 
-/* ─── Folder Items ───────────────────────────────── */
+/* --- Sent Messages View --- */
+
+function SentMessagesView() {
+  const sentItems = [
+    {
+      id: "sent_1",
+      type: "bulk" as const,
+      subject: "【春の新商品】特別先行セールのご案内",
+      body: "{{名前}}様\n\nいつもご利用いただきありがとうございます。\nこの度、春の新商品ラインナップが完成いたしましたので、お得意様限定の先行セールをご案内いたします。\n\n■ セール期間\n2026年3月10日（火）〜 3月20日（金）\n\n■ 対象商品\n春の新作コレクション全品 20%OFF\n\n■ ご利用方法\nマイページにログイン後、クーポンコード「SPRING2026」をご入力ください。\n\nご不明な点がございましたら、お気軽にお問い合わせください。\n\n今後ともよろしくお願いいたします。",
+      recipientCount: 24,
+      recipientGroups: ["VIP顧客"],
+      recipients: [
+        { name: "山田 太郎", email: "yamada@example.com" },
+        { name: "佐藤 花子", email: "sato@example.com" },
+        { name: "鈴木 一郎", email: "suzuki@example.com" },
+        { name: "田村 裕子", email: "tamura@example.com" },
+        { name: "中村 健太", email: "nakamura@example.com" },
+        { name: "高橋 真一", email: "takahashi@example.com" },
+        { name: "伊藤 美穂", email: "ito@example.com" },
+        { name: "渡辺 大輔", email: "watanabe@example.com" },
+        { name: "小林 さくら", email: "kobayashi@example.com" },
+        { name: "加藤 雄介", email: "kato@example.com" },
+        { name: "吉田 真理", email: "yoshida@example.com" },
+        { name: "松本 翔太", email: "matsumoto@example.com" },
+        { name: "井上 美咲", email: "inoue@example.com" },
+        { name: "木村 太一", email: "kimura@example.com" },
+        { name: "清水 愛", email: "shimizu@example.com" },
+        { name: "山本 浩二", email: "yamamoto@example.com" },
+        { name: "中島 彩", email: "nakajima@example.com" },
+        { name: "前田 誠", email: "maeda@example.com" },
+        { name: "岡田 由美", email: "okada@example.com" },
+        { name: "藤田 龍", email: "fujita@example.com" },
+        { name: "後藤 麻衣", email: "goto@example.com" },
+        { name: "長谷川 翼", email: "hasegawa@example.com" },
+        { name: "村上 恵", email: "murakami@example.com" },
+        { name: "近藤 光", email: "kondo@example.com" },
+      ],
+      bccEmails: ["archive@example.com"],
+      variables: { "名前": "連絡先名", "会社名": "会社名" } as Record<string, string>,
+      sentAt: "2026-03-05 14:30",
+      sentBy: "田中 美咲",
+      channel: "email" as Channel,
+      fromEmail: "support@cobox.jp",
+    },
+    {
+      id: "sent_2",
+      type: "individual" as const,
+      subject: "Re: 商品に関するお問い合わせ",
+      body: "山田様\n\nお問い合わせいただきありがとうございます。\nご質問の件について回答いたします。\n\nお問い合わせいただいた商品「プレミアムセット A」の在庫状況ですが、現在在庫がございます。\nご注文いただければ、通常2〜3営業日以内に発送いたします。\n\n配送先やお支払い方法についてご不明点があれば、お気軽にご連絡ください。\n\nよろしくお願いいたします。\n\n田中 美咲\nカスタマーサポート",
+      recipientCount: 1,
+      recipientName: "山田 太郎",
+      recipients: [{ name: "山田 太郎", email: "yamada@example.com" }],
+      bccEmails: [],
+      sentAt: "2026-03-05 11:15",
+      sentBy: "田中 美咲",
+      channel: "email" as Channel,
+      fromEmail: "support@cobox.jp",
+      linkedContactId: "contact_2",
+    },
+    {
+      id: "sent_3",
+      type: "bulk" as const,
+      subject: "メンテナンスのお知らせ",
+      body: "{{名前}}様\n\nいつもご利用いただきありがとうございます。\n下記の日程でシステムメンテナンスを実施いたします。\n\n■ メンテナンス日時\n2026年3月8日（日） 02:00 〜 06:00（予定）\n\n■ 影響範囲\nメンテナンス中はサービス全体がご利用いただけません。\n\n■ ご注意\nメンテナンス前に作業中のデータは必ず保存してください。\n\nご不便をおかけしますが、サービス品質向上のため何卒ご了承ください。\n\n株式会社CoBox\nシステム運営チーム",
+      recipientCount: 156,
+      recipientGroups: ["全顧客", "パートナー"],
+      recipients: [
+        { name: "山田 太郎", email: "yamada@example.com" },
+        { name: "佐藤 花子", email: "sato@example.com" },
+        { name: "鈴木 一郎", email: "suzuki@example.com" },
+        { name: "高橋 真一", email: "takahashi@example.com" },
+        { name: "伊藤 美穂", email: "ito@example.com" },
+      ],
+      bccEmails: ["log@example.com"],
+      variables: { "名前": "連絡先名" } as Record<string, string>,
+      sentAt: "2026-03-04 09:00",
+      sentBy: "佐藤 健一",
+      channel: "email" as Channel,
+      fromEmail: "info@cobox.jp",
+    },
+    {
+      id: "sent_4",
+      type: "individual" as const,
+      subject: "",
+      body: "ありがとうございます！確認いたしました。\n商品の発送手続きを進めさせていただきますので、到着まで少々お待ちください。\n\n何かございましたらお気軽にご連絡ください。",
+      recipientCount: 1,
+      recipientName: "鈴木 花子",
+      recipients: [{ name: "鈴木 花子", email: "" }],
+      bccEmails: [],
+      sentAt: "2026-03-03 16:45",
+      sentBy: "田中 美咲",
+      channel: "line" as Channel,
+      linkedContactId: "contact_3",
+    },
+  ];
+
+  const [selectedSent, setSelectedSent] = useState<string | null>(null);
+  const [sentSearch, setSentSearch] = useState("");
+  const [recipientsExpanded, setRecipientsExpanded] = useState(false);
+  const [bodyTab, setBodyTab] = useState<"template" | "preview">("template");
+  const [previewRecipientIdx, setPreviewRecipientIdx] = useState(0);
+  const selectedItem = sentItems.find((s) => s.id === selectedSent);
+  const sentListRef = useRef<HTMLDivElement>(null);
+
+  const filteredSentItems = useMemo(() => {
+    if (!sentSearch.trim()) return sentItems;
+    const q = sentSearch.toLowerCase();
+    return sentItems.filter((item) =>
+      item.subject?.toLowerCase().includes(q) ||
+      item.body.toLowerCase().includes(q) ||
+      (item.recipientName && item.recipientName.toLowerCase().includes(q))
+    );
+  }, [sentSearch]);
+
+  // Keyboard navigation for sent messages
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        const idx = filteredSentItems.findIndex((s) => s.id === selectedSent);
+        let nextIdx = idx;
+        if (e.key === "ArrowDown" && idx < filteredSentItems.length - 1) nextIdx = idx + 1;
+        else if (e.key === "ArrowUp" && idx > 0) nextIdx = idx - 1;
+        if (nextIdx !== idx) {
+          setSelectedSent(filteredSentItems[nextIdx].id);
+          const container = sentListRef.current;
+          if (container) {
+            const buttons = container.querySelectorAll<HTMLButtonElement>(":scope > button");
+            buttons[nextIdx]?.scrollIntoView({ block: "nearest" });
+            buttons[nextIdx]?.focus();
+          }
+        }
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [selectedSent, filteredSentItems]);
+
+  // Resolve variable preview
+  const renderPreviewBody = (body: string, variables: Record<string, string>) => {
+    let result = body;
+    Object.entries(variables).forEach(([key, val]) => {
+      result = result.replace(new RegExp(`\\{\\{${key}\\}\\}`, "g"), val);
+    });
+    return result;
+  };
+
+  return (
+    <div className="flex flex-1 overflow-hidden">
+      {/* Sent list - 280px matching other folders */}
+      <div className="flex h-full w-[280px] shrink-0 flex-col border-r bg-background">
+        <div className="shrink-0 px-3 pt-3 pb-2 space-y-2">
+          <div className="flex items-center gap-2 rounded-xl border px-3 py-2">
+            <Search className="h-4 w-4 text-muted-foreground" />
+            <input value={sentSearch} onChange={(e) => setSentSearch(e.target.value)}
+              placeholder="一括送信済みを検索..."
+              className="flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted-foreground/50" />
+          </div>
+          <div className="px-1">
+            <p className="text-[12px] font-medium text-muted-foreground truncate">一括送信済み</p>
+          </div>
+        </div>
+
+        <div ref={sentListRef} className="flex-1 overflow-y-auto">
+          {filteredSentItems.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+              <Send className="mb-2 h-8 w-8 opacity-30" />
+              <p className="text-[14px]">送信メッセージがありません</p>
+            </div>
+          ) : (
+            filteredSentItems.map((item) => {
+              const Icon = channelIcons[item.channel];
+              const isSelected = selectedSent === item.id;
+              return (
+                <button key={item.id}
+                  onClick={() => setSelectedSent(item.id)}
+                  className={cn(
+                    "w-full text-left px-3 py-3 border-b transition-colors cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-inset",
+                    isSelected ? "bg-brand text-white" : "hover:bg-accent/30"
+                  )}>
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <Icon className={cn("h-3.5 w-3.5 shrink-0", isSelected ? "text-white/80" : channelStyles[item.channel].text)} />
+                    {item.type === "bulk" && (
+                      <span className={cn("rounded-full px-1.5 py-0.5 text-[10px] font-medium", isSelected ? "bg-white/20 text-white" : "bg-amber-100 text-amber-700")}>一括送信済み</span>
+                    )}
+                    <span className={cn("text-[11px] ml-auto", isSelected ? "text-white/70" : "text-muted-foreground")}>{item.sentAt}</span>
+                  </div>
+                  <p className={cn("text-[13px] font-medium truncate", isSelected && "text-white")}>
+                    {item.subject || item.body.slice(0, 30)}
+                  </p>
+                  <p className={cn("text-[12px] truncate mt-0.5", isSelected ? "text-white/70" : "text-muted-foreground")}>
+                    {item.type === "bulk"
+                      ? `${item.recipientCount}名に送信`
+                      : item.recipientName}
+                  </p>
+                </button>
+              );
+            })
+          )}
+        </div>
+      </div>
+
+      {/* Sent detail */}
+      {selectedItem ? (
+        <div className="flex-1 overflow-y-auto p-6">
+          <div className="max-w-2xl mx-auto">
+            <div className="flex items-center gap-2 mb-4">
+              {(() => { const Icon = channelIcons[selectedItem.channel]; return <Icon className={cn("h-4 w-4", channelStyles[selectedItem.channel].text)} />; })()}
+              {selectedItem.type === "bulk" && (
+                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700">一括送信済み</span>
+              )}
+              <span className="text-[13px] text-muted-foreground">{selectedItem.sentAt}</span>
+              <span className="text-[13px] text-muted-foreground">· 送信者: {selectedItem.sentBy}</span>
+            </div>
+
+            {selectedItem.subject && (
+              <h2 className="text-[18px] font-semibold mb-4">{selectedItem.subject}</h2>
+            )}
+
+            {/* Recipients info with email addresses */}
+            <div className="rounded-lg border bg-accent/20 p-4 mb-4 space-y-2">
+              {selectedItem.channel === "email" && selectedItem.fromEmail && (
+                <div className="flex items-start gap-2">
+                  <span className="text-[12px] font-medium text-muted-foreground w-12 shrink-0 pt-0.5">From</span>
+                  <span className="text-[13px]">{selectedItem.fromEmail}</span>
+                </div>
+              )}
+              <div className="flex items-start gap-2">
+                <span className="text-[12px] font-medium text-muted-foreground w-12 shrink-0 pt-0.5">To</span>
+                <div className="text-[13px] flex-1 min-w-0">
+                  {selectedItem.type === "bulk" && (
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-2">
+                        <span>{selectedItem.recipientCount}名</span>
+                        {selectedItem.recipientGroups && (
+                          <span className="flex items-center gap-1">
+                            <FolderOpen className="h-3 w-3 text-muted-foreground" />
+                            <span className="text-muted-foreground">{selectedItem.recipientGroups.join(", ")}</span>
+                          </span>
+                        )}
+                      </div>
+                      {selectedItem.recipients && selectedItem.recipients.length > 0 && (
+                        <div className="space-y-0.5 text-[12px]">
+                          {(recipientsExpanded ? selectedItem.recipients : selectedItem.recipients.slice(0, 3)).map((r, i) => (
+                            <div key={i} className="truncate">
+                              <span>{r.name}</span>
+                              {r.email && <span className="text-muted-foreground ml-1">&lt;{r.email}&gt;</span>}
+                            </div>
+                          ))}
+                          {!recipientsExpanded && selectedItem.recipients.length > 3 && (
+                            <button onClick={() => setRecipientsExpanded(true)}
+                              className="text-brand hover:underline cursor-pointer text-[12px]">
+                              他 {selectedItem.recipients.length - 3}名を表示
+                            </button>
+                          )}
+                          {recipientsExpanded && selectedItem.recipients.length > 3 && (
+                            <button onClick={() => setRecipientsExpanded(false)}
+                              className="text-brand hover:underline cursor-pointer text-[12px]">
+                              折りたたむ
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {selectedItem.type === "individual" && selectedItem.recipients && (
+                    <div>
+                      <span>{selectedItem.recipients[0]?.name}</span>
+                      {selectedItem.recipients[0]?.email && (
+                        <span className="text-muted-foreground ml-1.5">&lt;{selectedItem.recipients[0].email}&gt;</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+              {selectedItem.bccEmails && selectedItem.bccEmails.length > 0 && (
+                <div className="flex items-start gap-2">
+                  <span className="text-[12px] font-medium text-muted-foreground w-12 shrink-0 pt-0.5">BCC</span>
+                  <span className="text-[13px] text-muted-foreground">{selectedItem.bccEmails.join(", ")}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Linked contact */}
+            {selectedItem.linkedContactId && (() => {
+              const contact = contacts.find((c) => c.id === selectedItem.linkedContactId);
+              return contact ? (
+                <div className="flex items-center gap-2 mb-4 rounded-lg border px-3 py-2">
+                  <User className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="text-[13px]">連絡先: {contact.name}</span>
+                  {contact.company && <span className="text-[12px] text-muted-foreground">({contact.company})</span>}
+                </div>
+              ) : null;
+            })()}
+
+            {/* Message body with template/preview tabs for bulk */}
+            {selectedItem.type === "bulk" && selectedItem.variables ? (
+              <div className="rounded-lg border bg-white">
+                <div className="flex border-b">
+                  <button onClick={() => setBodyTab("template")}
+                    className={cn("flex-1 px-4 py-2.5 text-[13px] font-medium transition-colors cursor-pointer -mb-px border-b-2",
+                      bodyTab === "template" ? "text-foreground" : "text-muted-foreground hover:text-foreground border-transparent"
+                    )}
+                    style={bodyTab === "template" ? { borderBottomColor: "var(--brand)" } : undefined}
+                  >入力した本文</button>
+                  <button onClick={() => setBodyTab("preview")}
+                    className={cn("flex-1 px-4 py-2.5 text-[13px] font-medium transition-colors cursor-pointer -mb-px border-b-2",
+                      bodyTab === "preview" ? "text-foreground" : "text-muted-foreground hover:text-foreground border-transparent"
+                    )}
+                    style={bodyTab === "preview" ? { borderBottomColor: "var(--brand)" } : undefined}
+                  >実際の文面</button>
+                </div>
+                {bodyTab === "template" ? (
+                  <div className="p-5">
+                    <div className="text-[15px] leading-relaxed whitespace-pre-wrap">{selectedItem.body}</div>
+                  </div>
+                ) : (
+                  <div className="p-5">
+                    <div className="mb-3 flex items-center gap-2">
+                      <span className="text-[12px] text-muted-foreground">送信先:</span>
+                      <select
+                        value={previewRecipientIdx}
+                        onChange={(e) => setPreviewRecipientIdx(Number(e.target.value))}
+                        className="rounded-md border px-2 py-1 text-[13px] outline-none focus:border-brand/40 cursor-pointer">
+                        {selectedItem.recipients.map((r, i) => (
+                          <option key={i} value={i}>{r.name} &lt;{r.email}&gt;</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="rounded-md border bg-accent/10 p-4 text-[15px] leading-relaxed whitespace-pre-wrap">
+                      {renderPreviewBody(selectedItem.body, {
+                        ...selectedItem.variables,
+                        ...Object.fromEntries(Object.entries(selectedItem.variables).map(([key]) => {
+                          const recipient = selectedItem.recipients[previewRecipientIdx];
+                          if (key === "名前") return [key, recipient?.name ?? ""];
+                          if (key === "会社名") return [key, "株式会社サンプル"];
+                          return [key, selectedItem.variables[key]];
+                        }))
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="rounded-lg border bg-white p-5">
+                <div className="text-[15px] leading-relaxed whitespace-pre-wrap">{selectedItem.body}</div>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-1 items-center justify-center text-muted-foreground">
+          <div className="text-center">
+            <Send className="mx-auto mb-3 h-10 w-10 opacity-20" />
+            <p className="text-[15px]">送信メッセージを選択してください</p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* --- Folder Items --- */
 
 function FolderItem({ icon: Icon, label, count, isActive, onClick, iconColor }: {
   icon: React.ElementType; label: string; count: number; isActive: boolean;
@@ -512,7 +1006,14 @@ function FolderItem({ icon: Icon, label, count, isActive, onClick, iconColor }: 
       )}>
       <Icon className={cn("h-[16px] w-[16px] shrink-0", !isActive && iconColor)} />
       <span className="flex-1 truncate text-left">{label}</span>
-      {count > 0 && <span className="text-[12px] tabular-nums text-muted-foreground/60">{count}</span>}
+      {count > 0 && (
+        <span className={cn(
+          "min-w-[20px] text-center rounded-full px-1.5 py-0.5 text-[11px] font-semibold tabular-nums leading-none",
+          isActive ? "bg-brand text-white" : "bg-foreground/8 text-muted-foreground"
+        )}>
+          {count}
+        </span>
+      )}
     </button>
   );
 }
@@ -528,51 +1029,59 @@ function FolderItemWithAvatar({ label, count, isActive, onClick }: {
       )}>
       <Avatar src={currentUser.avatar} fallback={currentUser.name} size="sm" className="h-[16px] w-[16px] text-[5px]" />
       <span className="flex-1 truncate text-left">{label}</span>
-      {count > 0 && <span className="text-[12px] tabular-nums text-muted-foreground/60">{count}</span>}
+      {count > 0 && (
+        <span className={cn(
+          "min-w-[20px] text-center rounded-full px-1.5 py-0.5 text-[11px] font-semibold tabular-nums leading-none",
+          isActive ? "bg-brand text-white" : "bg-foreground/8 text-muted-foreground"
+        )}>
+          {count}
+        </span>
+      )}
     </button>
   );
 }
 
-/* ─── Conversation List Item ─────────────────────── */
+/* --- Conversation List Item --- */
+/* Change #9: added isSelfAssigned prop for green background */
 
-function ConversationItem({ conversation, isSelected, unreadOnly, onSelect }: {
-  conversation: Conversation; isSelected: boolean; unreadOnly: boolean; onSelect: () => void;
+function ConversationItem({ conversation, isSelected, isRecentlyRead, isSelfAssigned, folderFilter, onSelect, onAnimationComplete }: {
+  conversation: Conversation; isSelected: boolean; isRecentlyRead?: boolean;
+  isSelfAssigned: boolean;
+  folderFilter: FolderFilter;
+  onSelect: () => void; onAnimationComplete?: () => void;
 }) {
-  const { contactName, channel, lastMessage, lastMessageAt, assignee, subject } = conversation;
+  const { contactName, channel, lastMessage, lastMessageAt, assignees, subject } = conversation;
   const Icon = channelIcons[channel];
   const style = channelStyles[channel];
   const unread = isUnread(conversation);
-  // Priority: resolved > unread
-  const isResolved = conversation.status === "resolved";
+  const isCompleted = conversation.status === "completed";
+  const isNoAction = conversation.status === "no_action";
 
-  // Track when unread state changes to animate
-  const prevUnreadRef = useRef(unread);
-  const [justRead, setJustRead] = useState(false);
-
-  useEffect(() => {
-    if (prevUnreadRef.current && !unread) {
-      setJustRead(true);
-      const timer = setTimeout(() => setJustRead(false), 400);
-      return () => clearTimeout(timer);
-    }
-    prevUnreadRef.current = unread;
-  }, [unread]);
-
-  // Display: subject only for email, lastMessage (1 line) for others
   const displayText = channel === "email" && subject ? subject : lastMessage;
+
+  // Show status labels for 完了/対応なし/自分が担当 folders
+  const showStatus = folderFilter === "completed" || folderFilter === "no_action" || folderFilter === "mine";
+  const statusLabels: Record<string, string> = { open: "対応中", completed: "完了", no_action: "対応なし" };
+  const statusLabel = statusLabels[conversation.status] ?? "新着";
+  const statusColor = conversation.status === "completed" ? "text-brand" : conversation.status === "no_action" ? "text-muted-foreground" : "text-foreground";
+  const statusIcon = conversation.status === "completed" ? <Check className="h-3.5 w-3.5" /> : conversation.status === "no_action" ? <Ban className="h-3.5 w-3.5" /> : <MessageCircleMore className="h-3.5 w-3.5" />;
 
   return (
     <button onClick={onSelect}
+      onAnimationEnd={() => {
+        if (isRecentlyRead && onAnimationComplete) onAnimationComplete();
+      }}
       className={cn(
-        "flex w-full gap-3 border-b px-4 py-3 text-left transition-all duration-300 cursor-pointer",
-        justRead && unreadOnly && "animate-read-fade",
+        "flex w-full gap-2.5 border-b px-3 py-2.5 text-left transition-all duration-300 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-inset",
         isSelected
           ? "bg-brand text-white"
-          : isResolved
-            ? "bg-background hover:bg-accent/40"
-            : unread
-              ? "bg-brand/4 hover:bg-brand/8"
-              : "bg-background hover:bg-accent/40"
+          : isSelfAssigned
+            ? "bg-brand/5 hover:bg-brand/10"
+            : isCompleted || isNoAction
+              ? "bg-background hover:bg-accent/40"
+              : unread
+                ? "bg-brand/4 hover:bg-brand/8"
+                : "bg-background hover:bg-accent/40"
       )}>
       {/* Channel icon */}
       <div className={cn(
@@ -603,20 +1112,31 @@ function ConversationItem({ conversation, isSelected, unreadOnly, onSelect }: {
           {displayText}
         </p>
 
-        {/* Assignee */}
+        {/* Assignees / Status */}
         <div className="mt-1.5 flex items-center justify-between">
           <div className="flex items-center gap-1">
-            {assignee ? (
-              <span className={cn("flex items-center gap-1 truncate text-[12px]",
-                isSelected ? "text-white/60" : "text-muted-foreground")}>
-                <Avatar src={assignee.avatar} fallback={assignee.name} size="sm" className="h-4 w-4 text-[6px]" />
-                {assignee.name}
+            {showStatus ? (
+              <span className={cn("flex items-center gap-1 text-[12px] font-medium truncate",
+                isSelected ? "text-white/60" : statusColor)}>
+                {statusIcon}
+                <span className="truncate">{statusLabel}</span>
               </span>
+            ) : assignees.length > 0 ? (
+              <div className="flex items-center gap-1 min-w-0 overflow-hidden">
+                <div className="flex items-center shrink-0">
+                  {assignees.map((a) => (
+                    <Avatar key={a.id} src={a.avatar} fallback={a.name} size="sm" className="h-4 w-4 text-[6px]" />
+                  ))}
+                </div>
+                <span className={cn("text-[12px] truncate", isSelected ? "text-white/60" : "text-muted-foreground")}>
+                  {assignees[0].name}{assignees.length > 1 ? ` +${assignees.length - 1}` : ""}
+                </span>
+              </div>
             ) : (
-              <span className={cn("flex items-center gap-1 text-[12px] font-medium",
+              <span className={cn("flex items-center gap-1 text-[12px] font-medium truncate",
                 isSelected ? "text-white/50" : "text-muted-foreground/60")}>
-                <CircleDashed className="h-4 w-4" />
-                未アサイン
+                <CircleDashed className="h-4 w-4 shrink-0" />
+                <span className="truncate">担当者なし</span>
               </span>
             )}
           </div>
@@ -629,22 +1149,122 @@ function ConversationItem({ conversation, isSelected, unreadOnly, onSelect }: {
   );
 }
 
-/* ─── Conversation Detail ────────────────────────── */
+/* --- Assignee Popover (multi-select, focus-out close) --- */
 
-function ConversationDetail({ conversation, conversations: allConvs, onStatusChange, onAssigneeChange,
-  onOpenContactDetail, onToggleFavorite, onMarkSpam, onRequestDelete, onToggleNeedsAction,
-  onMarkUnread, onSendMessage, onNavigateToContact }: {
+function AssigneePopover({ conversation, isSelfAssigned, roundLeft, onSetAssignee, onRemoveAssignee, onClearAssignees }: {
+  conversation: Conversation;
+  isSelfAssigned: boolean;
+  roundLeft?: boolean;
+  onSetAssignee: (id: string, assigneeId: string) => void;
+  onRemoveAssignee: (id: string, assigneeId: string) => void;
+  onClearAssignees: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const isNoOne = conversation.assignees.length === 0;
+
+  return (
+    <div ref={ref} className="relative">
+      <Button variant={isSelfAssigned ? "ghost" : "outline"} size="sm"
+        className={cn(
+          "h-9 gap-1 text-[14px] px-3",
+          !isSelfAssigned && !roundLeft && "rounded-l-none",
+          isSelfAssigned && "border"
+        )}
+        onClick={() => setOpen(!open)}>
+        {conversation.assignees.length > 0 ? (
+          <span className="flex items-center gap-1">
+            {conversation.assignees.map((a) => (
+              <Avatar key={a.id} src={a.avatar} fallback={a.name} size="sm" className="h-4 w-4 text-[6px]" />
+            ))}
+            {conversation.assignees.length === 1
+              ? conversation.assignees[0].name
+              : `${conversation.assignees[0].name}+${conversation.assignees.length - 1}`}
+          </span>
+        ) : (
+          <span className="flex items-center gap-1 text-muted-foreground">
+            <CircleDashed className="h-3.5 w-3.5" />
+            担当者なし
+          </span>
+        )}
+        <ChevronDown className="h-2.5 w-2.5 text-muted-foreground" />
+      </Button>
+      {open && (
+        <div className="absolute right-0 z-50 mt-1 min-w-[200px] rounded-lg border bg-popover p-1 shadow-md">
+          {/* 担当者なし option */}
+          <button
+            onClick={() => {
+              if (!isNoOne) onClearAssignees(conversation.id);
+            }}
+            className={cn(
+              "flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-[15px] transition-colors cursor-pointer",
+              isNoOne ? "bg-accent text-foreground font-medium" : "text-muted-foreground hover:bg-accent hover:text-foreground"
+            )}>
+            <CircleDashed className="h-4 w-4" />
+            担当者なし
+            {isNoOne && <Check className="h-3 w-3 ml-auto text-brand" />}
+          </button>
+          <div className="my-1 border-t" />
+          {/* Team members */}
+          {teamMembers.map((m) => {
+            const isAssigned = conversation.assignees.some((a) => a.id === m.id);
+            return (
+              <button key={m.id}
+                onClick={() => isAssigned ? onRemoveAssignee(conversation.id, m.id) : onSetAssignee(conversation.id, m.id)}
+                className={cn(
+                  "flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-[15px] transition-colors cursor-pointer",
+                  isAssigned ? "bg-accent text-foreground font-medium" : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                )}>
+                <Avatar src={m.avatar} fallback={m.name} size="sm" className="h-4 w-4 text-[6px]" />
+                {m.name}
+                {isAssigned && <Check className="h-3 w-3 ml-auto text-brand" />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* --- Conversation Detail --- */
+
+function ConversationDetail({ conversation, conversations: allConvs, onStatusChange,
+  onAssignSelf, onRemoveAssignee, onSetAssignee,
+  onOpenContactDetail, onToggleFavorite, onRequestDelete,
+  onSendMessage, onLinkConversation, onUnlinkConversation,
+  onNavigateToContact, onSelectConversation, onPreviewImage,
+  onDeleteMemo,
+  showRightPane, onToggleRightPane }: {
   conversation: Conversation; conversations: Conversation[];
   onStatusChange: (id: string, status: Status) => void;
-  onAssigneeChange: (id: string, assigneeId: string | null) => void;
+  onAssignSelf: (id: string) => void;
+  onRemoveAssignee: (id: string, assigneeId: string) => void;
+  onSetAssignee: (id: string, assigneeId: string) => void;
   onOpenContactDetail: (contactId: string) => void;
   onToggleFavorite: (id: string) => void;
-  onMarkSpam: (id: string) => void;
   onRequestDelete: (id: string) => void;
-  onToggleNeedsAction: (id: string) => void;
-  onMarkUnread: (id: string) => void;
-  onSendMessage: (id: string, content: string, isInternal: boolean) => void;
+  onSendMessage: (id: string, content: string, isInternal: boolean, attachments?: Attachment[]) => void;
+  onLinkConversation: (convId: string, targetId: string) => void;
+  onUnlinkConversation: (convId: string, targetId: string) => void;
   onNavigateToContact: (contactId: string) => void;
+  onSelectConversation: (id: string) => void;
+  onPreviewImage: (url: string) => void;
+  onDeleteMemo: (convId: string, messageId: string) => void;
+  showRightPane: boolean;
+  onToggleRightPane: () => void;
 }) {
   const [replyText, setReplyText] = useState("");
   const [memoText, setMemoText] = useState("");
@@ -662,6 +1282,25 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
   const [mentionPos, setMentionPos] = useState<{ top: number; left: number } | null>(null);
   const mentionStartRef = useRef<number>(-1);
 
+  // LINE stamp picker state
+  const [showStampPicker, setShowStampPicker] = useState(false);
+  const [stampPickerPos, setStampPickerPos] = useState({ left: 0, bottom: 0 });
+  const stampPickerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!showStampPicker) return;
+    const handler = (e: MouseEvent) => {
+      if (stampPickerRef.current && !stampPickerRef.current.contains(e.target as Node)) {
+        setShowStampPicker(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showStampPicker]);
+
+  // File input ref for attachments
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [attachedFiles, setAttachedFiles] = useState<{ name: string; size: string; type: string; url: string }[]>([]);
+
   const mentionCandidates = useMemo(() => {
     if (mentionQuery === null) return [];
     const q = mentionQuery.toLowerCase();
@@ -671,8 +1310,6 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
   const insertMention = useCallback((memberName: string) => {
     const start = mentionStartRef.current;
     const before = memoText.substring(0, start);
-    const afterCursor = memoText.substring(memoRef.current?.selectionStart ?? start);
-    // Find end of the @query
     const queryEnd = memoRef.current?.selectionStart ?? start;
     const after = memoText.substring(queryEnd);
     const newText = `${before}@${memberName} ${after}`;
@@ -680,10 +1317,9 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
     setMentionQuery(null);
     setMentionIndex(0);
     mentionStartRef.current = -1;
-    // Focus and set cursor position after the inserted mention
     requestAnimationFrame(() => {
       if (memoRef.current) {
-        const cursorPos = before.length + memberName.length + 2; // +2 for @ and space
+        const cursorPos = before.length + memberName.length + 2;
         memoRef.current.focus();
         memoRef.current.setSelectionRange(cursorPos, cursorPos);
       }
@@ -715,38 +1351,20 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
 
   const handleMemoKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (mentionQuery !== null && mentionCandidates.length > 0) {
-      if (e.key === "ArrowDown") {
-        e.preventDefault();
-        setMentionIndex((prev) => Math.min(prev + 1, mentionCandidates.length - 1));
-        return;
-      }
-      if (e.key === "ArrowUp") {
-        e.preventDefault();
-        setMentionIndex((prev) => Math.max(prev - 1, 0));
-        return;
-      }
-      if (e.key === "Enter" || e.key === "Tab") {
-        e.preventDefault();
-        insertMention(mentionCandidates[mentionIndex].name);
-        return;
-      }
-      if (e.key === "Escape") {
-        e.preventDefault();
-        setMentionQuery(null);
-        return;
-      }
+      if (e.key === "ArrowDown") { e.preventDefault(); setMentionIndex((prev) => Math.min(prev + 1, mentionCandidates.length - 1)); return; }
+      if (e.key === "ArrowUp") { e.preventDefault(); setMentionIndex((prev) => Math.max(prev - 1, 0)); return; }
+      if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); insertMention(mentionCandidates[mentionIndex].name); return; }
+      if (e.key === "Escape") { e.preventDefault(); setMentionQuery(null); return; }
     }
-    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-      e.preventDefault();
-      handleSendMemo();
-    }
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); handleSendMemo(); }
   };
 
   const Icon = channelIcons[conversation.channel];
   const style = channelStyles[conversation.channel];
 
   const isEmail = conversation.channel === "email";
-  const isSelfAssigned = conversation.assignee?.id === currentUser.id;
+  const isLine = conversation.channel === "line";
+  const isSelfAssigned = conversation.assignees.some((a) => a.id === currentUser.id);
 
   const contactObj = contacts.find((c) => c.id === conversation.contactId);
   const accountObj = accounts.find((a) => a.id === conversation.accountId);
@@ -768,18 +1386,26 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [conversation.messages.length]);
 
-  // Auto-assign on typing
   const handleReplyChange = (text: string) => {
     setReplyText(text);
     if (text.length === 1 && !isSelfAssigned) {
-      onAssigneeChange(conversation.id, currentUser.id);
+      onAssignSelf(conversation.id);
     }
   };
 
   const handleSendReply = () => {
-    if (!replyText.trim()) return;
-    onSendMessage(conversation.id, replyText.trim(), false);
+    if (!replyText.trim() && attachedFiles.length === 0) return;
+    const content = replyText.trim() || (attachedFiles.length > 0 ? `[添付ファイル: ${attachedFiles.map(f => f.name).join(", ")}]` : "");
+    const msgAttachments: Attachment[] = attachedFiles.map((f, i) => ({
+      id: `att-${Date.now()}-${i}`,
+      name: f.name,
+      type: f.type === "image" ? "image" as const : "file" as const,
+      url: f.url,
+      size: f.size,
+    }));
+    onSendMessage(conversation.id, content, false, msgAttachments);
     setReplyText("");
+    setAttachedFiles([]);
   };
 
   const handleSendMemo = () => {
@@ -788,256 +1414,592 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
     setMemoText("");
   };
 
+  // Right pane data
+  const linkedContact = conversation.linkedContactId
+    ? contacts.find((c) => c.id === conversation.linkedContactId)
+    : null;
+  const contactConversations = linkedContact
+    ? allConvs.filter((c) => c.contactId === linkedContact.id)
+    : allConvs.filter((c) => c.contactId === conversation.contactId);
+  const linkedIds = conversation.linkedConversationIds ?? [];
+
+  // Change #18: linked conversations data
+  const linkedConversations = linkedIds.map((id) => allConvs.find((c) => c.id === id)).filter(Boolean) as Conversation[];
+
+  // Two-stage responsive header:
+  // level 0: full (all buttons + labels)
+  // level 1: hide 担当する button
+  // level 2: also hide 完了/対応なし labels (icons only)
+  const headerRef = useRef<HTMLElement>(null);
+  const [headerLevel, setHeaderLevel] = useState(0);
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const w = entry.contentRect.width;
+        if (w < 500) setHeaderLevel(2);
+        else if (w < 620) setHeaderLevel(1);
+        else setHeaderLevel(0);
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   return (
-    <div className="flex h-full min-w-[400px] flex-1 flex-col bg-background">
-      {/* Header */}
-      <header className="flex shrink-0 items-center justify-between border-b px-5 py-3">
-        <button onClick={() => onOpenContactDetail(conversation.contactId)}
-          className="flex min-w-0 items-center gap-3 cursor-pointer rounded-lg px-2 py-1.5 -ml-2 transition-colors hover:bg-accent active:bg-accent/80">
-          <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-full", style.bg)}>
-            <Icon className={cn("h-4 w-4", style.text)} />
-          </div>
-          <div className="min-w-0 text-left">
-            <p className="truncate text-[16px] font-semibold leading-tight">{conversation.contactName}</p>
-            {contactObj?.company && (
-              <p className="truncate text-[13px] leading-tight text-muted-foreground">{contactObj.company}</p>
-            )}
-          </div>
-        </button>
+    <div className="flex h-full min-w-0 flex-1">
+      {/* Main conversation area */}
+      <div className="flex h-full min-w-[400px] flex-1 flex-col bg-background">
+        {/* Action bar */}
+        <header ref={headerRef} className="relative flex shrink-0 items-center justify-between gap-2 border-b px-5 py-3 min-w-0" style={{ minHeight: "70px" }}>
+          {/* clicking contact name toggles right pane */}
+          <button onClick={onToggleRightPane}
+            className="flex min-w-0 items-center gap-3 cursor-pointer rounded-lg px-2 py-1.5 -ml-2 transition-colors hover:bg-accent active:bg-accent/80" style={{ maxWidth: "40%" }}>
+            <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-full", style.bg)}>
+              <Icon className={cn("h-4 w-4", style.text)} />
+            </div>
+            <div className="min-w-0 text-left">
+              <p className="truncate text-[16px] font-semibold leading-tight">{conversation.contactName}</p>
+              {contactObj?.company && (
+                <p className="truncate text-[13px] leading-tight text-muted-foreground">{contactObj.company}</p>
+              )}
+            </div>
+          </button>
 
-        <div className="flex items-center gap-1.5">
-          {/* Favorite */}
-          <Tooltip content="お気に入り" side="bottom">
-            <Button variant="ghost" size="icon-sm" className="h-8 w-8"
-              onClick={() => onToggleFavorite(conversation.id)}>
-              <Star className={cn("h-4 w-4",
-                conversation.isFavorite ? "fill-amber-400 text-amber-400" : "text-muted-foreground")} />
-            </Button>
-          </Tooltip>
-
-          {/* Assign */}
-          <div className="flex items-center rounded-lg border">
-            <Button variant="ghost" size="sm"
-              className={cn("h-9 gap-1.5 rounded-r-none border-r text-[14px] px-3",
-                isSelfAssigned && "text-destructive hover:text-destructive")}
-              onClick={() => onAssigneeChange(conversation.id, isSelfAssigned ? null : currentUser.id)}>
-              {isSelfAssigned ? "アサインを解除" : "自分にアサイン"}
-            </Button>
-            <Dropdown align="right"
-              trigger={
-                <Button variant="ghost" size="sm" className="h-9 gap-1 rounded-l-none text-[14px] px-3">
-                  {conversation.assignee ? (
-                    <>
-                      <Avatar src={conversation.assignee.avatar} fallback={conversation.assignee.name} size="sm" className="h-4 w-4 text-[6px]" />
-                      {conversation.assignee.name}
-                    </>
-                  ) : (
-                    <span className="flex items-center gap-1">
-                      <CircleDashed className="h-3.5 w-3.5" />
-                      未アサイン
-                    </span>
-                  )}
-                  <ChevronDown className="h-2.5 w-2.5 text-muted-foreground" />
+          <div className="flex items-center gap-1.5 shrink-0 justify-end">
+            {/* Assign self + assignee dropdown */}
+            <div className="flex items-center">
+              {!isSelfAssigned && headerLevel < 1 && (
+                <Button variant="outline" size="sm" className="h-9 gap-1.5 text-[14px] px-3 rounded-r-none border-r-0"
+                  onClick={() => onAssignSelf(conversation.id)}>
+                  <Avatar src={currentUser.avatar} fallback={currentUser.name} size="sm" className="h-4 w-4 text-[6px]" />
+                  担当する
                 </Button>
-              }>
-              <DropdownItem active={!conversation.assignee} onClick={() => onAssigneeChange(conversation.id, null)}>
-                <CircleDashed className="h-3.5 w-3.5" /> 未アサイン
-              </DropdownItem>
-              {teamMembers.map((m) => (
-                <DropdownItem key={m.id} active={conversation.assignee?.id === m.id}
-                  onClick={() => onAssigneeChange(conversation.id, m.id)}>
-                  <Avatar src={m.avatar} fallback={m.name} size="sm" className="h-4 w-4 text-[6px]" />
-                  {m.name}
-                </DropdownItem>
-              ))}
-            </Dropdown>
-          </div>
-
-          {/* Needs action / Resolve */}
-          {conversation.needsAction ? (
-            <Dropdown align="right"
-              trigger={
-                <Button size="sm"
-                  className="h-9 gap-1.5 text-[14px] px-4 bg-amber-500 hover:bg-amber-600">
-                  要対応
-                  <ChevronDown className="h-3 w-3" />
-                </Button>
-              }>
-              <DropdownItem onClick={() => onToggleNeedsAction(conversation.id)}>
-                要対応を解除する
-              </DropdownItem>
-              <DropdownItem onClick={() => { onStatusChange(conversation.id, "resolved"); }}>
-                解決済みにする
-              </DropdownItem>
-            </Dropdown>
-          ) : conversation.status === "resolved" ? (
-            <Dropdown align="right"
-              trigger={
-                <Button size="sm"
-                  className="h-9 gap-1.5 text-[14px] px-4 bg-foreground/10 text-foreground hover:bg-foreground/15">
-                  解決済み
-                  <ChevronDown className="h-3 w-3" />
-                </Button>
-              }>
-              <DropdownItem onClick={() => onStatusChange(conversation.id, "open")}>
-                未対応にもどす
-              </DropdownItem>
-              <DropdownItem onClick={() => { onStatusChange(conversation.id, "open"); onToggleNeedsAction(conversation.id); }}>
-                要対応にする
-              </DropdownItem>
-            </Dropdown>
-          ) : (
-            <Button size="sm"
-              className="h-9 gap-1.5 text-[14px] px-4 bg-brand hover:bg-brand/90"
-              onClick={() => onToggleNeedsAction(conversation.id)}>
-              要対応にする
-            </Button>
-          )}
-
-          {/* More options */}
-          <Dropdown align="right"
-            trigger={<Button variant="ghost" size="icon-sm" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button>}>
-            <DropdownItem onClick={() => onMarkUnread(conversation.id)}>
-              <Mail className="h-3.5 w-3.5" /> 未読にする
-            </DropdownItem>
-            <DropdownItem onClick={() => onMarkSpam(conversation.id)}>
-              <Ban className="h-3.5 w-3.5" /> スパムとして報告
-            </DropdownItem>
-            <DropdownItem className="text-destructive" onClick={() => onRequestDelete(conversation.id)}>
-              <Trash2 className="h-3.5 w-3.5" /> 完全に削除
-            </DropdownItem>
-          </Dropdown>
-        </div>
-      </header>
-
-      {/* Messages + inline reply */}
-      <div className="flex-1 overflow-y-auto px-5 py-5">
-        <div className="mx-auto max-w-2xl space-y-4">
-          {conversation.messages.map((message) => (
-            <MessageBubble key={message.id} message={message} channel={conversation.channel} contactEmail={contactObj?.email} />
-          ))}
-
-          {/* Inline reply input - after last message */}
-          <div ref={messagesEndRef} />
-
-          {/* Reply input - right-aligned, with channel header attached */}
-          <div className="flex justify-end">
-            <div className="w-[70%] rounded-lg border bg-background focus-within:border-brand/30 overflow-hidden">
-              {/* Channel reply header */}
-              <ReplyHeader
-                channel={conversation.channel}
-                channelLabel={channelLabel}
-                accountName={accountName}
-                isEmail={isEmail}
-                emailFrom={emailFrom} setEmailFrom={setEmailFrom}
-                emailTo={emailTo} setEmailTo={setEmailTo}
-                emailCc={emailCc} setEmailCc={setEmailCc}
-                emailBcc={emailBcc} setEmailBcc={setEmailBcc}
-                emailSubject={emailSubject} setEmailSubject={setEmailSubject}
-              />
-              <textarea value={replyText} onChange={(e) => handleReplyChange(e.target.value)}
-                placeholder="メッセージを入力..."
-                rows={3}
-                className="w-full resize-none bg-transparent px-3 pt-2.5 pb-0 text-[15px] leading-relaxed outline-none placeholder:text-muted-foreground/50"
-                onKeyDown={(e) => {
-                  if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-                    e.preventDefault();
-                    handleSendReply();
-                  }
+              )}
+              <AssigneePopover
+                conversation={conversation}
+                isSelfAssigned={isSelfAssigned}
+                roundLeft={headerLevel >= 1}
+                onSetAssignee={onSetAssignee}
+                onRemoveAssignee={onRemoveAssignee}
+                onClearAssignees={(id) => {
+                  conversation.assignees.forEach((a) => onRemoveAssignee(id, a.id));
                 }}
-                onInput={(e) => {
-                  const el = e.currentTarget;
-                  el.style.height = "auto";
-                  el.style.height = Math.min(el.scrollHeight, 160) + "px";
-                }} />
-              <div className="flex items-center justify-between px-3 pb-2">
-                <Tooltip content="ファイルを添付" side="right">
-                  <Button variant="ghost" size="icon-sm" className="h-8 w-8 text-muted-foreground">
-                    <Paperclip className="h-4 w-4" />
-                  </Button>
-                </Tooltip>
-                <Button size="sm" className="h-8 rounded-md bg-brand hover:bg-brand/90 px-4 text-[14px]"
-                  disabled={!replyText.trim()} onClick={handleSendReply}>
-                  <Send className="h-3 w-3 mr-1" /> 送信
-                </Button>
+              />
+            </div>
+
+            {/* Connected toggle button group for 完了 and 対応なし with icons */}
+            <div className="flex items-center">
+              <Button size="sm"
+                variant={conversation.status === "completed" ? "default" : "outline"}
+                className={cn(
+                  "h-9 text-[14px] px-3 gap-1.5 rounded-r-none border-r-0",
+                  conversation.status === "completed" && "bg-brand hover:bg-brand/90"
+                )}
+                onClick={() => onStatusChange(conversation.id, conversation.status === "completed" ? "open" : "completed")}>
+                <Check className="h-3.5 w-3.5" />
+                {headerLevel < 2 && <span>完了</span>}
+              </Button>
+              <Button size="sm"
+                variant={conversation.status === "no_action" ? "default" : "outline"}
+                className={cn(
+                  "h-9 text-[14px] px-3 gap-1.5 rounded-l-none",
+                  conversation.status === "no_action" && "bg-muted-foreground hover:bg-muted-foreground/90"
+                )}
+                onClick={() => onStatusChange(conversation.id, conversation.status === "no_action" ? "open" : "no_action")}>
+                <Ban className="h-3.5 w-3.5" />
+                {headerLevel < 2 && <span>対応なし</span>}
+              </Button>
+            </div>
+
+            {/* Change #11: More menu without 未読にする and without 対応なし */}
+            <Dropdown align="right"
+              trigger={<Button variant="ghost" size="icon-sm" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button>}>
+              <DropdownItem onClick={() => onToggleFavorite(conversation.id)}>
+                <Star className={cn("h-3.5 w-3.5", conversation.isFavorite && "fill-amber-400 text-amber-400")} />
+                {conversation.isFavorite ? "お気に入りを解除" : "お気に入り"}
+              </DropdownItem>
+              <DropdownItem className="text-destructive" onClick={() => onRequestDelete(conversation.id)}>
+                <Trash2 className="h-3.5 w-3.5" /> 完全に削除
+              </DropdownItem>
+            </Dropdown>
+          </div>
+        </header>
+
+        {/* Messages + inline reply */}
+        <div className="flex-1 overflow-y-auto px-5 py-5">
+          <div className="mx-auto max-w-2xl space-y-4">
+            {/* Related messages - single line format */}
+            {linkedConversations.length > 0 && linkedConversations.some((lc) => new Date(lc.lastMessageAt) <= new Date(conversation.messages[0]?.timestamp ?? "")) && (
+              <div className="space-y-1">
+                {linkedConversations.filter((lc) => new Date(lc.lastMessageAt) <= new Date(conversation.messages[0]?.timestamp ?? "")).map((lc) => (
+                  <button key={lc.id} onClick={() => onSelectConversation(lc.id)}
+                    className="flex items-center gap-2 text-[13px] text-muted-foreground hover:text-foreground cursor-pointer transition-colors truncate w-full text-left border border-border rounded-lg px-3 py-2 hover:bg-accent">
+                    <Link2 className="h-3.5 w-3.5 shrink-0 text-brand" />
+                    <span className="truncate">関連メッセージ：{lc.channel === "email" ? (lc.subject || lc.lastMessage) : (lc.messages[0]?.content || lc.lastMessage)}</span>
+                  </button>
+                ))}
               </div>
+            )}
+
+            {conversation.messages.map((message) => (
+              <MessageBubble key={message.id} message={message} channel={conversation.channel}
+                contactEmail={contactObj?.email} onPreviewImage={onPreviewImage}
+                onDeleteMemo={(msgId) => onDeleteMemo(conversation.id, msgId)} />
+            ))}
+            <div ref={messagesEndRef} />
+
+            {/* Reply input */}
+            <div className="flex justify-end">
+              <div className="w-[70%] rounded-lg border bg-background focus-within:border-brand/30">
+                <ReplyHeader
+                  channel={conversation.channel}
+                  channelLabel={channelLabel}
+                  accountName={accountName}
+                  isEmail={isEmail}
+                  emailFrom={emailFrom} setEmailFrom={setEmailFrom}
+                  emailTo={emailTo} setEmailTo={setEmailTo}
+                  emailCc={emailCc} setEmailCc={setEmailCc}
+                  emailBcc={emailBcc} setEmailBcc={setEmailBcc}
+                  emailSubject={emailSubject} setEmailSubject={setEmailSubject}
+                />
+                <textarea value={replyText} onChange={(e) => handleReplyChange(e.target.value)}
+                  placeholder="メッセージを入力..."
+                  rows={3}
+                  className="w-full resize-none bg-transparent px-3 pt-2.5 pb-0 text-[15px] leading-relaxed outline-none placeholder:text-muted-foreground/50"
+                  onKeyDown={(e) => {
+                    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); handleSendReply(); }
+                  }}
+                  onInput={(e) => {
+                    const el = e.currentTarget;
+                    el.style.height = "auto";
+                    el.style.height = Math.min(el.scrollHeight, 160) + "px";
+                  }} />
+                {/* Attached files preview */}
+                {attachedFiles.length > 0 && (
+                  <div className="flex flex-wrap gap-2 px-3 py-2 border-t">
+                    {attachedFiles.map((file, i) => (
+                      <div key={i} className="flex items-center gap-2 rounded-lg border bg-accent/20 px-2.5 py-1.5 text-[13px]">
+                        {file.type === "image" ? (
+                          <img src={file.url} alt={file.name} className="h-8 w-8 rounded object-cover" />
+                        ) : (
+                          <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                        )}
+                        <span className="truncate max-w-[120px]">{file.name}</span>
+                        <span className="text-[11px] text-muted-foreground shrink-0">{file.size}</span>
+                        <button onClick={() => setAttachedFiles((prev) => prev.filter((_, j) => j !== i))}
+                          className="rounded p-0.5 text-muted-foreground hover:text-foreground hover:bg-accent cursor-pointer">
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="flex items-center justify-between px-3 pb-2">
+                  <div className="flex items-center gap-1">
+                    {/* Attachment button */}
+                    <Tooltip content="ファイルを添付" side="right">
+                      <Button variant="ghost" size="icon-sm" className="h-8 w-8 text-muted-foreground"
+                        onClick={() => fileInputRef.current?.click()}>
+                        <Paperclip className="h-4 w-4" />
+                      </Button>
+                    </Tooltip>
+                    <input ref={fileInputRef} type="file" multiple className="hidden"
+                      onChange={(e) => {
+                        const files = e.target.files;
+                        if (!files) return;
+                        const newFiles = Array.from(files).map((f) => ({
+                          name: f.name,
+                          size: f.size < 1024 * 1024 ? `${Math.round(f.size / 1024)}KB` : `${(f.size / (1024 * 1024)).toFixed(1)}MB`,
+                          type: f.type.startsWith("image/") ? "image" : "file",
+                          url: URL.createObjectURL(f),
+                        }));
+                        setAttachedFiles((prev) => [...prev, ...newFiles]);
+                        e.target.value = "";
+                      }} />
+                    {/* Change #19: stamp picker with fixed positioning to avoid overflow clipping */}
+                    {isLine && (
+                      <div ref={stampPickerRef} className="relative">
+                        <Tooltip content="スタンプ" side="right">
+                          <Button variant="ghost" size="icon-sm" className="h-8 w-8 text-muted-foreground"
+                            onClick={(e) => {
+                              if (!showStampPicker) {
+                                const rect = e.currentTarget.getBoundingClientRect();
+                                setStampPickerPos({ left: rect.left, bottom: window.innerHeight - rect.top + 8 });
+                              }
+                              setShowStampPicker(!showStampPicker);
+                            }}>
+                            <Smile className="h-4 w-4" />
+                          </Button>
+                        </Tooltip>
+                        {showStampPicker && (
+                          <div className="fixed w-[320px] max-h-[280px] rounded-lg border bg-popover p-3 shadow-lg z-[500] overflow-y-auto"
+                            style={{ left: stampPickerPos.left, bottom: stampPickerPos.bottom }}>
+                            <p className="mb-2 text-[12px] font-medium text-muted-foreground sticky top-0 bg-popover pb-1">スタンプ</p>
+                            <div className="grid grid-cols-4 gap-2">
+                              {lineStampLabels.map((label, i) => (
+                                <button key={i}
+                                  className="flex h-14 items-center justify-center rounded-lg border bg-channel-line/5 text-[13px] font-medium text-channel-line hover:bg-channel-line/15 transition-colors cursor-pointer"
+                                  onClick={() => { onSendMessage(conversation.id, `[スタンプ: ${label}]`, false); setShowStampPicker(false); }}>
+                                  {label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <Button size="sm" className="h-8 rounded-md bg-brand hover:bg-brand/90 px-4 text-[14px]"
+                    disabled={!replyText.trim() && attachedFiles.length === 0} onClick={handleSendReply}>
+                    <Send className="h-3 w-3 mr-1" /> 送信
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            {/* Related messages at bottom - only newer ones */}
+            {linkedConversations.length > 0 && linkedConversations.some((lc) => new Date(lc.lastMessageAt) > new Date(conversation.messages[0]?.timestamp ?? "")) && (
+              <div className="space-y-1">
+                {linkedConversations.filter((lc) => new Date(lc.lastMessageAt) > new Date(conversation.messages[0]?.timestamp ?? "")).map((lc) => (
+                  <button key={lc.id} onClick={() => onSelectConversation(lc.id)}
+                    className="flex items-center gap-2 text-[13px] text-muted-foreground hover:text-foreground cursor-pointer transition-colors truncate w-full text-left border border-border rounded-lg px-3 py-2 hover:bg-accent">
+                    <Link2 className="h-3.5 w-3.5 shrink-0 text-brand" />
+                    <span className="truncate">関連メッセージ：{lc.channel === "email" ? (lc.subject || lc.lastMessage) : (lc.messages[0]?.content || lc.lastMessage)}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Message ID removed from here - moved to contact pane */}
+          </div>
+        </div>
+
+        {/* Team memo */}
+        <div className="border-t px-5 py-3">
+          <div className="mx-auto max-w-2xl">
+            <div className="relative rounded-lg border border-amber-200/50 bg-amber-50/30">
+              <div className="flex items-center gap-2.5 px-3 py-3">
+                <MessageSquareText className="h-4 w-4 shrink-0 text-amber-500" />
+                <textarea value={memoText} onChange={handleMemoChange}
+                  placeholder="チーム内メモを入力（@でメンション）"
+                  rows={1}
+                  className="flex-1 resize-none bg-transparent text-[14px] leading-normal outline-none placeholder:text-amber-400/60"
+                  style={{ height: "auto", minHeight: "24px", maxHeight: "80px", overflow: "auto" }}
+                  onKeyDown={handleMemoKeyDown}
+                  ref={(el) => {
+                    (memoRef as React.MutableRefObject<HTMLTextAreaElement | null>).current = el;
+                    if (el) { el.style.height = "auto"; el.style.height = Math.min(el.scrollHeight, 80) + "px"; }
+                  }} />
+              </div>
+              {memoText.trim() && (
+                <div className="flex justify-end px-3 pb-2.5">
+                  <Button size="sm" className="h-7 rounded-md bg-amber-500 hover:bg-amber-600 px-3 text-[14px]"
+                    onClick={handleSendMemo}>
+                    保存
+                  </Button>
+                </div>
+              )}
+              {mentionQuery !== null && mentionCandidates.length > 0 && mentionPos && (
+                <div className="absolute bottom-full left-8 mb-1 w-[200px] rounded-lg border bg-popover p-1 shadow-lg z-[300]">
+                  {mentionCandidates.map((member, i) => (
+                    <button key={member.id}
+                      className={cn(
+                        "flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-[14px] transition-colors cursor-pointer",
+                        i === mentionIndex ? "bg-accent text-foreground" : "text-foreground hover:bg-accent/50"
+                      )}
+                      onMouseDown={(e) => { e.preventDefault(); insertMention(member.name); }}
+                      onMouseEnter={() => setMentionIndex(i)}>
+                      <Avatar src={member.avatar} fallback={member.name} size="sm" className="h-6 w-6 text-[8px]" />
+                      <span className="font-medium">{member.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
       </div>
 
-      {/* Team memo */}
-      <div className="border-t px-5 py-3">
-        <div className="mx-auto max-w-2xl">
-          <div className="relative rounded-lg border border-amber-200/50 bg-amber-50/30">
-            <div className="flex items-center gap-2.5 px-3 py-3">
-              <MessageSquareText className="h-4 w-4 shrink-0 text-amber-500" />
-              <textarea value={memoText} onChange={handleMemoChange}
-                placeholder="チーム内メモを入力（@でメンション）"
-                rows={1}
-                className="flex-1 resize-none bg-transparent text-[14px] leading-normal outline-none placeholder:text-amber-400/60"
-                style={{ height: "auto", minHeight: "24px", maxHeight: "80px", overflow: "auto" }}
-                onKeyDown={handleMemoKeyDown}
-                ref={(el) => {
-                  (memoRef as React.MutableRefObject<HTMLTextAreaElement | null>).current = el;
-                  if (el) {
-                    el.style.height = "auto";
-                    el.style.height = Math.min(el.scrollHeight, 80) + "px";
-                  }
-                }} />
-            </div>
-            {memoText.trim() && (
-              <div className="flex justify-end px-3 pb-2.5">
-                <Button size="sm" className="h-7 rounded-md bg-amber-500 hover:bg-amber-600 px-3 text-[14px]"
-                  onClick={handleSendMemo}>
-                  保存
-                </Button>
-              </div>
-            )}
+      {/* Change #13: Right side pane - toggleable */}
+      {showRightPane && (
+        <RightSidePane
+          conversation={conversation}
+          allConversations={allConvs}
+          contactConversations={contactConversations}
+          linkedContact={linkedContact}
+          linkedIds={linkedIds}
+          onLinkConversation={onLinkConversation}
+          onUnlinkConversation={onUnlinkConversation}
+          onNavigateToContact={onNavigateToContact}
+          onSelectConversation={onSelectConversation}
+          onClose={onToggleRightPane}
+        />
+      )}
+    </div>
+  );
+}
 
-            {/* @mention suggestions popup */}
-            {mentionQuery !== null && mentionCandidates.length > 0 && mentionPos && (
-              <div
-                className="absolute bottom-full left-8 mb-1 w-[200px] rounded-lg border bg-popover p-1 shadow-lg z-[300]"
-              >
-                {mentionCandidates.map((member, i) => (
-                  <button
-                    key={member.id}
-                    className={cn(
-                      "flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-[14px] transition-colors cursor-pointer",
-                      i === mentionIndex ? "bg-accent text-foreground" : "text-foreground hover:bg-accent/50"
-                    )}
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      insertMention(member.name);
-                    }}
-                    onMouseEnter={() => setMentionIndex(i)}
-                  >
-                    <Avatar src={member.avatar} fallback={member.name} size="sm" className="h-6 w-6 text-[8px]" />
-                    <span className="font-medium">{member.name}</span>
-                  </button>
-                ))}
+/* --- Right Side Pane --- */
+/* Changes #13, #14, #15, #16, #17 applied here */
+
+function RightSidePane({ conversation, allConversations, contactConversations, linkedContact, linkedIds,
+  onLinkConversation, onUnlinkConversation, onNavigateToContact, onSelectConversation, onClose }: {
+  conversation: Conversation;
+  allConversations: Conversation[];
+  contactConversations: Conversation[];
+  linkedContact: Contact | null | undefined;
+  linkedIds: string[];
+  onLinkConversation: (convId: string, targetId: string) => void;
+  onUnlinkConversation: (convId: string, targetId: string) => void;
+  onNavigateToContact: (contactId: string) => void;
+  onSelectConversation: (id: string) => void;
+  onClose: () => void;
+}) {
+  const [showLinkPicker, setShowLinkPicker] = useState(false);
+
+  const contactObj = contacts.find((c) => c.id === conversation.contactId);
+  const contactGroups_ = contactGroups.filter((g) => g.contactIds.includes(conversation.contactId));
+
+  return (
+    <div className="relative z-[60] flex h-full w-[300px] min-w-[260px] shrink-0 flex-col border-l bg-background overflow-y-auto">
+      {/* Header with message ID and close button */}
+      <div className="shrink-0 px-4 flex items-center justify-between" style={{ height: "70px" }}>
+        <span className="text-[13px] font-medium text-muted-foreground">
+          メッセージID: {formatMessageNumber(conversation.messageNumber)}
+        </span>
+        <button onClick={onClose} className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors cursor-pointer">
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-4 py-3">
+        {/* Change #14: 連絡先 section - always shown, no toggle */}
+        <section className="mb-4">
+          <div className="flex w-full items-center gap-1.5 py-1.5 text-[14px] font-semibold text-foreground">
+            連絡先
+          </div>
+          <div className="mt-2 space-y-2">
+            {linkedContact || contactObj ? (
+              <div>
+                {/* Change #15: increased text sizes */}
+                <button
+                  onClick={() => onNavigateToContact((linkedContact ?? contactObj)!.id)}
+                  className="text-[16px] font-medium text-brand hover:text-brand/80 cursor-pointer transition-colors"
+                >
+                  {(linkedContact ?? contactObj)!.name}
+                </button>
+                {(linkedContact ?? contactObj)!.company && (
+                  <p className="text-[14px] text-muted-foreground">{(linkedContact ?? contactObj)!.company}</p>
+                )}
+
+                {/* Channel info */}
+                <div className="mt-2 space-y-1">
+                  {(linkedContact ?? contactObj)!.channels.map((ch) => {
+                    const CIcon = channelIcons[ch.channel];
+                    const s = channelStyles[ch.channel];
+                    return (
+                      <div key={ch.channel + ch.handle} className="flex items-center gap-2 text-[14px]">
+                        <CIcon className={cn("h-3.5 w-3.5", s.text)} />
+                        <span className="text-muted-foreground">{ch.handle}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Groups */}
+                {contactGroups_.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {contactGroups_.map((g) => (
+                      <span key={g.id} className="rounded-full bg-accent px-2 py-0.5 text-[12px] font-medium text-foreground/70">{g.name}</span>
+                    ))}
+                  </div>
+                )}
               </div>
+            ) : (
+              <button className="flex items-center gap-1.5 text-[14px] text-brand hover:text-brand/80 transition-colors cursor-pointer">
+                <Plus className="h-3.5 w-3.5" />
+                連絡先と紐づける
+              </button>
             )}
           </div>
-        </div>
+        </section>
+
+        {/* Change #14: メッセージ履歴 section - always shown, no toggle */}
+        <section>
+          <div className="flex w-full items-center gap-1.5 py-1.5 text-[14px] font-semibold text-foreground">
+            メッセージ履歴
+          </div>
+          <div className="mt-2 space-y-1.5">
+            {contactConversations.length === 0 ? (
+              <p className="text-[14px] text-muted-foreground/60">履歴はありません</p>
+            ) : (
+              contactConversations.map((conv) => {
+                const CIcon = channelIcons[conv.channel];
+                const s = channelStyles[conv.channel];
+                const isLinked = linkedIds.includes(conv.id);
+                const isCurrent = conv.id === conversation.id;
+                return (
+                  <ThreadHistoryItem
+                    key={conv.id}
+                    conv={conv}
+                    CIcon={CIcon}
+                    channelStyle={s}
+                    isLinked={isLinked}
+                    isCurrent={isCurrent}
+                    currentConvId={conversation.id}
+                    onSelect={() => onSelectConversation(conv.id)}
+                    onLink={() => onLinkConversation(conversation.id, conv.id)}
+                    onUnlink={() => onUnlinkConversation(conversation.id, conv.id)}
+                  />
+                );
+              })
+            )}
+          </div>
+        </section>
       </div>
     </div>
   );
 }
 
-/* ─── Message Bubble ─────────────────────────────── */
+/* --- Thread History Item (with link menu) --- */
+/* Change #15: increased text sizes, Change #17: clickable to navigate */
 
-function MessageBubble({ message, channel, contactEmail }: { message: Message; channel: Channel; contactEmail?: string }) {
-  const { content, timestamp, isInbound, senderName, isInternal, emailHeader } = message;
+function ThreadHistoryItem({ conv, CIcon, channelStyle, isLinked, isCurrent, currentConvId, onSelect, onLink, onUnlink }: {
+  conv: Conversation;
+  CIcon: React.ElementType;
+  channelStyle: { bg: string; text: string };
+  isLinked: boolean;
+  isCurrent: boolean;
+  currentConvId: string;
+  onSelect: () => void;
+  onLink: () => void;
+  onUnlink: () => void;
+}) {
+  const [showMenu, setShowMenu] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setShowMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showMenu]);
+
+  return (
+    <div
+      className={cn(
+        "group relative flex items-center gap-2 rounded-md px-2.5 py-2 transition-colors",
+        isCurrent ? "border-2" : "border",
+        !isCurrent && (isLinked ? "border-brand/20" : "hover:bg-accent/30"),
+        !isCurrent && "cursor-pointer"
+      )}
+      style={isCurrent ? { borderColor: "var(--brand)" } : undefined}
+      onClick={() => !isCurrent && onSelect()}
+    >
+      <div className={cn("flex h-5 w-5 shrink-0 items-center justify-center rounded-full", channelStyle.bg)}>
+        <CIcon className={cn("h-2.5 w-2.5", channelStyle.text)} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-[13px] font-medium">{conv.subject || conv.messages?.[0]?.content || conv.lastMessage}</p>
+        <p className="text-[12px] text-muted-foreground">{conv.lastMessageAt}</p>
+      </div>
+
+      {/* Link icon + menu */}
+      {!isCurrent && (
+        <div className="relative shrink-0 flex items-center gap-0.5" ref={menuRef}>
+          {isLinked ? (
+            /* Linked: show link icon always, click opens unlink popover */
+            <button
+              onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
+              className="flex h-7 w-7 items-center justify-center rounded text-brand hover:bg-accent cursor-pointer"
+            >
+              <Link2 className="h-4 w-4" />
+            </button>
+          ) : (
+            /* Not linked: show ... on hover or when menu open */
+            <button
+              onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
+              className={cn("h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent cursor-pointer self-center",
+                showMenu ? "flex" : "hidden group-hover:flex"
+              )}
+            >
+              <MoreHorizontal className="h-4 w-4" />
+            </button>
+          )}
+          {showMenu && (
+            <div className="absolute right-0 top-8 z-[200] w-auto rounded-lg border bg-popover p-1 shadow-lg">
+              {isLinked ? (
+                <button onClick={(e) => { e.stopPropagation(); onUnlink(); setShowMenu(false); }}
+                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-[14px] text-left text-foreground hover:bg-accent transition-colors cursor-pointer whitespace-nowrap">
+                  <Link2 className="h-3.5 w-3.5 text-destructive shrink-0" />
+                  関連づけを解除する
+                </button>
+              ) : (
+                <button onClick={(e) => { e.stopPropagation(); onLink(); setShowMenu(false); }}
+                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-[14px] text-left text-foreground hover:bg-accent transition-colors cursor-pointer whitespace-nowrap">
+                  <Link2 className="h-3.5 w-3.5 text-brand shrink-0" />
+                  このメッセージと関連づける
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* --- Message Bubble --- */
+
+function MessageBubble({ message, channel, contactEmail, onPreviewImage, onDeleteMemo }: {
+  message: Message; channel: Channel; contactEmail?: string;
+  onPreviewImage: (url: string) => void;
+  onDeleteMemo?: (messageId: string) => void;
+}) {
+  const { content, timestamp, isInbound, senderName, isInternal, emailHeader, attachments } = message;
   const [headerExpanded, setHeaderExpanded] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const [editContent, setEditContent] = useState(content);
+  const [showMemoMenu, setShowMemoMenu] = useState(false);
+  const memoMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showMemoMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (memoMenuRef.current && !memoMenuRef.current.contains(e.target as Node)) {
+        setShowMemoMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showMemoMenu]);
 
   if (isInternal) {
     return (
       <div className="flex justify-center">
-        <div className="min-w-[340px] max-w-md rounded-lg border border-amber-200/60 bg-amber-50/40 px-4 py-2.5">
+        <div className="group/memo relative min-w-[340px] max-w-md rounded-lg border border-amber-200/60 bg-amber-50/40 px-4 py-2.5">
+          {/* Hover dots menu for delete */}
+          <div className="absolute top-2 right-2" ref={memoMenuRef}>
+            <button
+              onClick={() => setShowMemoMenu(!showMemoMenu)}
+              className="hidden group-hover/memo:flex h-6 w-6 items-center justify-center rounded text-amber-400 hover:bg-amber-100 cursor-pointer"
+            >
+              <MoreHorizontal className="h-3.5 w-3.5" />
+            </button>
+            {showMemoMenu && (
+              <div className="absolute right-0 top-7 z-[200] min-w-[140px] rounded-lg border bg-popover p-1 shadow-lg">
+                <button onClick={() => { onDeleteMemo?.(message.id); setShowMemoMenu(false); }}
+                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-[14px] text-destructive hover:bg-accent transition-colors cursor-pointer">
+                  <Trash2 className="h-3.5 w-3.5" />
+                  削除
+                </button>
+              </div>
+            )}
+          </div>
           <div className="flex items-center gap-1.5 mb-1.5">
             <MessageSquareText className="h-3 w-3 text-amber-500" />
             <span className="text-[12px] font-medium text-amber-600">チーム内メモ</span>
@@ -1057,8 +2019,8 @@ function MessageBubble({ message, channel, contactEmail }: { message: Message; c
     <div className={cn("flex gap-2.5", isInbound ? "justify-start" : "justify-end")}>
       <div className={cn("max-w-[70%] space-y-1", !isInbound && "items-end")}>
         <div className={cn("flex items-center gap-1.5", !isInbound && "justify-end")}>
-          <span className="text-[13px] font-medium text-muted-foreground">{senderName}</span>
-          <span className="text-[13px] text-muted-foreground/50">{timestamp}</span>
+          <span className="text-[12px] font-medium text-muted-foreground">{senderName}</span>
+          <span className="text-[12px] text-muted-foreground/50">{timestamp}</span>
         </div>
 
         {channel === "email" && emailHeader ? (
@@ -1068,17 +2030,17 @@ function MessageBubble({ message, channel, contactEmail }: { message: Message; c
           )}>
             <div className="border-b bg-accent/20 px-3 py-2">
               <button onClick={() => setHeaderExpanded(!headerExpanded)}
-                className="flex cursor-pointer items-center gap-2 text-[14px] text-muted-foreground hover:text-foreground transition-colors">
-                <Mail className="h-4 w-4 text-channel-email" />
+                className="flex w-full cursor-pointer items-center gap-2 text-[14px] text-left text-muted-foreground hover:text-foreground transition-colors">
+                <Mail className="h-4 w-4 text-channel-email shrink-0" />
                 <span className="font-medium">{emailHeader.subject}</span>
                 <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", headerExpanded && "rotate-180")} />
               </button>
               {headerExpanded && (
                 <div className="mt-2 space-y-1 text-[14px] text-muted-foreground">
-                  {isInbound && (contactEmail || senderName) && (
+                  {(contactEmail || senderName) && (
                     <div className="flex items-center gap-2">
                       <span className="w-10 shrink-0 text-right font-medium text-[13px]">From</span>
-                      <span>{contactEmail || senderName}</span>
+                      <span>{isInbound ? (contactEmail || senderName) : senderName}</span>
                     </div>
                   )}
                   {emailHeader.to && (
@@ -1107,15 +2069,33 @@ function MessageBubble({ message, channel, contactEmail }: { message: Message; c
                 <span key={i}>{line}{i < content.split("\n").length - 1 && <br />}</span>
               ))}
             </div>
+            {/* Attachments in email */}
+            {attachments && attachments.length > 0 && (
+              <div className="border-t px-3.5 py-2">
+                <AttachmentList attachments={attachments} onPreviewImage={onPreviewImage} />
+              </div>
+            )}
+          </div>
+        ) : content.trim().startsWith("[スタンプ:") ? (
+          <div className="flex h-20 w-20 items-center justify-center rounded-xl bg-channel-line/10 border border-channel-line/20">
+            <span className="text-[14px] font-medium text-channel-line">{content.replace(/^\[スタンプ:\s*/, "").replace(/\]$/, "")}</span>
           </div>
         ) : (
-          <div className={cn(
-            "rounded-2xl px-3.5 py-2 text-[15px] leading-relaxed",
-            isInbound ? "rounded-tl-sm bg-secondary text-secondary-foreground" : "rounded-tr-sm bg-brand text-brand-foreground"
-          )}>
-            {content.split("\n").map((line, i) => (
-              <span key={i}>{line}{i < content.split("\n").length - 1 && <br />}</span>
-            ))}
+          <div>
+            <div className={cn(
+              "rounded-2xl px-3.5 py-2 text-[15px] leading-relaxed",
+              isInbound ? "rounded-tl-sm bg-secondary text-secondary-foreground" : "rounded-tr-sm bg-brand text-brand-foreground"
+            )}>
+              {content.split("\n").map((line, i) => (
+                <span key={i}>{line}{i < content.split("\n").length - 1 && <br />}</span>
+              ))}
+            </div>
+            {/* Attachments in non-email */}
+            {attachments && attachments.length > 0 && (
+              <div className="mt-1.5">
+                <AttachmentList attachments={attachments} onPreviewImage={onPreviewImage} />
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -1123,7 +2103,48 @@ function MessageBubble({ message, channel, contactEmail }: { message: Message; c
   );
 }
 
-/* ─── Reply Header (channel-aware, attached to input) ── */
+/* --- Attachment List --- */
+
+function AttachmentList({ attachments, onPreviewImage }: {
+  attachments: Attachment[];
+  onPreviewImage: (url: string) => void;
+}) {
+  return (
+    <div className="space-y-1.5">
+      {attachments.map((att) => {
+        if (att.type === "image") {
+          return (
+            <button key={att.id}
+              onClick={() => onPreviewImage(att.url)}
+              className="block cursor-pointer rounded-lg overflow-hidden border hover:opacity-90 transition-opacity">
+              <img src={att.url} alt={att.name} className="max-w-[200px] max-h-[150px] object-cover" />
+              <div className="flex items-center gap-1.5 px-2 py-1 bg-accent/30">
+                <ImageIcon className="h-3 w-3 text-muted-foreground" />
+                <span className="text-[11px] text-muted-foreground truncate">{att.name}</span>
+                {att.size && <span className="text-[11px] text-muted-foreground/60 shrink-0">{att.size}</span>}
+              </div>
+            </button>
+          );
+        }
+        return (
+          <a key={att.id} href={att.url} download={att.name}
+            className="flex items-center gap-2.5 rounded-lg border px-3 py-2 hover:bg-accent/30 transition-colors">
+            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-accent">
+              <FileText className="h-4 w-4 text-muted-foreground" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[13px] font-medium">{att.name}</p>
+              {att.size && <p className="text-[11px] text-muted-foreground">{att.size}</p>}
+            </div>
+            <Download className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+          </a>
+        );
+      })}
+    </div>
+  );
+}
+
+/* --- Reply Header --- */
 
 function ReplyHeader({ channel, channelLabel, accountName, isEmail,
   emailFrom, setEmailFrom, emailTo, setEmailTo,
@@ -1141,12 +2162,12 @@ function ReplyHeader({ channel, channelLabel, accountName, isEmail,
 
   return (
     <div className="border-b bg-accent/20 px-3 py-2">
-      <button onClick={() => isEmail ? setExpanded(!expanded) : undefined}
+      <button onClick={isEmail ? () => setExpanded(!expanded) : undefined}
         className={cn(
-          "flex items-center gap-2 text-[14px] text-muted-foreground",
+          "flex items-center gap-2 text-[14px] text-muted-foreground w-full text-left",
           isEmail && "cursor-pointer hover:text-foreground transition-colors"
         )}>
-        <CIcon className={cn("h-4 w-4", cStyle.text)} />
+        <CIcon className={cn("h-4 w-4 shrink-0", cStyle.text)} />
         <span className="font-medium">{channelLabel} {accountName} として返信</span>
         {isEmail && <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", expanded && "rotate-180")} />}
       </button>
@@ -1154,165 +2175,29 @@ function ReplyHeader({ channel, channelLabel, accountName, isEmail,
         <div className="mt-2 space-y-1 text-[14px] text-muted-foreground">
           <div className="flex items-center gap-2">
             <span className="w-10 shrink-0 text-right font-medium text-[13px]">From</span>
-            <input value={emailFrom} onChange={(e) => setEmailFrom(e.target.value)}
-              className="flex-1 rounded bg-transparent px-1.5 py-0.5 outline-none text-[14px] hover:text-muted-foreground focus:text-foreground transition-colors" />
+            <span className="flex-1 rounded-md bg-accent/40 px-2 py-0.5 text-[14px] text-muted-foreground">{emailFrom}</span>
           </div>
           <div className="flex items-center gap-2">
             <span className="w-10 shrink-0 text-right font-medium text-[13px]">To</span>
-            <input value={emailTo} onChange={(e) => setEmailTo(e.target.value)}
-              className="flex-1 rounded bg-transparent px-1.5 py-0.5 outline-none text-[14px] hover:text-muted-foreground focus:text-foreground transition-colors" />
+            <span className="flex-1 rounded-md bg-accent/40 px-2 py-0.5 text-[14px] text-muted-foreground">{emailTo}</span>
           </div>
           <div className="flex items-center gap-2">
             <span className="w-10 shrink-0 text-right font-medium text-[13px]">CC</span>
             <input value={emailCc} onChange={(e) => setEmailCc(e.target.value)} placeholder="任意"
-              className="flex-1 rounded bg-transparent px-1.5 py-0.5 outline-none text-[14px] hover:text-muted-foreground focus:text-foreground transition-colors placeholder:text-muted-foreground/30" />
+              className="flex-1 rounded-md bg-transparent px-2 py-0.5 outline-none text-[14px] border border-transparent hover:border-border focus:border-brand/30 transition-colors placeholder:text-muted-foreground/30" />
           </div>
           <div className="flex items-center gap-2">
             <span className="w-10 shrink-0 text-right font-medium text-[13px]">BCC</span>
             <input value={emailBcc} onChange={(e) => setEmailBcc(e.target.value)} placeholder="任意"
-              className="flex-1 rounded bg-transparent px-1.5 py-0.5 outline-none text-[14px] hover:text-muted-foreground focus:text-foreground transition-colors placeholder:text-muted-foreground/30" />
+              className="flex-1 rounded-md bg-transparent px-2 py-0.5 outline-none text-[14px] border border-transparent hover:border-border focus:border-brand/30 transition-colors placeholder:text-muted-foreground/30" />
           </div>
           <div className="flex items-center gap-2">
             <span className="w-10 shrink-0 text-right font-medium text-[13px]">件名</span>
             <input value={emailSubject} onChange={(e) => setEmailSubject(e.target.value)}
-              className="flex-1 rounded bg-transparent px-1.5 py-0.5 outline-none text-[14px] hover:text-muted-foreground focus:text-foreground transition-colors" />
+              className="flex-1 rounded-md bg-transparent px-2 py-0.5 outline-none text-[14px] border border-transparent hover:border-border focus:border-brand/30 transition-colors" />
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-/* ─── Contact Slide Panel ────────────────────────── */
-
-function ContactSlidePanel({ contact, onClose, onNavigateToContact }: {
-  contact: Contact; onClose: () => void; onNavigateToContact: (id: string) => void;
-}) {
-  const contactConversations = allConversations.filter((c) =>
-    contact.conversationIds.includes(c.id)
-  );
-  const memberGroups = contactGroups.filter(
-    (g) => g.contactIds.includes(contact.id)
-  );
-
-  return (
-    <div className="flex h-full w-[320px] min-w-[260px] max-w-[400px] shrink-0 flex-col border-l bg-background animate-slide-in-right">
-      <div className="flex items-center justify-between border-b px-4 py-3">
-        <h3 className="text-[16px] font-semibold">連絡先</h3>
-        <button onClick={onClose}
-          className="cursor-pointer rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground">
-          <X className="h-4 w-4" />
-        </button>
-      </div>
-
-      <div className="flex-1 overflow-y-auto px-4 py-4">
-        <div className="space-y-4">
-          {/* 氏名 */}
-          <section>
-            <p className="text-[16px] font-semibold">{contact.name}</p>
-            {contact.nameFurigana && <p className="text-[13px] text-muted-foreground">{contact.nameFurigana}</p>}
-          </section>
-
-          {/* 会社名 */}
-          <section>
-            {contact.company ? (
-              <>
-                <p className="text-[15px] font-medium">{contact.company}</p>
-                {contact.companyFurigana && <p className="text-[13px] text-muted-foreground">{contact.companyFurigana}</p>}
-              </>
-            ) : (
-              <p className="text-[14px] text-muted-foreground/60">なし</p>
-            )}
-          </section>
-
-          {/* 連絡先 */}
-          <section>
-            <h4 className="mb-1.5 text-[12px] font-medium uppercase tracking-wider text-muted-foreground">連絡先</h4>
-            <div className="space-y-1.5 text-[14px]">
-              {contact.phone && (
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-muted-foreground shrink-0">電話番号</span>
-                  <span>{contact.phone}</span>
-                </div>
-              )}
-              {contact.email && (
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-muted-foreground shrink-0">メール</span>
-                  <span className="text-right break-all">{contact.email}</span>
-                </div>
-              )}
-              {contact.channels.filter((ch) => ch.channel !== "email").map((ch) => {
-                const CIcon = channelIcons[ch.channel];
-                const s = channelStyles[ch.channel];
-                return (
-                  <div key={ch.channel} className="flex items-center justify-between gap-2">
-                    <span className="text-muted-foreground shrink-0 flex items-center gap-1">
-                      <CIcon className={cn("h-3.5 w-3.5", s.text)} />
-                      {ch.channel === "instagram" ? "Instagram" : ch.channel === "line" ? "LINE" : "Facebook"}
-                    </span>
-                    <span className="text-right break-all">{ch.handle}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-
-          {/* グループ */}
-          <section>
-            <h4 className="mb-1.5 text-[12px] font-medium uppercase tracking-wider text-muted-foreground">グループ</h4>
-            {memberGroups.length === 0 ? (
-              <p className="text-[13px] text-muted-foreground/60">なし</p>
-            ) : (
-              <div className="flex flex-wrap gap-1">
-                {memberGroups.map((g) => (
-                  <span key={g.id} className="rounded-full bg-accent px-2.5 py-0.5 text-[13px] font-medium text-foreground/70">{g.name}</span>
-                ))}
-              </div>
-            )}
-          </section>
-
-          {/* メッセージ履歴 */}
-          <section>
-            <h4 className="mb-1.5 text-[12px] font-medium uppercase tracking-wider text-muted-foreground">メッセージ履歴</h4>
-            {contactConversations.length === 0 ? (
-              <p className="text-[13px] text-muted-foreground/60">履歴はありません</p>
-            ) : (
-              <div className="space-y-1.5">
-                {contactConversations.map((conv) => {
-                  const CIcon = channelIcons[conv.channel];
-                  const s = channelStyles[conv.channel];
-                  return (
-                    <div key={conv.id} className="flex items-start gap-2.5 rounded-md border px-3 py-2">
-                      <div className={cn("flex h-6 w-6 shrink-0 items-center justify-center rounded-full mt-0.5", s.bg)}>
-                        <CIcon className={cn("h-3 w-3", s.text)} />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-[13px] font-medium">{conv.subject || conv.lastMessage}</p>
-                        <p className="text-[12px] text-muted-foreground">{conv.lastMessageAt}</p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </section>
-
-          {/* メモ */}
-          <section>
-            <h4 className="mb-1.5 text-[12px] font-medium uppercase tracking-wider text-muted-foreground">メモ</h4>
-            <p className="text-[14px] text-muted-foreground leading-relaxed">{contact.note || "なし"}</p>
-          </section>
-
-          {/* Link to contact page */}
-          <div className="pt-4 pb-2 flex justify-center">
-            <button
-              className="text-[14px] text-brand hover:text-brand/80 underline underline-offset-2 cursor-pointer transition-colors"
-              onClick={() => { onClose(); onNavigateToContact(contact.id); }}>
-              この連絡先へ
-            </button>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }

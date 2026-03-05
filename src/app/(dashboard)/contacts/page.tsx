@@ -16,12 +16,15 @@ import {
   MessageCircle,
   Mail,
   Facebook,
+
   Plus,
   FolderOpen,
   X,
   Trash2,
   UserPlus,
   Check,
+  Send,
+  Phone,
 } from "lucide-react";
 
 const channelIcons: Record<Channel, React.ElementType> = {
@@ -103,6 +106,7 @@ export default function ContactsPage() {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [filtered, selectedContactId]);
+
 
   const handleAddContact = () => {
     if (hasUnsavedChanges) {
@@ -255,29 +259,46 @@ export default function ContactsPage() {
             />
           </div>
           {/* Section title header */}
-          {selectedGroupId && (
-            <div className="mt-2 px-1">
-              <p className="text-[12px] font-medium text-muted-foreground truncate">
-                {groups.find((g) => g.id === selectedGroupId)?.name}
-              </p>
-            </div>
-          )}
+          <div className="mt-2 px-1">
+            <p className="text-[12px] font-medium text-muted-foreground truncate">
+              {selectedGroupId ? groups.find((g) => g.id === selectedGroupId)?.name : "すべての連絡先"}
+            </p>
+          </div>
           {selectedGroupId === null ? (
-            <button
-              onClick={handleAddContact}
-              className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-xl border border-border/60 bg-accent/30 px-3 py-2.5 text-[14px] text-muted-foreground hover:bg-accent/60 transition-colors cursor-pointer"
-            >
-              <Plus className="h-4 w-4" />
-              連絡先を追加する
-            </button>
+            <div className="mt-2 flex gap-1.5">
+              <button
+                onClick={handleAddContact}
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-border/60 bg-accent/30 px-3 py-2.5 text-[14px] text-muted-foreground hover:bg-accent/60 transition-colors cursor-pointer"
+              >
+                <Plus className="h-4 w-4" />
+                連絡先追加
+              </button>
+              <button
+                onClick={() => router.push("/messages/compose?from=contacts&selectAll=true")}
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-brand/30 bg-brand/5 px-3 py-2.5 text-[14px] text-brand hover:bg-brand/10 transition-colors cursor-pointer"
+              >
+                <Send className="h-4 w-4" />
+                一括送信
+              </button>
+            </div>
           ) : (
-            <button
-              onClick={() => setShowAddToGroup(true)}
-              className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-xl border border-brand/30 bg-brand/5 px-3 py-2.5 text-[14px] text-brand hover:bg-brand/10 transition-colors cursor-pointer"
-            >
-              <UserPlus className="h-4 w-4" />
-              このグループに追加
-            </button>
+            <div className="mt-2 flex gap-1.5">
+              <button
+                onClick={() => setShowAddToGroup(true)}
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-border/60 bg-accent/30 px-3 py-2.5 text-[14px] text-muted-foreground hover:bg-accent/60 transition-colors cursor-pointer"
+              >
+                <UserPlus className="h-4 w-4" />
+                追加
+              </button>
+              {/* Send to group - navigate to compose page */}
+              <button
+                onClick={() => router.push(`/messages/compose?from=contacts&group=${selectedGroupId}`)}
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-brand/30 bg-brand/5 px-3 py-2.5 text-[14px] text-brand hover:bg-brand/10 transition-colors cursor-pointer"
+              >
+                <Send className="h-4 w-4" />
+                一括送信
+              </button>
+            </div>
           )}
         </div>
 
@@ -575,7 +596,7 @@ function ContactDetail({
   const handleSave = () => {
     // New contacts require name
     if (isAdd && !editName.trim()) {
-      window.alert("氏名を入力してください。");
+      window.alert("名前を入力してください。");
       return;
     }
     const updated: Contact = {
@@ -631,14 +652,14 @@ function ContactDetail({
             <section>
               <div className="space-y-4">
                 <div>
-                  <label className="mb-1 block text-[13px] text-muted-foreground">氏名</label>
+                  <label className="mb-1 block text-[13px] text-muted-foreground">名前</label>
                   <input value={editName} onChange={(e) => { setEditName(e.target.value); markChanged(); }}
                     className="w-full rounded-md border px-3 py-2.5 text-[15px] outline-none focus:border-brand/40" autoFocus />
                 </div>
                 <div>
-                  <label className="mb-1 block text-[13px] text-muted-foreground">氏名フリガナ</label>
+                  <label className="mb-1 block text-[13px] text-muted-foreground">ふりがな</label>
                   <input value={editNameFurigana} onChange={(e) => { setEditNameFurigana(e.target.value); markChanged(); }}
-                    className="w-full rounded-md border px-3 py-2.5 text-[15px] outline-none focus:border-brand/40" placeholder="ヤマダ タロウ" />
+                    className="w-full rounded-md border px-3 py-2.5 text-[15px] outline-none focus:border-brand/40" placeholder="やまだ たろう" />
                 </div>
               </div>
             </section>
@@ -659,20 +680,34 @@ function ContactDetail({
             </section>
 
             <section>
-              <h3 className="mb-3 text-[13px] font-medium text-muted-foreground">連絡先</h3>
+              <h3 className="mb-3 text-[15px] font-semibold text-foreground">連絡先</h3>
               <div className="space-y-4">
                 <div>
-                  <label className="mb-1 block text-[13px] text-muted-foreground">電話番号</label>
+                  <div className="mb-1 flex items-center justify-between">
+                    <label className="flex items-center gap-1.5 text-[13px] text-muted-foreground">
+                      <Phone className="h-3.5 w-3.5" />
+                      電話番号
+                    </label>
+                    <button className="flex items-center gap-0.5 text-[12px] text-brand hover:text-brand/80 cursor-pointer transition-colors">
+                      <Plus className="h-3 w-3" />
+                    </button>
+                  </div>
                   <input value={editPhone} onChange={(e) => { setEditPhone(e.target.value); markChanged(); }}
                     className="w-full rounded-md border px-3 py-2.5 text-[15px] outline-none focus:border-brand/40" />
                 </div>
                 <div>
-                  <label className="mb-1 flex items-center gap-2 text-[13px] text-muted-foreground">
-                    メールアドレス
-                    {editChannels.some((ch) => ch.channel === "email" && ch.isAutoLinked) && (
-                      <span className="text-[11px] text-brand bg-brand/10 px-1.5 py-0.5 rounded">自動連携</span>
-                    )}
-                  </label>
+                  <div className="mb-1 flex items-center justify-between">
+                    <label className="flex items-center gap-1.5 text-[13px] text-muted-foreground">
+                      <Mail className="h-3.5 w-3.5 text-channel-email" />
+                      メールアドレス
+                      {editChannels.some((ch) => ch.channel === "email" && ch.isAutoLinked) && (
+                        <span className="text-[11px] text-brand bg-brand/10 px-1.5 py-0.5 rounded">自動連携</span>
+                      )}
+                    </label>
+                    <button className="flex items-center gap-0.5 text-[12px] text-brand hover:text-brand/80 cursor-pointer transition-colors">
+                      <Plus className="h-3 w-3" />
+                    </button>
+                  </div>
                   <input value={editEmail} onChange={(e) => { setEditEmail(e.target.value); markChanged(); }}
                     disabled={editChannels.some((ch) => ch.channel === "email" && ch.isAutoLinked)}
                     className="w-full rounded-md border px-3 py-2.5 text-[15px] outline-none focus:border-brand/40 disabled:bg-accent/30 disabled:text-muted-foreground" />
@@ -683,11 +718,16 @@ function ContactDetail({
                   const isAutoLinked = existing?.isAutoLinked;
                   return (
                     <div key={channel}>
-                      <label className="mb-1 flex items-center gap-2 text-[13px] text-muted-foreground">
-                        <Icon className="h-3.5 w-3.5" />
-                        {channel === "instagram" ? "Instagram" : channel === "line" ? "LINE" : "Facebook"}
-                        {isAutoLinked && <span className="text-[11px] text-brand bg-brand/10 px-1.5 py-0.5 rounded">自動連携</span>}
-                      </label>
+                      <div className="mb-1 flex items-center justify-between">
+                        <label className="flex items-center gap-1.5 text-[13px] text-muted-foreground">
+                          <Icon className="h-3.5 w-3.5" />
+                          {channel === "instagram" ? "Instagram" : channel === "line" ? "LINE" : "Facebook"}
+                          {isAutoLinked && <span className="text-[11px] text-brand bg-brand/10 px-1.5 py-0.5 rounded">自動連携</span>}
+                        </label>
+                        <button className="flex items-center gap-0.5 text-[12px] text-brand hover:text-brand/80 cursor-pointer transition-colors">
+                          <Plus className="h-3 w-3" />
+                        </button>
+                      </div>
                       <input
                         value={existing?.handle ?? ""}
                         onChange={(e) => {
@@ -709,7 +749,7 @@ function ContactDetail({
             </section>
 
             <section>
-              <h3 className="mb-3 text-[13px] font-medium text-muted-foreground">グループ</h3>
+              <h3 className="mb-3 text-[15px] font-semibold text-foreground">グループ</h3>
               <div className="space-y-2">
                 {groups.map((g) => (
                   <label key={g.id} className="flex items-center gap-2.5 cursor-pointer select-none">
@@ -726,23 +766,22 @@ function ContactDetail({
             </section>
 
             <section>
-              <h3 className="mb-3 text-[13px] font-medium text-muted-foreground">メモ</h3>
+              <h3 className="mb-3 text-[15px] font-semibold text-foreground">メモ</h3>
               <textarea value={editNote} onChange={(e) => { setEditNote(e.target.value); markChanged(); }}
                 placeholder="メモを入力..." rows={4}
                 className="w-full resize-none rounded-md border px-3 py-2.5 text-[15px] outline-none focus:border-brand/40 placeholder:text-muted-foreground/50" />
             </section>
 
-            <section className="pt-4 border-t border-border/40">
+            <section className="pt-4">
               <button
                 onClick={() => {
                   if (window.confirm("この連絡先を削除しますか？")) {
                     onDelete();
                   }
                 }}
-                className="flex w-full items-center justify-center gap-2 rounded-lg border border-destructive/30 px-4 py-3 text-[14px] font-medium text-destructive hover:bg-destructive/5 transition-colors cursor-pointer"
+                className="text-[14px] text-destructive hover:text-destructive/70 underline underline-offset-2 transition-colors cursor-pointer"
               >
-                <Trash2 className="h-4 w-4" />
-                この連絡先を削除
+                連絡先を削除する
               </button>
             </section>
 
@@ -763,7 +802,10 @@ function ContactDetail({
               <div className="space-y-2">
                 {contact.phone && (
                   <div className="flex items-center gap-2.5 text-[17px]">
-                    <span className="text-muted-foreground text-[15px] w-24 shrink-0">電話番号</span>
+                    <span className="text-muted-foreground text-[15px] w-24 shrink-0 flex items-center gap-1">
+                      <Phone className="h-3.5 w-3.5" />
+                      電話番号
+                    </span>
                     <span>{contact.phone}</span>
                   </div>
                 )}
@@ -831,7 +873,7 @@ function ContactDetail({
                           <p className="text-[14px] text-muted-foreground">{conv.lastMessageAt}</p>
                         </div>
                         <span className="rounded-full px-2 py-0.5 text-[12px] font-medium shrink-0 bg-foreground/6 text-foreground/50">
-                          {conv.status === "open" ? "未対応" : conv.status === "resolved" ? "解決済み" : "対応中"}
+                          {conv.status === "completed" ? "完了" : conv.status === "no_action" ? "対応なし" : conv.assignees.length > 0 ? "対応中" : "新着"}
                         </span>
                       </button>
                     );
