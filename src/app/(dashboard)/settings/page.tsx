@@ -799,14 +799,14 @@ function VariableSettings({ defaultVariables, customVariables, setCustomVariable
               <div>
                 <label className="mb-1.5 block text-[13px] font-medium text-muted-foreground">変数キー *</label>
                 <input autoFocus value={form.key} onChange={(e) => setForm((p) => ({ ...p, key: e.target.value }))}
-                  placeholder="例: 部署名"
+                  placeholder="例: 会社の住所"
                   className="w-full rounded-md border px-3 py-2.5 text-[14px] outline-none focus:border-brand/40" />
                 <p className="mt-1 text-[11px] text-muted-foreground">テンプレート内で {`{{${form.key || "キー"}}}`} として使用されます</p>
               </div>
               <div>
                 <label className="mb-1.5 block text-[13px] font-medium text-muted-foreground">表示名 *</label>
                 <input value={form.label} onChange={(e) => setForm((p) => ({ ...p, label: e.target.value }))}
-                  placeholder="例: 部署名"
+                  placeholder="例: 東京都港区..."
                   className="w-full rounded-md border px-3 py-2.5 text-[14px] outline-none focus:border-brand/40" />
               </div>
             </div>

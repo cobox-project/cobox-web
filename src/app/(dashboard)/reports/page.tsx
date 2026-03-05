@@ -101,16 +101,16 @@ function WeekNav({ weekOffset, setWeekOffset, currentMonday, weekEnd }: {
   currentMonday: Date; weekEnd: Date;
 }) {
   return (
-    <div className="flex items-center">
-      <button onClick={() => setWeekOffset((p) => p - 1)} className="cursor-pointer rounded-md p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors">
-        <ChevronLeft className="h-5 w-5" />
+    <div className="flex items-center gap-1">
+      <button onClick={() => setWeekOffset((p) => p - 1)} className="cursor-pointer rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors">
+        <ChevronLeft className="h-6 w-6" />
       </button>
       <span className="text-[14px] font-medium text-muted-foreground text-center">
         {formatDateFull(currentMonday)} - {formatDate(weekEnd)}
       </span>
       <button onClick={() => setWeekOffset((p) => Math.min(p + 1, 0))} disabled={weekOffset >= 0}
-        className="cursor-pointer rounded-md p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors disabled:opacity-30 disabled:cursor-default">
-        <ChevronRight className="h-5 w-5" />
+        className="cursor-pointer rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors disabled:opacity-30 disabled:cursor-default">
+        <ChevronRight className="h-6 w-6" />
       </button>
     </div>
   );
@@ -307,7 +307,7 @@ function SummaryReport({ weekOffset, setWeekOffset, currentMonday, weekEnd }: {
             <span className="text-[13px] text-muted-foreground">新着</span>
           </div>
           <p className="text-[28px] font-semibold tabular-nums">{total}</p>
-          <div className="mt-2 text-[12px] text-muted-foreground">前週比 <span className="text-foreground font-medium">—</span></div>
+          <div className="mt-2 text-[12px] text-muted-foreground">前週比 <span className="text-foreground font-medium">+12%</span></div>
         </div>
         <div className="rounded-lg border bg-white px-5 py-5 flex flex-col justify-between h-full">
           <div className="flex items-center gap-2 mb-2">
@@ -315,7 +315,7 @@ function SummaryReport({ weekOffset, setWeekOffset, currentMonday, weekEnd }: {
             <span className="text-[13px] text-muted-foreground">完了数</span>
           </div>
           <p className="text-[28px] font-semibold tabular-nums text-brand">{resolvedCount}</p>
-          <div className="mt-2 text-[12px] text-muted-foreground">完了率 <span className="text-brand font-medium">{total > 0 ? Math.round((resolvedCount / total) * 100) : 0}%</span></div>
+          <div className="mt-2 text-[12px] text-muted-foreground">前週比 <span className="text-brand font-medium">+8%</span></div>
         </div>
         <div className="rounded-lg border bg-white px-5 py-5">
           <div className="flex items-center gap-2 mb-3">

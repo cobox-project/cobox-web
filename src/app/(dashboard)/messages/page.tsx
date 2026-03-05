@@ -646,6 +646,25 @@ function SentMessagesView() {
         { name: "鈴木 一郎", email: "suzuki@example.com" },
         { name: "田村 裕子", email: "tamura@example.com" },
         { name: "中村 健太", email: "nakamura@example.com" },
+        { name: "高橋 真一", email: "takahashi@example.com" },
+        { name: "伊藤 美穂", email: "ito@example.com" },
+        { name: "渡辺 大輔", email: "watanabe@example.com" },
+        { name: "小林 さくら", email: "kobayashi@example.com" },
+        { name: "加藤 雄介", email: "kato@example.com" },
+        { name: "吉田 真理", email: "yoshida@example.com" },
+        { name: "松本 翔太", email: "matsumoto@example.com" },
+        { name: "井上 美咲", email: "inoue@example.com" },
+        { name: "木村 太一", email: "kimura@example.com" },
+        { name: "清水 愛", email: "shimizu@example.com" },
+        { name: "山本 浩二", email: "yamamoto@example.com" },
+        { name: "中島 彩", email: "nakajima@example.com" },
+        { name: "前田 誠", email: "maeda@example.com" },
+        { name: "岡田 由美", email: "okada@example.com" },
+        { name: "藤田 龍", email: "fujita@example.com" },
+        { name: "後藤 麻衣", email: "goto@example.com" },
+        { name: "長谷川 翼", email: "hasegawa@example.com" },
+        { name: "村上 恵", email: "murakami@example.com" },
+        { name: "近藤 光", email: "kondo@example.com" },
       ],
       bccEmails: ["archive@example.com"],
       variables: { "名前": "連絡先名", "会社名": "会社名" } as Record<string, string>,
@@ -708,6 +727,9 @@ function SentMessagesView() {
 
   const [selectedSent, setSelectedSent] = useState<string | null>(null);
   const [sentSearch, setSentSearch] = useState("");
+  const [recipientsExpanded, setRecipientsExpanded] = useState(false);
+  const [bodyTab, setBodyTab] = useState<"template" | "preview">("template");
+  const [previewRecipientIdx, setPreviewRecipientIdx] = useState(0);
   const selectedItem = sentItems.find((s) => s.id === selectedSent);
   const sentListRef = useRef<HTMLDivElement>(null);
 
@@ -759,12 +781,15 @@ function SentMessagesView() {
     <div className="flex flex-1 overflow-hidden">
       {/* Sent list - 280px matching other folders */}
       <div className="flex h-full w-[280px] shrink-0 flex-col border-r bg-background">
-        <div className="shrink-0 px-3 pt-3 pb-2">
+        <div className="shrink-0 px-3 pt-3 pb-2 space-y-2">
           <div className="flex items-center gap-2 rounded-xl border px-3 py-2">
             <Search className="h-4 w-4 text-muted-foreground" />
             <input value={sentSearch} onChange={(e) => setSentSearch(e.target.value)}
               placeholder="送信済みを検索..."
               className="flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted-foreground/50" />
+          </div>
+          <div className="px-1">
+            <p className="text-[12px] font-medium text-muted-foreground truncate">送信済み</p>
           </div>
         </div>
 
@@ -788,9 +813,9 @@ function SentMessagesView() {
                   <div className="flex items-center gap-1.5 mb-1">
                     <Icon className={cn("h-3.5 w-3.5 shrink-0", isSelected ? "text-white/80" : channelStyles[item.channel].text)} />
                     {item.type === "bulk" && (
-                      <span className={cn("rounded-full px-1.5 py-0.5 text-[10px] font-medium", isSelected ? "bg-white/20 text-white" : "bg-amber-100 text-amber-700")}>一括</span>
+                      <span className={cn("rounded-full px-1.5 py-0.5 text-[10px] font-medium", isSelected ? "bg-white/20 text-white" : "bg-amber-100 text-amber-700")}>一括送信済み</span>
                     )}
-                    <span className={cn("text-[11px] ml-auto", isSelected ? "text-white/70" : "text-muted-foreground")}>{item.sentAt.split(" ")[1]}</span>
+                    <span className={cn("text-[11px] ml-auto", isSelected ? "text-white/70" : "text-muted-foreground")}>{item.sentAt}</span>
                   </div>
                   <p className={cn("text-[13px] font-medium truncate", isSelected && "text-white")}>
                     {item.subject || item.body.slice(0, 30)}
@@ -814,7 +839,7 @@ function SentMessagesView() {
             <div className="flex items-center gap-2 mb-4">
               {(() => { const Icon = channelIcons[selectedItem.channel]; return <Icon className={cn("h-4 w-4", channelStyles[selectedItem.channel].text)} />; })()}
               {selectedItem.type === "bulk" && (
-                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700">一括送信</span>
+                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700">一括送信済み</span>
               )}
               <span className="text-[13px] text-muted-foreground">{selectedItem.sentAt}</span>
               <span className="text-[13px] text-muted-foreground">· 送信者: {selectedItem.sentBy}</span>
@@ -848,14 +873,23 @@ function SentMessagesView() {
                       </div>
                       {selectedItem.recipients && selectedItem.recipients.length > 0 && (
                         <div className="space-y-0.5 text-[12px]">
-                          {selectedItem.recipients.map((r, i) => (
+                          {(recipientsExpanded ? selectedItem.recipients : selectedItem.recipients.slice(0, 3)).map((r, i) => (
                             <div key={i} className="truncate">
                               <span>{r.name}</span>
                               {r.email && <span className="text-muted-foreground ml-1">&lt;{r.email}&gt;</span>}
                             </div>
                           ))}
-                          {selectedItem.recipientCount > selectedItem.recipients.length && (
-                            <p className="text-muted-foreground">他 {selectedItem.recipientCount - selectedItem.recipients.length}名</p>
+                          {!recipientsExpanded && selectedItem.recipients.length > 3 && (
+                            <button onClick={() => setRecipientsExpanded(true)}
+                              className="text-brand hover:underline cursor-pointer text-[12px]">
+                              他 {selectedItem.recipients.length - 3}名を表示
+                            </button>
+                          )}
+                          {recipientsExpanded && selectedItem.recipients.length > 3 && (
+                            <button onClick={() => setRecipientsExpanded(false)}
+                              className="text-brand hover:underline cursor-pointer text-[12px]">
+                              折りたたむ
+                            </button>
                           )}
                         </div>
                       )}
@@ -891,30 +925,55 @@ function SentMessagesView() {
               ) : null;
             })()}
 
-            {/* Variables used (for bulk) with preview */}
-            {selectedItem.type === "bulk" && selectedItem.variables && (
-              <div className="rounded-lg border bg-accent/20 p-4 mb-4 space-y-3">
-                <p className="text-[13px] font-medium">使用変数</p>
-                <div className="flex flex-wrap items-center gap-2">
-                  {Object.entries(selectedItem.variables).map(([key, val]) => (
-                    <span key={key} className="rounded-full border border-brand/30 px-2.5 py-0.5 text-[12px] font-medium text-brand">
-                      {`{{${key}}}`} → {val}
-                    </span>
-                  ))}
+            {/* Message body with template/preview tabs for bulk */}
+            {selectedItem.type === "bulk" && selectedItem.variables ? (
+              <div className="rounded-lg border bg-white">
+                <div className="flex border-b">
+                  <button onClick={() => setBodyTab("template")}
+                    className={cn("flex-1 px-4 py-2.5 text-[13px] font-medium transition-colors cursor-pointer",
+                      bodyTab === "template" ? "text-foreground border-b-2 border-brand" : "text-muted-foreground hover:text-foreground"
+                    )}>テンプレート本文</button>
+                  <button onClick={() => setBodyTab("preview")}
+                    className={cn("flex-1 px-4 py-2.5 text-[13px] font-medium transition-colors cursor-pointer",
+                      bodyTab === "preview" ? "text-foreground border-b-2 border-brand" : "text-muted-foreground hover:text-foreground"
+                    )}>送信プレビュー</button>
                 </div>
-                <div className="border-t pt-3">
-                  <p className="text-[12px] font-medium text-muted-foreground mb-1.5">プレビュー（変数展開後）</p>
-                  <div className="rounded-md border bg-white p-3 text-[13px] leading-relaxed whitespace-pre-wrap text-muted-foreground">
-                    {renderPreviewBody(selectedItem.body, selectedItem.variables)}
+                {bodyTab === "template" ? (
+                  <div className="p-5">
+                    <div className="text-[15px] leading-relaxed whitespace-pre-wrap">{selectedItem.body}</div>
                   </div>
-                </div>
+                ) : (
+                  <div className="p-5">
+                    <div className="mb-3 flex items-center gap-2">
+                      <span className="text-[12px] text-muted-foreground">送信先:</span>
+                      <select
+                        value={previewRecipientIdx}
+                        onChange={(e) => setPreviewRecipientIdx(Number(e.target.value))}
+                        className="rounded-md border px-2 py-1 text-[13px] outline-none focus:border-brand/40 cursor-pointer">
+                        {selectedItem.recipients.map((r, i) => (
+                          <option key={i} value={i}>{r.name} &lt;{r.email}&gt;</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="rounded-md border bg-accent/10 p-4 text-[15px] leading-relaxed whitespace-pre-wrap">
+                      {renderPreviewBody(selectedItem.body, {
+                        ...selectedItem.variables,
+                        ...Object.fromEntries(Object.entries(selectedItem.variables).map(([key]) => {
+                          const recipient = selectedItem.recipients[previewRecipientIdx];
+                          if (key === "名前") return [key, recipient?.name ?? ""];
+                          if (key === "会社名") return [key, "株式会社サンプル"];
+                          return [key, selectedItem.variables[key]];
+                        }))
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="rounded-lg border bg-white p-5">
+                <div className="text-[15px] leading-relaxed whitespace-pre-wrap">{selectedItem.body}</div>
               </div>
             )}
-
-            {/* Message body */}
-            <div className="rounded-lg border bg-white p-5">
-              <div className="text-[15px] leading-relaxed whitespace-pre-wrap">{selectedItem.body}</div>
-            </div>
           </div>
         </div>
       ) : (
@@ -1381,7 +1440,7 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
       {/* Main conversation area */}
       <div className="flex h-full min-w-[400px] flex-1 flex-col bg-background">
         {/* Action bar */}
-        <header ref={headerRef} className="flex shrink-0 items-center justify-between gap-2 border-b px-5 py-3 min-w-0 overflow-hidden" style={{ minHeight: "70px" }}>
+        <header ref={headerRef} className="relative flex shrink-0 items-center justify-between gap-2 border-b px-5 py-3 min-w-0" style={{ minHeight: "70px" }}>
           {/* clicking contact name toggles right pane */}
           <button onClick={onToggleRightPane}
             className="flex min-w-0 items-center gap-3 cursor-pointer rounded-lg px-2 py-1.5 -ml-2 transition-colors hover:bg-accent active:bg-accent/80 shrink-0" style={{ maxWidth: "40%" }}>
@@ -1557,7 +1616,7 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
                           </Button>
                         </Tooltip>
                         {showStampPicker && (
-                          <div className="absolute bottom-full left-0 mb-2 w-[320px] max-h-[280px] rounded-lg border bg-popover p-3 shadow-lg z-[200] overflow-y-auto">
+                          <div className="absolute bottom-full left-0 mb-2 w-[320px] max-h-[280px] rounded-lg border bg-popover p-3 shadow-lg z-[500] overflow-y-auto">
                             <p className="mb-2 text-[12px] font-medium text-muted-foreground sticky top-0 bg-popover pb-1">スタンプ</p>
                             <div className="grid grid-cols-4 gap-2">
                               {lineStampLabels.map((label, i) => (
@@ -1817,10 +1876,11 @@ function ThreadHistoryItem({ conv, CIcon, channelStyle, isLinked, isCurrent, cur
     <div
       className={cn(
         "group relative flex items-center gap-2 rounded-md px-2.5 py-2 transition-colors",
-        isCurrent ? "border-2 border-brand" : "border",
+        isCurrent ? "border-2" : "border",
         !isCurrent && (isLinked ? "border-brand/20" : "hover:bg-accent/30"),
         !isCurrent && "cursor-pointer"
       )}
+      style={isCurrent ? { borderColor: "var(--brand)" } : undefined}
       onClick={() => !isCurrent && onSelect()}
     >
       <div className={cn("flex h-5 w-5 shrink-0 items-center justify-center rounded-full", channelStyle.bg)}>

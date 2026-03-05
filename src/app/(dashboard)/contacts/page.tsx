@@ -259,13 +259,11 @@ export default function ContactsPage() {
             />
           </div>
           {/* Section title header */}
-          {selectedGroupId && (
-            <div className="mt-2 px-1">
-              <p className="text-[12px] font-medium text-muted-foreground truncate">
-                {groups.find((g) => g.id === selectedGroupId)?.name}
-              </p>
-            </div>
-          )}
+          <div className="mt-2 px-1">
+            <p className="text-[12px] font-medium text-muted-foreground truncate">
+              {selectedGroupId ? groups.find((g) => g.id === selectedGroupId)?.name : "すべての連絡先"}
+            </p>
+          </div>
           {selectedGroupId === null ? (
             <div className="mt-2 flex gap-1.5">
               <button
