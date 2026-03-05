@@ -930,13 +930,17 @@ function SentMessagesView() {
               <div className="rounded-lg border bg-white">
                 <div className="flex border-b">
                   <button onClick={() => setBodyTab("template")}
-                    className={cn("flex-1 px-4 py-2.5 text-[13px] font-medium transition-colors cursor-pointer -mb-px",
-                      bodyTab === "template" ? "text-foreground border-b-2 border-brand" : "text-muted-foreground hover:text-foreground border-b-2 border-transparent"
-                    )}>入力した本文</button>
+                    className={cn("flex-1 px-4 py-2.5 text-[13px] font-medium transition-colors cursor-pointer -mb-px border-b-2",
+                      bodyTab === "template" ? "text-foreground" : "text-muted-foreground hover:text-foreground border-transparent"
+                    )}
+                    style={bodyTab === "template" ? { borderBottomColor: "var(--brand)" } : undefined}
+                  >入力した本文</button>
                   <button onClick={() => setBodyTab("preview")}
-                    className={cn("flex-1 px-4 py-2.5 text-[13px] font-medium transition-colors cursor-pointer -mb-px",
-                      bodyTab === "preview" ? "text-foreground border-b-2 border-brand" : "text-muted-foreground hover:text-foreground border-b-2 border-transparent"
-                    )}>実際の文面</button>
+                    className={cn("flex-1 px-4 py-2.5 text-[13px] font-medium transition-colors cursor-pointer -mb-px border-b-2",
+                      bodyTab === "preview" ? "text-foreground" : "text-muted-foreground hover:text-foreground border-transparent"
+                    )}
+                    style={bodyTab === "preview" ? { borderBottomColor: "var(--brand)" } : undefined}
+                  >実際の文面</button>
                 </div>
                 {bodyTab === "template" ? (
                   <div className="p-5">
