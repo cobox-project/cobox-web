@@ -101,15 +101,15 @@ function WeekNav({ weekOffset, setWeekOffset, currentMonday, weekEnd }: {
   currentMonday: Date; weekEnd: Date;
 }) {
   return (
-    <div className="flex items-center gap-1">
-      <button onClick={() => setWeekOffset((p) => p - 1)} className="cursor-pointer rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors">
+    <div className="flex items-center">
+      <button onClick={() => setWeekOffset((p) => p - 1)} className="cursor-pointer rounded-md p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors">
         <ChevronLeft className="h-5 w-5" />
       </button>
-      <span className="text-[14px] font-medium text-muted-foreground min-w-[180px] text-center">
+      <span className="text-[14px] font-medium text-muted-foreground text-center">
         {formatDateFull(currentMonday)} - {formatDate(weekEnd)}
       </span>
       <button onClick={() => setWeekOffset((p) => Math.min(p + 1, 0))} disabled={weekOffset >= 0}
-        className="cursor-pointer rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors disabled:opacity-30 disabled:cursor-default">
+        className="cursor-pointer rounded-md p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors disabled:opacity-30 disabled:cursor-default">
         <ChevronRight className="h-5 w-5" />
       </button>
     </div>
@@ -417,7 +417,7 @@ function SummaryReport({ weekOffset, setWeekOffset, currentMonday, weekEnd }: {
                   const val = heatmapData[dayIdx][hour];
                   const intensity = maxHeat > 0 ? val / maxHeat : 0;
                   return (
-                    <div key={dayIdx} className="flex-1 h-[7px] cursor-default transition-transform hover:scale-110 hover:z-10"
+                    <div key={dayIdx} className="flex-1 h-[9px] cursor-default transition-transform hover:scale-110 hover:z-10"
                       style={{ backgroundColor: val === 0 ? "oklch(0.96 0 0)" : `oklch(0.52 ${0.17 * intensity} 155 / ${0.15 + intensity * 0.85})` }}
                       onMouseEnter={(e) => { const rect = e.currentTarget.getBoundingClientRect(); setHoveredCell({ day, date: heatmapDates[dayIdx], hour, val, x: rect.left + rect.width / 2, y: rect.top }); }}
                       onMouseLeave={() => setHoveredCell(null)} />

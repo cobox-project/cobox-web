@@ -637,10 +637,16 @@ function SentMessagesView() {
       id: "sent_1",
       type: "bulk" as const,
       subject: "【春の新商品】特別先行セールのご案内",
-      body: "{{名前}}様\n\nいつもご利用いただきありがとうございます。この度、春の新商品ラインナップが完成いたしましたので、お得意様限定の先行セールをご案内いたします...",
+      body: "{{名前}}様\n\nいつもご利用いただきありがとうございます。\nこの度、春の新商品ラインナップが完成いたしましたので、お得意様限定の先行セールをご案内いたします。\n\n■ セール期間\n2026年3月10日（火）〜 3月20日（金）\n\n■ 対象商品\n春の新作コレクション全品 20%OFF\n\n■ ご利用方法\nマイページにログイン後、クーポンコード「SPRING2026」をご入力ください。\n\nご不明な点がございましたら、お気軽にお問い合わせください。\n\n今後ともよろしくお願いいたします。",
       recipientCount: 24,
       recipientGroups: ["VIP顧客"],
-      recipientEmails: ["vip-group@example.com"],
+      recipients: [
+        { name: "山田 太郎", email: "yamada@example.com" },
+        { name: "佐藤 花子", email: "sato@example.com" },
+        { name: "鈴木 一郎", email: "suzuki@example.com" },
+        { name: "田村 裕子", email: "tamura@example.com" },
+        { name: "中村 健太", email: "nakamura@example.com" },
+      ],
       bccEmails: ["archive@example.com"],
       variables: { "名前": "連絡先名", "会社名": "会社名" } as Record<string, string>,
       sentAt: "2026-03-05 14:30",
@@ -652,10 +658,10 @@ function SentMessagesView() {
       id: "sent_2",
       type: "individual" as const,
       subject: "Re: 商品に関するお問い合わせ",
-      body: "山田様\n\nお問い合わせいただきありがとうございます。ご質問の件について回答いたします...",
+      body: "山田様\n\nお問い合わせいただきありがとうございます。\nご質問の件について回答いたします。\n\nお問い合わせいただいた商品「プレミアムセット A」の在庫状況ですが、現在在庫がございます。\nご注文いただければ、通常2〜3営業日以内に発送いたします。\n\n配送先やお支払い方法についてご不明点があれば、お気軽にご連絡ください。\n\nよろしくお願いいたします。\n\n田中 美咲\nカスタマーサポート",
       recipientCount: 1,
       recipientName: "山田 太郎",
-      recipientEmails: ["yamada@example.com"],
+      recipients: [{ name: "山田 太郎", email: "yamada@example.com" }],
       bccEmails: [],
       sentAt: "2026-03-05 11:15",
       sentBy: "田中 美咲",
@@ -667,10 +673,16 @@ function SentMessagesView() {
       id: "sent_3",
       type: "bulk" as const,
       subject: "メンテナンスのお知らせ",
-      body: "{{名前}}様\n\nシステムメンテナンスを以下の日程で実施いたします。ご不便をおかけしますが、ご了承ください...",
+      body: "{{名前}}様\n\nいつもご利用いただきありがとうございます。\n下記の日程でシステムメンテナンスを実施いたします。\n\n■ メンテナンス日時\n2026年3月8日（日） 02:00 〜 06:00（予定）\n\n■ 影響範囲\nメンテナンス中はサービス全体がご利用いただけません。\n\n■ ご注意\nメンテナンス前に作業中のデータは必ず保存してください。\n\nご不便をおかけしますが、サービス品質向上のため何卒ご了承ください。\n\n株式会社CoBox\nシステム運営チーム",
       recipientCount: 156,
       recipientGroups: ["全顧客", "パートナー"],
-      recipientEmails: ["all-customers@example.com", "partners@example.com"],
+      recipients: [
+        { name: "山田 太郎", email: "yamada@example.com" },
+        { name: "佐藤 花子", email: "sato@example.com" },
+        { name: "鈴木 一郎", email: "suzuki@example.com" },
+        { name: "高橋 真一", email: "takahashi@example.com" },
+        { name: "伊藤 美穂", email: "ito@example.com" },
+      ],
       bccEmails: ["log@example.com"],
       variables: { "名前": "連絡先名" } as Record<string, string>,
       sentAt: "2026-03-04 09:00",
@@ -682,10 +694,10 @@ function SentMessagesView() {
       id: "sent_4",
       type: "individual" as const,
       subject: "",
-      body: "ありがとうございます！確認いたしました。",
+      body: "ありがとうございます！確認いたしました。\n商品の発送手続きを進めさせていただきますので、到着まで少々お待ちください。\n\n何かございましたらお気軽にご連絡ください。",
       recipientCount: 1,
       recipientName: "鈴木 花子",
-      recipientEmails: [],
+      recipients: [{ name: "鈴木 花子", email: "" }],
       bccEmails: [],
       sentAt: "2026-03-03 16:45",
       sentBy: "田中 美咲",
@@ -822,25 +834,38 @@ function SentMessagesView() {
               )}
               <div className="flex items-start gap-2">
                 <span className="text-[12px] font-medium text-muted-foreground w-12 shrink-0 pt-0.5">To</span>
-                <div className="text-[13px]">
-                  {selectedItem.type === "bulk" ? (
-                    <div className="space-y-1">
-                      <span>{selectedItem.recipientCount}名</span>
-                      {selectedItem.recipientGroups && (
-                        <div className="flex items-center gap-1.5">
-                          <FolderOpen className="h-3 w-3 text-muted-foreground" />
-                          <span className="text-muted-foreground">{selectedItem.recipientGroups.join(", ")}</span>
+                <div className="text-[13px] flex-1 min-w-0">
+                  {selectedItem.type === "bulk" && (
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-2">
+                        <span>{selectedItem.recipientCount}名</span>
+                        {selectedItem.recipientGroups && (
+                          <span className="flex items-center gap-1">
+                            <FolderOpen className="h-3 w-3 text-muted-foreground" />
+                            <span className="text-muted-foreground">{selectedItem.recipientGroups.join(", ")}</span>
+                          </span>
+                        )}
+                      </div>
+                      {selectedItem.recipients && selectedItem.recipients.length > 0 && (
+                        <div className="space-y-0.5 text-[12px]">
+                          {selectedItem.recipients.map((r, i) => (
+                            <div key={i} className="truncate">
+                              <span>{r.name}</span>
+                              {r.email && <span className="text-muted-foreground ml-1">&lt;{r.email}&gt;</span>}
+                            </div>
+                          ))}
+                          {selectedItem.recipientCount > selectedItem.recipients.length && (
+                            <p className="text-muted-foreground">他 {selectedItem.recipientCount - selectedItem.recipients.length}名</p>
+                          )}
                         </div>
                       )}
-                      {selectedItem.recipientEmails.length > 0 && (
-                        <p className="text-muted-foreground">{selectedItem.recipientEmails.join(", ")}</p>
-                      )}
                     </div>
-                  ) : (
+                  )}
+                  {selectedItem.type === "individual" && selectedItem.recipients && (
                     <div>
-                      <span>{selectedItem.recipientName}</span>
-                      {selectedItem.recipientEmails.length > 0 && (
-                        <span className="text-muted-foreground ml-1.5">&lt;{selectedItem.recipientEmails[0]}&gt;</span>
+                      <span>{selectedItem.recipients[0]?.name}</span>
+                      {selectedItem.recipients[0]?.email && (
+                        <span className="text-muted-foreground ml-1.5">&lt;{selectedItem.recipients[0].email}&gt;</span>
                       )}
                     </div>
                   )}
@@ -1063,9 +1088,10 @@ function ConversationItem({ conversation, isSelected, isRecentlyRead, isSelfAssi
 
 /* --- Assignee Popover (multi-select, focus-out close) --- */
 
-function AssigneePopover({ conversation, isSelfAssigned, onSetAssignee, onRemoveAssignee, onClearAssignees }: {
+function AssigneePopover({ conversation, isSelfAssigned, roundLeft, onSetAssignee, onRemoveAssignee, onClearAssignees }: {
   conversation: Conversation;
   isSelfAssigned: boolean;
+  roundLeft?: boolean;
   onSetAssignee: (id: string, assigneeId: string) => void;
   onRemoveAssignee: (id: string, assigneeId: string) => void;
   onClearAssignees: (id: string) => void;
@@ -1091,7 +1117,7 @@ function AssigneePopover({ conversation, isSelfAssigned, onSetAssignee, onRemove
       <Button variant={isSelfAssigned ? "ghost" : "outline"} size="sm"
         className={cn(
           "h-9 gap-1 text-[14px] px-3",
-          !isSelfAssigned && "rounded-l-none",
+          !isSelfAssigned && !roundLeft && "rounded-l-none",
           isSelfAssigned && "border"
         )}
         onClick={() => setOpen(!open)}>
@@ -1336,15 +1362,29 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
   // Change #18: linked conversations data
   const linkedConversations = linkedIds.map((id) => allConvs.find((c) => c.id === id)).filter(Boolean) as Conversation[];
 
+  const headerRef = useRef<HTMLElement>(null);
+  const [headerNarrow, setHeaderNarrow] = useState(false);
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setHeaderNarrow(entry.contentRect.width < 640);
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   return (
     <div className="flex h-full min-w-0 flex-1">
       {/* Main conversation area */}
       <div className="flex h-full min-w-[400px] flex-1 flex-col bg-background">
         {/* Action bar */}
-        <header className="flex shrink-0 items-center justify-between gap-2 border-b px-5 py-3 min-w-0 overflow-hidden" style={{ minHeight: "70px" }}>
+        <header ref={headerRef} className="flex shrink-0 items-center justify-between gap-2 border-b px-5 py-3 min-w-0 overflow-hidden" style={{ minHeight: "70px" }}>
           {/* clicking contact name toggles right pane */}
           <button onClick={onToggleRightPane}
-            className="flex min-w-0 items-center gap-3 cursor-pointer rounded-lg px-2 py-1.5 -ml-2 transition-colors hover:bg-accent active:bg-accent/80 shrink overflow-hidden" style={{ minWidth: "80px" }}>
+            className="flex min-w-0 items-center gap-3 cursor-pointer rounded-lg px-2 py-1.5 -ml-2 transition-colors hover:bg-accent active:bg-accent/80 shrink-0" style={{ maxWidth: "40%" }}>
             <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-full", style.bg)}>
               <Icon className={cn("h-4 w-4", style.text)} />
             </div>
@@ -1356,11 +1396,11 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
             </div>
           </button>
 
-          <div className="flex items-center gap-1.5 shrink-0 justify-end overflow-hidden">
+          <div className="flex items-center gap-1.5 shrink-0 justify-end">
             {/* Assign self + assignee dropdown */}
             <div className="flex items-center">
-              {!isSelfAssigned && (
-                <Button variant="outline" size="sm" className="hidden xl:flex h-9 gap-1.5 text-[14px] px-3 rounded-r-none border-r-0"
+              {!isSelfAssigned && !headerNarrow && (
+                <Button variant="outline" size="sm" className="h-9 gap-1.5 text-[14px] px-3 rounded-r-none border-r-0"
                   onClick={() => onAssignSelf(conversation.id)}>
                   <Avatar src={currentUser.avatar} fallback={currentUser.name} size="sm" className="h-4 w-4 text-[6px]" />
                   担当する
@@ -1369,6 +1409,7 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
               <AssigneePopover
                 conversation={conversation}
                 isSelfAssigned={isSelfAssigned}
+                roundLeft={headerNarrow}
                 onSetAssignee={onSetAssignee}
                 onRemoveAssignee={onRemoveAssignee}
                 onClearAssignees={(id) => {
@@ -1387,7 +1428,7 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
                 )}
                 onClick={() => onStatusChange(conversation.id, conversation.status === "completed" ? "open" : "completed")}>
                 <Check className="h-3.5 w-3.5" />
-                <span className="hidden xl:inline">完了</span>
+                {!headerNarrow && <span>完了</span>}
               </Button>
               <Button size="sm"
                 variant={conversation.status === "no_action" ? "default" : "outline"}
@@ -1397,7 +1438,7 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
                 )}
                 onClick={() => onStatusChange(conversation.id, conversation.status === "no_action" ? "open" : "no_action")}>
                 <Ban className="h-3.5 w-3.5" />
-                <span className="hidden xl:inline">対応なし</span>
+                {!headerNarrow && <span>対応なし</span>}
               </Button>
             </div>
 
@@ -1516,12 +1557,12 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
                           </Button>
                         </Tooltip>
                         {showStampPicker && (
-                          <div className="absolute bottom-full left-0 mb-2 w-[320px] rounded-lg border bg-popover p-3 shadow-lg z-[200]">
-                            <p className="mb-2 text-[12px] font-medium text-muted-foreground">スタンプ</p>
+                          <div className="absolute bottom-full left-0 mb-2 w-[320px] max-h-[280px] rounded-lg border bg-popover p-3 shadow-lg z-[200] overflow-y-auto">
+                            <p className="mb-2 text-[12px] font-medium text-muted-foreground sticky top-0 bg-popover pb-1">スタンプ</p>
                             <div className="grid grid-cols-4 gap-2">
                               {lineStampLabels.map((label, i) => (
                                 <button key={i}
-                                  className="flex h-16 items-center justify-center rounded-lg border bg-channel-line/5 text-[13px] font-medium text-channel-line hover:bg-channel-line/15 transition-colors cursor-pointer"
+                                  className="flex h-14 items-center justify-center rounded-lg border bg-channel-line/5 text-[13px] font-medium text-channel-line hover:bg-channel-line/15 transition-colors cursor-pointer"
                                   onClick={() => { onSendMessage(conversation.id, `[スタンプ: ${label}]`, false); setShowStampPicker(false); }}>
                                   {label}
                                 </button>
@@ -1775,8 +1816,9 @@ function ThreadHistoryItem({ conv, CIcon, channelStyle, isLinked, isCurrent, cur
   return (
     <div
       className={cn(
-        "group relative flex items-center gap-2 rounded-md border px-2.5 py-2 transition-colors",
-        isCurrent ? "border-brand border-2" : isLinked ? "border-brand/20" : "hover:bg-accent/30",
+        "group relative flex items-center gap-2 rounded-md px-2.5 py-2 transition-colors",
+        isCurrent ? "border-2 border-brand" : "border",
+        !isCurrent && (isLinked ? "border-brand/20" : "hover:bg-accent/30"),
         !isCurrent && "cursor-pointer"
       )}
       onClick={() => !isCurrent && onSelect()}
