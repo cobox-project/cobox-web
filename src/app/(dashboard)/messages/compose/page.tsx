@@ -17,6 +17,7 @@ import {
   FileText,
   Mail,
   ChevronDown,
+  FileStack,
 } from "lucide-react";
 
 const variableButtons = [
@@ -47,6 +48,7 @@ function ComposePageInner() {
   const [previewContactId, setPreviewContactId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedEmailAccountId, setSelectedEmailAccountId] = useState(emailAccounts[0]?.id ?? "");
+  const [showDraftModal, setShowDraftModal] = useState(false);
 
   // Pre-select group from query param
   useEffect(() => {
@@ -133,9 +135,10 @@ function ComposePageInner() {
           <h1 className="text-[17px] font-semibold">新規メッセージ作成</h1>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" className="h-9 gap-1.5 text-[14px] px-4">
-            <Save className="h-3.5 w-3.5" />
-            下書き保存
+          <Button variant="outline" size="sm" className="h-9 gap-1.5 text-[14px] px-4"
+            onClick={() => setShowDraftModal(true)}>
+            <FileStack className="h-3.5 w-3.5" />
+            下書き
           </Button>
           <Button size="sm" className="h-9 gap-1.5 text-[14px] px-4 bg-brand hover:bg-brand/90"
             disabled={resolvedContacts.length === 0 || !body.trim()}>
@@ -148,8 +151,8 @@ function ComposePageInner() {
       {/* Main content - split layout: editor left, preview right */}
       <div className="flex flex-1 overflow-hidden">
         {/* Editor pane */}
-        <div className="flex-1 overflow-y-auto border-r">
-          <div className="max-w-xl px-8 py-6 space-y-5">
+        <div className="w-1/2 overflow-y-auto border-r">
+          <div className="max-w-lg mx-auto px-8 py-6 space-y-5">
             {/* Email account selector */}
             <section>
               <label className="mb-1.5 block text-[13px] font-medium text-muted-foreground">送信元メールアカウント</label>
@@ -158,7 +161,7 @@ function ComposePageInner() {
                 <select
                   value={selectedEmailAccountId}
                   onChange={(e) => setSelectedEmailAccountId(e.target.value)}
-                  className="flex-1 rounded-lg border px-3 py-2.5 text-[15px] outline-none focus:border-brand/40 bg-background"
+                  className="flex-1 rounded-lg border px-3 pr-8 py-2.5 text-[15px] outline-none focus:border-brand/40 bg-background"
                 >
                   {emailAccounts.map((acc) => (
                     <option key={acc.id} value={acc.id}>{acc.name}</option>
@@ -170,24 +173,24 @@ function ComposePageInner() {
             {/* Recipient type */}
             <section>
               <label className="mb-2 block text-[13px] font-medium text-muted-foreground">宛先</label>
-              <div className="flex items-center gap-2 mb-3">
-                <button
-                  onClick={() => setRecipientType("group")}
-                  className={cn(
-                    "flex items-center gap-1.5 rounded-lg border px-3 py-2 text-[14px] font-medium transition-colors cursor-pointer",
-                    recipientType === "group" ? "border-brand bg-brand/5 text-brand" : "border-border text-muted-foreground hover:bg-accent"
-                  )}>
-                  <Users className="h-3.5 w-3.5" />
-                  グループ
-                </button>
+              <div className="flex rounded-lg border overflow-hidden mb-3">
                 <button
                   onClick={() => setRecipientType("individual")}
                   className={cn(
-                    "flex items-center gap-1.5 rounded-lg border px-3 py-2 text-[14px] font-medium transition-colors cursor-pointer",
-                    recipientType === "individual" ? "border-brand bg-brand/5 text-brand" : "border-border text-muted-foreground hover:bg-accent"
+                    "flex flex-1 items-center justify-center gap-1.5 px-3 py-2 text-[14px] font-medium transition-colors cursor-pointer border-r",
+                    recipientType === "individual" ? "bg-brand text-white" : "bg-background text-muted-foreground hover:bg-accent"
                   )}>
                   <User className="h-3.5 w-3.5" />
-                  個別連絡先
+                  個別
+                </button>
+                <button
+                  onClick={() => setRecipientType("group")}
+                  className={cn(
+                    "flex flex-1 items-center justify-center gap-1.5 px-3 py-2 text-[14px] font-medium transition-colors cursor-pointer",
+                    recipientType === "group" ? "bg-brand text-white" : "bg-background text-muted-foreground hover:bg-accent"
+                  )}>
+                  <Users className="h-3.5 w-3.5" />
+                  グループ
                 </button>
               </div>
 
@@ -248,25 +251,18 @@ function ComposePageInner() {
                 className="w-full rounded-lg border px-3 py-2.5 text-[15px] outline-none focus:border-brand/40 placeholder:text-muted-foreground/50" />
             </section>
 
-            {/* Variable buttons */}
-            <section>
-              <label className="mb-1.5 block text-[13px] font-medium text-muted-foreground">差し込み変数</label>
-              <div className="flex items-center gap-2">
-                {variableButtons.map((v) => (
-                  <button key={v.variable}
-                    onClick={() => insertVariable(v.variable)}
-                    className="rounded-full border border-brand/30 bg-brand/5 px-3 py-1 text-[13px] font-medium text-brand hover:bg-brand/10 transition-colors cursor-pointer">
-                    {v.label}
-                  </button>
-                ))}
-              </div>
-            </section>
-
             {/* Body */}
             <section>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="text-[13px] font-medium text-muted-foreground">本文</label>
                 <div className="flex items-center gap-2">
+                  {variableButtons.map((v) => (
+                    <button key={v.variable}
+                      onClick={() => insertVariable(v.variable)}
+                      className="rounded-full border border-brand/30 bg-brand/5 px-2.5 py-0.5 text-[12px] font-medium text-brand hover:bg-brand/10 transition-colors cursor-pointer">
+                      {v.label}
+                    </button>
+                  ))}
                   <button onClick={() => setShowTemplatePicker(!showTemplatePicker)}
                     className="flex items-center gap-1 text-[13px] text-brand hover:text-brand/80 cursor-pointer transition-colors">
                     <FileText className="h-3.5 w-3.5" />
@@ -293,23 +289,12 @@ function ComposePageInner() {
                 placeholder="メッセージ本文を入力..."
                 rows={12}
                 className="w-full resize-none rounded-lg border px-3 py-2.5 text-[15px] leading-relaxed outline-none focus:border-brand/40 placeholder:text-muted-foreground/50" />
-
-              {/* Variable tags display */}
-              {body.includes("{{") && (
-                <div className="mt-2 flex flex-wrap gap-1">
-                  {(body.match(/\{\{[^}]+\}\}/g) ?? []).map((v, i) => (
-                    <span key={i} className="rounded-full bg-brand/10 px-2.5 py-0.5 text-[12px] font-medium text-brand">
-                      {v.replace(/[{}]/g, "")}
-                    </span>
-                  ))}
-                </div>
-              )}
             </section>
           </div>
         </div>
 
         {/* Live preview pane (always visible on right) */}
-        <div className="w-[400px] shrink-0 overflow-y-auto bg-accent/5">
+        <div className="w-1/2 overflow-y-auto bg-accent/5">
           <div className="px-6 py-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-[15px] font-semibold">プレビュー</h3>
@@ -317,7 +302,7 @@ function ComposePageInner() {
                 <select
                   value={previewContactId ?? ""}
                   onChange={(e) => setPreviewContactId(e.target.value || null)}
-                  className="rounded-md border px-2 py-1 text-[13px] outline-none bg-background"
+                  className="rounded-md border px-2 pr-8 py-1 text-[13px] outline-none bg-background"
                 >
                   {resolvedContacts.map((c) => (
                     <option key={c.id} value={c.id}>{c.name}</option>
@@ -355,6 +340,25 @@ function ComposePageInner() {
           </div>
         </div>
       </div>
+
+      {/* Draft modal */}
+      {showDraftModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="w-full max-w-md rounded-xl border bg-background p-6 shadow-lg">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-[16px] font-semibold">下書き一覧</h2>
+              <button onClick={() => setShowDraftModal(false)}
+                className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors cursor-pointer">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <FileText className="h-10 w-10 text-muted-foreground/30 mb-3" />
+              <p className="text-[14px] text-muted-foreground">保存された下書きはありません</p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -909,31 +909,60 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
           <div className="flex items-center gap-1.5">
             {/* Change #12: Combined assign button with assignee dropdown */}
             {!isSelfAssigned ? (
-              <div className="flex items-center">
-                <Button variant="outline" size="sm" className="h-9 gap-1.5 text-[14px] px-3 rounded-r-none border-r-0"
-                  onClick={() => onAssignSelf(conversation.id)}>
-                  <UserPlus className="h-3.5 w-3.5" />
-                  {conversation.assignees.length === 0 ? "自分をアサイン" : "自分をアサイン追加"}
-                </Button>
-                <Dropdown align="right"
-                  trigger={
-                    <Button variant="outline" size="sm" className="h-9 px-1.5 rounded-l-none">
-                      <ChevronDown className="h-3 w-3 text-muted-foreground" />
-                    </Button>
-                  }>
-                  {teamMembers.map((m) => {
-                    const isAssigned = conversation.assignees.some((a) => a.id === m.id);
-                    return (
-                      <DropdownItem key={m.id} active={isAssigned}
-                        onClick={() => isAssigned ? onRemoveAssignee(conversation.id, m.id) : onSetAssignee(conversation.id, m.id)}>
-                        <Avatar src={m.avatar} fallback={m.name} size="sm" className="h-4 w-4 text-[6px]" />
-                        {m.name}
-                        {isAssigned && <Check className="h-3 w-3 ml-auto text-brand" />}
-                      </DropdownItem>
-                    );
-                  })}
-                </Dropdown>
-              </div>
+              conversation.assignees.length === 0 ? (
+                <div className="flex items-center">
+                  <span className="inline-flex h-9 items-center rounded-l-md border border-r-0 bg-muted/40 px-3 text-[14px] text-muted-foreground">未アサイン</span>
+                  <Button variant="outline" size="sm" className="h-9 gap-1.5 text-[14px] px-3 rounded-none border-r-0"
+                    onClick={() => onAssignSelf(conversation.id)}>
+                    <UserPlus className="h-3.5 w-3.5" />
+                    自分にアサイン
+                  </Button>
+                  <Dropdown align="right"
+                    trigger={
+                      <Button variant="outline" size="sm" className="h-9 px-1.5 rounded-l-none">
+                        <ChevronDown className="h-3 w-3 text-muted-foreground" />
+                      </Button>
+                    }>
+                    {teamMembers.map((m) => {
+                      const isAssigned = conversation.assignees.some((a) => a.id === m.id);
+                      return (
+                        <DropdownItem key={m.id} active={isAssigned}
+                          onClick={() => isAssigned ? onRemoveAssignee(conversation.id, m.id) : onSetAssignee(conversation.id, m.id)}>
+                          <Avatar src={m.avatar} fallback={m.name} size="sm" className="h-4 w-4 text-[6px]" />
+                          {m.name}
+                          {isAssigned && <Check className="h-3 w-3 ml-auto text-brand" />}
+                        </DropdownItem>
+                      );
+                    })}
+                  </Dropdown>
+                </div>
+              ) : (
+                <div className="flex items-center">
+                  <Button variant="outline" size="sm" className="h-9 gap-1.5 text-[14px] px-3 rounded-r-none border-r-0"
+                    onClick={() => onAssignSelf(conversation.id)}>
+                    <UserPlus className="h-3.5 w-3.5" />
+                    自分をアサイン追加
+                  </Button>
+                  <Dropdown align="right"
+                    trigger={
+                      <Button variant="outline" size="sm" className="h-9 px-1.5 rounded-l-none">
+                        <ChevronDown className="h-3 w-3 text-muted-foreground" />
+                      </Button>
+                    }>
+                    {teamMembers.map((m) => {
+                      const isAssigned = conversation.assignees.some((a) => a.id === m.id);
+                      return (
+                        <DropdownItem key={m.id} active={isAssigned}
+                          onClick={() => isAssigned ? onRemoveAssignee(conversation.id, m.id) : onSetAssignee(conversation.id, m.id)}>
+                          <Avatar src={m.avatar} fallback={m.name} size="sm" className="h-4 w-4 text-[6px]" />
+                          {m.name}
+                          {isAssigned && <Check className="h-3 w-3 ml-auto text-brand" />}
+                        </DropdownItem>
+                      );
+                    })}
+                  </Dropdown>
+                </div>
+              )
             ) : (
               <Dropdown align="right"
                 trigger={
@@ -943,7 +972,9 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
                         {conversation.assignees.map((a) => (
                           <Avatar key={a.id} src={a.avatar} fallback={a.name} size="sm" className="h-4 w-4 text-[6px]" />
                         ))}
-                        担当者
+                        {conversation.assignees.length === 1
+                          ? conversation.assignees[0].name
+                          : `${conversation.assignees[0].name}+${conversation.assignees.length - 1}`}
                       </span>
                     ) : (
                       <span className="flex items-center gap-1">
@@ -968,26 +999,24 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
               </Dropdown>
             )}
 
-            {/* Change #10: Two side-by-side buttons for 完了 and 対応なし */}
-            <div className="flex items-center gap-1">
+            {/* Change #10: Connected toggle button group for 完了 and 対応なし */}
+            <div className="flex items-center">
               <Button size="sm"
                 variant={conversation.status === "completed" ? "default" : "outline"}
                 className={cn(
-                  "h-9 gap-1.5 text-[14px] px-3",
+                  "h-9 text-[14px] px-3 rounded-r-none border-r-0",
                   conversation.status === "completed" && "bg-brand hover:bg-brand/90"
                 )}
                 onClick={() => onStatusChange(conversation.id, conversation.status === "completed" ? "open" : "completed")}>
-                <Check className="h-3.5 w-3.5" />
                 完了
               </Button>
               <Button size="sm"
                 variant={conversation.status === "no_action" ? "default" : "outline"}
                 className={cn(
-                  "h-9 gap-1.5 text-[14px] px-3",
+                  "h-9 text-[14px] px-3 rounded-l-none",
                   conversation.status === "no_action" && "bg-muted-foreground hover:bg-muted-foreground/90"
                 )}
                 onClick={() => onStatusChange(conversation.id, conversation.status === "no_action" ? "open" : "no_action")}>
-                <X className="h-3.5 w-3.5" />
                 対応なし
               </Button>
             </div>
@@ -1020,7 +1049,7 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
                   {linkedConversations.map((lc) => (
                     <button key={lc.id} onClick={() => onSelectConversation(lc.id)}
                       className="block w-full text-left text-[13px] text-brand hover:text-brand/70 hover:underline cursor-pointer truncate">
-                      {lc.subject || lc.contactName}: {lc.lastMessage}
+                      {lc.channel === "email" ? (lc.subject || lc.lastMessage) : (lc.messages[0]?.content || lc.lastMessage)}
                     </button>
                   ))}
                 </div>
@@ -1115,7 +1144,7 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
                   {linkedConversations.map((lc) => (
                     <button key={lc.id} onClick={() => onSelectConversation(lc.id)}
                       className="block w-full text-left text-[13px] text-brand hover:text-brand/70 hover:underline cursor-pointer truncate">
-                      {lc.subject || lc.contactName}: {lc.lastMessage}
+                      {lc.channel === "email" ? (lc.subject || lc.lastMessage) : (lc.messages[0]?.content || lc.lastMessage)}
                     </button>
                   ))}
                 </div>
@@ -1218,8 +1247,7 @@ function RightSidePane({ conversation, allConversations, contactConversations, l
   return (
     <div className="flex h-full w-[300px] min-w-[260px] shrink-0 flex-col border-l bg-background overflow-y-auto">
       {/* Change #13: Close button in header, Change #16: removed message ID from here */}
-      <div className="shrink-0 px-4 py-3 border-b flex items-center justify-between">
-        <span className="text-[15px] font-semibold text-foreground">詳細</span>
+      <div className="shrink-0 px-4 py-3 flex items-center justify-end">
         <button onClick={onClose} className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors cursor-pointer">
           <X className="h-4 w-4" />
         </button>
@@ -1329,38 +1357,56 @@ function ThreadHistoryItem({ conv, CIcon, channelStyle, isLinked, isCurrent, cur
   onUnlink: () => void;
 }) {
   const [showMenu, setShowMenu] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setShowMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showMenu]);
 
   return (
     <div
       className={cn(
-        "group relative flex items-start gap-2 rounded-md border px-2.5 py-2 transition-colors",
+        "group relative flex items-center gap-2 rounded-md border px-2.5 py-2 transition-colors",
         isCurrent ? "border-brand/30 bg-brand/5" : isLinked ? "border-brand/20 bg-brand/3" : "hover:bg-accent/30",
         !isCurrent && "cursor-pointer"
       )}
       onClick={() => !isCurrent && onSelect()}
     >
-      {isLinked && (
-        <Link2 className="absolute -left-1 -top-1 h-3.5 w-3.5 text-brand" />
-      )}
-      <div className={cn("flex h-5 w-5 shrink-0 items-center justify-center rounded-full mt-0.5", channelStyle.bg)}>
+      <div className={cn("flex h-5 w-5 shrink-0 items-center justify-center rounded-full", channelStyle.bg)}>
         <CIcon className={cn("h-2.5 w-2.5", channelStyle.text)} />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[13px] font-medium">{conv.subject || conv.lastMessage}</p>
+        <p className="truncate text-[13px] font-medium">{conv.subject || conv.messages?.[0]?.content || conv.lastMessage}</p>
         <p className="text-[12px] text-muted-foreground">{conv.lastMessageAt}</p>
       </div>
 
-      {/* Hover menu */}
+      {/* Link icon + Hover menu */}
       {!isCurrent && (
-        <div className="relative shrink-0">
+        <div className="relative shrink-0 flex items-center gap-0.5" ref={menuRef}>
+          {isLinked && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onUnlink(); }}
+              className="flex h-7 w-7 items-center justify-center rounded text-brand hover:bg-accent cursor-pointer"
+              title="紐づけ解除"
+            >
+              <Link2 className="h-4 w-4" />
+            </button>
+          )}
           <button
             onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
-            className="hidden group-hover:flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-accent cursor-pointer"
+            className="hidden group-hover:flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent cursor-pointer self-center"
           >
-            <MoreHorizontal className="h-3 w-3" />
+            <MoreHorizontal className="h-4 w-4" />
           </button>
           {showMenu && (
-            <div className="absolute right-0 top-6 z-[200] min-w-[180px] rounded-lg border bg-popover p-1 shadow-lg">
+            <div className="absolute right-0 top-8 z-[200] min-w-[200px] rounded-lg border bg-popover p-1 shadow-lg">
               {isLinked ? (
                 <button onClick={(e) => { e.stopPropagation(); onUnlink(); setShowMenu(false); }}
                   className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-[14px] text-foreground hover:bg-accent transition-colors cursor-pointer">

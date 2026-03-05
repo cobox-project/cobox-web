@@ -24,6 +24,7 @@ import {
   UserPlus,
   Check,
   Send,
+  ArrowLeft,
 } from "lucide-react";
 
 const channelIcons: Record<Channel, React.ElementType> = {
@@ -55,6 +56,8 @@ export default function ContactsPage() {
   const [showAddGroup, setShowAddGroup] = useState(false);
   const [showAddToGroup, setShowAddToGroup] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [composeMode, setComposeMode] = useState(false);
+  const [composeGroupId, setComposeGroupId] = useState<string | null>(null);
 
   const groupContacts = useMemo(() => {
     if (!selectedGroupId) return contacts;
@@ -105,6 +108,16 @@ export default function ContactsPage() {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [filtered, selectedContactId]);
+
+  // Browser back button handling for compose mode
+  useEffect(() => {
+    if (!composeMode) return;
+    const handlePopState = () => {
+      setComposeMode(false);
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [composeMode]);
 
   const handleAddContact = () => {
     if (hasUnsavedChanges) {
@@ -265,13 +278,26 @@ export default function ContactsPage() {
             </div>
           )}
           {selectedGroupId === null ? (
-            <button
-              onClick={handleAddContact}
-              className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-xl border border-border/60 bg-accent/30 px-3 py-2.5 text-[14px] text-muted-foreground hover:bg-accent/60 transition-colors cursor-pointer"
-            >
-              <Plus className="h-4 w-4" />
-              連絡先を追加する
-            </button>
+            <div className="mt-2 flex gap-1.5">
+              <button
+                onClick={handleAddContact}
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-border/60 bg-accent/30 px-3 py-2.5 text-[14px] text-muted-foreground hover:bg-accent/60 transition-colors cursor-pointer"
+              >
+                <Plus className="h-4 w-4" />
+                連絡先追加
+              </button>
+              <button
+                onClick={() => {
+                  setComposeMode(true);
+                  setComposeGroupId(null);
+                  window.history.pushState({ composeMode: true }, "");
+                }}
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-brand/30 bg-brand/5 px-3 py-2.5 text-[14px] text-brand hover:bg-brand/10 transition-colors cursor-pointer"
+              >
+                <Send className="h-4 w-4" />
+                一括送信
+              </button>
+            </div>
           ) : (
             <div className="mt-2 flex gap-1.5">
               <button
@@ -283,7 +309,11 @@ export default function ContactsPage() {
               </button>
               {/* 【8】Send to group button */}
               <button
-                onClick={() => router.push(`/messages/compose?group=${selectedGroupId}`)}
+                onClick={() => {
+                  setComposeMode(true);
+                  setComposeGroupId(selectedGroupId);
+                  window.history.pushState({ composeMode: true }, "");
+                }}
                 className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-brand/30 bg-brand/5 px-3 py-2.5 text-[14px] text-brand hover:bg-brand/10 transition-colors cursor-pointer"
               >
                 <Send className="h-4 w-4" />
@@ -345,7 +375,14 @@ export default function ContactsPage() {
       </div>
 
       {/* Detail panel */}
-      {selected ? (
+      {composeMode ? (
+        <InlineComposeView
+          groupId={composeGroupId}
+          groups={groups}
+          contacts={contacts}
+          onBack={() => setComposeMode(false)}
+        />
+      ) : selected ? (
         <ContactDetail
           key={selected.id + (isEditing ? "-edit" : "")}
           contact={selected}
@@ -878,6 +915,132 @@ function ContactDetail({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/* ─── Inline Compose View ────────────────── */
+function InlineComposeView({
+  groupId,
+  groups,
+  contacts,
+  onBack,
+}: {
+  groupId: string | null;
+  groups: ContactGroup[];
+  contacts: Contact[];
+  onBack: () => void;
+}) {
+  const [subject, setSubject] = useState("");
+  const [body, setBody] = useState("");
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
+
+  const group = groupId ? groups.find((g) => g.id === groupId) : null;
+  const recipientCount = group ? group.contactIds.length : contacts.length;
+  const recipientLabel = group ? group.name : "すべての連絡先";
+
+  const insertVariable = (variable: string) => {
+    const textarea = bodyRef.current;
+    if (!textarea) {
+      setBody((prev) => prev + variable);
+      return;
+    }
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const newBody = body.substring(0, start) + variable + body.substring(end);
+    setBody(newBody);
+    requestAnimationFrame(() => {
+      textarea.selectionStart = textarea.selectionEnd = start + variable.length;
+      textarea.focus();
+    });
+  };
+
+  const handleSend = () => {
+    if (!subject.trim() && !body.trim()) {
+      window.alert("件名または本文を入力してください。");
+      return;
+    }
+    window.alert(`${recipientCount}件の連絡先に送信しました。`);
+    onBack();
+  };
+
+  return (
+    <div className="flex flex-1 flex-col overflow-hidden">
+      {/* Header */}
+      <div className="shrink-0 flex items-center gap-3 border-b px-6 py-4">
+        <button
+          onClick={onBack}
+          className="cursor-pointer rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+        >
+          <ArrowLeft className="h-5 w-5" />
+        </button>
+        <div>
+          <h2 className="text-[17px] font-semibold">一括送信</h2>
+          <p className="text-[13px] text-muted-foreground">
+            {recipientLabel} — {recipientCount}件
+          </p>
+        </div>
+      </div>
+
+      {/* Compose form */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="mx-auto max-w-xl px-8 py-8 space-y-6">
+          <div>
+            <label className="mb-1 block text-[13px] text-muted-foreground">件名</label>
+            <input
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              placeholder="件名を入力..."
+              className="w-full rounded-md border px-3 py-2.5 text-[15px] outline-none focus:border-brand/40 placeholder:text-muted-foreground/50"
+              autoFocus
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-[13px] text-muted-foreground">本文</label>
+            <textarea
+              ref={bodyRef}
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              placeholder="本文を入力..."
+              rows={10}
+              className="w-full resize-none rounded-md border px-3 py-2.5 text-[15px] outline-none focus:border-brand/40 placeholder:text-muted-foreground/50"
+            />
+          </div>
+
+          <div>
+            <p className="mb-2 text-[13px] text-muted-foreground">変数を挿入</p>
+            <div className="flex flex-wrap gap-1.5">
+              {[
+                { label: "氏名", value: "{{name}}" },
+                { label: "会社名", value: "{{company}}" },
+                { label: "メール", value: "{{email}}" },
+              ].map((v) => (
+                <button
+                  key={v.value}
+                  onClick={() => insertVariable(v.value)}
+                  className="cursor-pointer rounded-lg border border-border/60 bg-accent/30 px-3 py-1.5 text-[13px] text-muted-foreground hover:bg-accent/60 transition-colors"
+                >
+                  {v.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Send button bar */}
+      <div className="shrink-0 border-t bg-background px-8 py-4">
+        <div className="mx-auto max-w-xl flex gap-3">
+          <Button variant="outline" className="flex-1 h-11 text-[15px] font-medium" onClick={onBack}>
+            キャンセル
+          </Button>
+          <Button className="flex-1 h-11 bg-brand hover:bg-brand/90 text-[15px] font-medium" onClick={handleSend}>
+            <Send className="mr-1.5 h-4 w-4" />
+            送信 ({recipientCount}件)
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }
