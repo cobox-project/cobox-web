@@ -1280,6 +1280,7 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
 
   // LINE stamp picker state
   const [showStampPicker, setShowStampPicker] = useState(false);
+  const [stampPickerPos, setStampPickerPos] = useState({ left: 0, bottom: 0 });
   const stampPickerRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!showStampPicker) return;
@@ -1606,17 +1607,24 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
                         setAttachedFiles((prev) => [...prev, ...newFiles]);
                         e.target.value = "";
                       }} />
-                    {/* Change #19: stamp picker with bottom-full positioning */}
+                    {/* Change #19: stamp picker with fixed positioning to avoid overflow clipping */}
                     {isLine && (
                       <div ref={stampPickerRef} className="relative">
                         <Tooltip content="スタンプ" side="right">
                           <Button variant="ghost" size="icon-sm" className="h-8 w-8 text-muted-foreground"
-                            onClick={() => setShowStampPicker(!showStampPicker)}>
+                            onClick={(e) => {
+                              if (!showStampPicker) {
+                                const rect = e.currentTarget.getBoundingClientRect();
+                                setStampPickerPos({ left: rect.left, bottom: window.innerHeight - rect.top + 8 });
+                              }
+                              setShowStampPicker(!showStampPicker);
+                            }}>
                             <Smile className="h-4 w-4" />
                           </Button>
                         </Tooltip>
                         {showStampPicker && (
-                          <div className="absolute bottom-full left-0 mb-2 w-[320px] max-h-[280px] rounded-lg border bg-popover p-3 shadow-lg z-[500] overflow-y-auto">
+                          <div className="fixed w-[320px] max-h-[280px] rounded-lg border bg-popover p-3 shadow-lg z-[500] overflow-y-auto"
+                            style={{ left: stampPickerPos.left, bottom: stampPickerPos.bottom }}>
                             <p className="mb-2 text-[12px] font-medium text-muted-foreground sticky top-0 bg-popover pb-1">スタンプ</p>
                             <div className="grid grid-cols-4 gap-2">
                               {lineStampLabels.map((label, i) => (
