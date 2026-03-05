@@ -1422,14 +1422,21 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
   // Change #18: linked conversations data
   const linkedConversations = linkedIds.map((id) => allConvs.find((c) => c.id === id)).filter(Boolean) as Conversation[];
 
+  // Two-stage responsive header:
+  // level 0: full (all buttons + labels)
+  // level 1: hide 担当する button
+  // level 2: also hide 完了/対応なし labels (icons only)
   const headerRef = useRef<HTMLElement>(null);
-  const [headerNarrow, setHeaderNarrow] = useState(false);
+  const [headerLevel, setHeaderLevel] = useState(0);
   useEffect(() => {
     const el = headerRef.current;
     if (!el) return;
     const ro = new ResizeObserver((entries) => {
       for (const entry of entries) {
-        setHeaderNarrow(entry.contentRect.width < 640);
+        const w = entry.contentRect.width;
+        if (w < 500) setHeaderLevel(2);
+        else if (w < 620) setHeaderLevel(1);
+        else setHeaderLevel(0);
       }
     });
     ro.observe(el);
@@ -1459,7 +1466,7 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
           <div className="flex items-center gap-1.5 shrink-0 justify-end">
             {/* Assign self + assignee dropdown */}
             <div className="flex items-center">
-              {!isSelfAssigned && !headerNarrow && (
+              {!isSelfAssigned && headerLevel < 1 && (
                 <Button variant="outline" size="sm" className="h-9 gap-1.5 text-[14px] px-3 rounded-r-none border-r-0"
                   onClick={() => onAssignSelf(conversation.id)}>
                   <Avatar src={currentUser.avatar} fallback={currentUser.name} size="sm" className="h-4 w-4 text-[6px]" />
@@ -1469,7 +1476,7 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
               <AssigneePopover
                 conversation={conversation}
                 isSelfAssigned={isSelfAssigned}
-                roundLeft={headerNarrow}
+                roundLeft={headerLevel >= 1}
                 onSetAssignee={onSetAssignee}
                 onRemoveAssignee={onRemoveAssignee}
                 onClearAssignees={(id) => {
@@ -1488,7 +1495,7 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
                 )}
                 onClick={() => onStatusChange(conversation.id, conversation.status === "completed" ? "open" : "completed")}>
                 <Check className="h-3.5 w-3.5" />
-                {!headerNarrow && <span>完了</span>}
+                {headerLevel < 2 && <span>完了</span>}
               </Button>
               <Button size="sm"
                 variant={conversation.status === "no_action" ? "default" : "outline"}
@@ -1498,7 +1505,7 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
                 )}
                 onClick={() => onStatusChange(conversation.id, conversation.status === "no_action" ? "open" : "no_action")}>
                 <Ban className="h-3.5 w-3.5" />
-                {!headerNarrow && <span>対応なし</span>}
+                {headerLevel < 2 && <span>対応なし</span>}
               </Button>
             </div>
 
@@ -1752,7 +1759,7 @@ function RightSidePane({ conversation, allConversations, contactConversations, l
   const contactGroups_ = contactGroups.filter((g) => g.contactIds.includes(conversation.contactId));
 
   return (
-    <div className="flex h-full w-[300px] min-w-[260px] shrink-0 flex-col border-l bg-background overflow-y-auto">
+    <div className="relative z-10 flex h-full w-[300px] min-w-[260px] shrink-0 flex-col border-l bg-background overflow-y-auto">
       {/* Header with message ID and close button */}
       <div className="shrink-0 px-4 flex items-center justify-between" style={{ height: "70px" }}>
         <span className="text-[13px] font-medium text-muted-foreground">
