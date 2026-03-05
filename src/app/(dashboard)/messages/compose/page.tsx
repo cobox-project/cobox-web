@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, Suspense } from "react";
+import { useState, useMemo, useEffect, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { contacts, contactGroups, composeTemplates, accounts } from "@/data/mock";
@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import {
   ArrowLeft,
   Send,
-  Save,
   X,
   Users,
   User,
@@ -17,7 +16,8 @@ import {
   FileText,
   Mail,
   ChevronDown,
-  FileStack,
+  Trash2,
+  FolderOpen,
 } from "lucide-react";
 
 const variableButtons = [
@@ -27,6 +27,17 @@ const variableButtons = [
 ];
 
 const emailAccounts = accounts.filter((a) => a.channel === "email");
+
+interface Draft {
+  id: string;
+  subject: string;
+  body: string;
+  recipientType: "group" | "individual";
+  selectedGroupIds: string[];
+  selectedContactIds: string[];
+  selectedEmailAccountId: string;
+  savedAt: string;
+}
 
 export default function ComposePage() {
   return (
@@ -49,6 +60,10 @@ function ComposePageInner() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedEmailAccountId, setSelectedEmailAccountId] = useState(emailAccounts[0]?.id ?? "");
   const [showDraftModal, setShowDraftModal] = useState(false);
+  const [drafts, setDrafts] = useState<Draft[]>([]);
+
+  // Track source for back navigation
+  const fromContacts = searchParams.get("from") === "contacts";
 
   // Pre-select group from query param
   useEffect(() => {
@@ -77,7 +92,6 @@ function ComposePageInner() {
     ? contacts.find((c) => c.id === previewContactId)
     : resolvedContacts[0];
 
-  // Replace variables in body for preview
   const resolveVariables = (text: string, contact?: Contact) => {
     if (!contact) return text;
     const nameParts = contact.name.split(/\s+/);
@@ -123,22 +137,69 @@ function ComposePageInner() {
     );
   }, [searchQuery]);
 
+  const hasContent = subject.trim() || body.trim();
+
+  const handleSaveDraft = () => {
+    const draft: Draft = {
+      id: `draft_${Date.now()}`,
+      subject,
+      body,
+      recipientType,
+      selectedGroupIds,
+      selectedContactIds,
+      selectedEmailAccountId,
+      savedAt: new Date().toLocaleString("ja-JP"),
+    };
+    setDrafts((prev) => [...prev, draft]);
+  };
+
+  const handleLoadDraft = (draft: Draft) => {
+    if (hasContent) {
+      if (!window.confirm("現在の入力内容は上書きされます。よろしいですか？")) return;
+    }
+    setSubject(draft.subject);
+    setBody(draft.body);
+    setRecipientType(draft.recipientType);
+    setSelectedGroupIds(draft.selectedGroupIds);
+    setSelectedContactIds(draft.selectedContactIds);
+    setSelectedEmailAccountId(draft.selectedEmailAccountId);
+    setShowDraftModal(false);
+  };
+
+  const handleDeleteDraft = (draftId: string) => {
+    setDrafts((prev) => prev.filter((d) => d.id !== draftId));
+  };
+
+  const handleBack = () => {
+    if (fromContacts) {
+      router.push("/contacts");
+    } else {
+      router.push("/messages");
+    }
+  };
+
   return (
     <div className="flex h-full flex-col bg-background">
       {/* Top bar */}
       <header className="flex shrink-0 items-center justify-between border-b px-6 py-3">
         <div className="flex items-center gap-3">
-          <button onClick={() => router.push("/messages")}
+          <button onClick={handleBack}
             className="cursor-pointer rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors">
             <ArrowLeft className="h-4 w-4" />
           </button>
-          <h1 className="text-[17px] font-semibold">新規メッセージ作成</h1>
+          <h1 className="text-[17px] font-semibold">メール作成</h1>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" className="h-9 gap-1.5 text-[14px] px-4"
-            onClick={() => setShowDraftModal(true)}>
-            <FileStack className="h-3.5 w-3.5" />
-            下書き
+          {drafts.length > 0 && (
+            <button onClick={() => setShowDraftModal(true)}
+              className="text-[13px] text-brand hover:text-brand/80 cursor-pointer transition-colors mr-1">
+              下書き：{drafts.length}件
+            </button>
+          )}
+          <Button variant="outline" size="sm" className="h-9 text-[14px] px-4"
+            onClick={handleSaveDraft}
+            disabled={!hasContent}>
+            下書き保存
           </Button>
           <Button size="sm" className="h-9 gap-1.5 text-[14px] px-4 bg-brand hover:bg-brand/90"
             disabled={resolvedContacts.length === 0 || !body.trim()}>
@@ -161,7 +222,7 @@ function ComposePageInner() {
                 <select
                   value={selectedEmailAccountId}
                   onChange={(e) => setSelectedEmailAccountId(e.target.value)}
-                  className="flex-1 rounded-lg border px-3 pr-8 py-2.5 text-[15px] outline-none focus:border-brand/40 bg-background"
+                  className="cobox-select flex-1 rounded-lg border px-3 py-2.5 text-[15px] outline-none focus:border-brand/40 bg-background appearance-none"
                 >
                   {emailAccounts.map((acc) => (
                     <option key={acc.id} value={acc.id}>{acc.name}</option>
@@ -189,7 +250,7 @@ function ComposePageInner() {
                     "flex flex-1 items-center justify-center gap-1.5 px-3 py-2 text-[14px] font-medium transition-colors cursor-pointer",
                     recipientType === "group" ? "bg-brand text-white" : "bg-background text-muted-foreground hover:bg-accent"
                   )}>
-                  <Users className="h-3.5 w-3.5" />
+                  <FolderOpen className="h-3.5 w-3.5" />
                   グループ
                 </button>
               </div>
@@ -293,7 +354,7 @@ function ComposePageInner() {
           </div>
         </div>
 
-        {/* Live preview pane (always visible on right) */}
+        {/* Live preview pane */}
         <div className="w-1/2 overflow-y-auto bg-accent/5">
           <div className="px-6 py-6">
             <div className="flex items-center justify-between mb-4">
@@ -302,7 +363,7 @@ function ComposePageInner() {
                 <select
                   value={previewContactId ?? ""}
                   onChange={(e) => setPreviewContactId(e.target.value || null)}
-                  className="rounded-md border px-2 pr-8 py-1 text-[13px] outline-none bg-background"
+                  className="cobox-select rounded-md border px-2 py-1 text-[13px] outline-none bg-background appearance-none"
                 >
                   {resolvedContacts.map((c) => (
                     <option key={c.id} value={c.id}>{c.name}</option>
@@ -343,7 +404,8 @@ function ComposePageInner() {
 
       {/* Draft modal */}
       {showDraftModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowDraftModal(false); }}>
           <div className="w-full max-w-md rounded-xl border bg-background p-6 shadow-lg">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-[16px] font-semibold">下書き一覧</h2>
@@ -352,10 +414,28 @@ function ComposePageInner() {
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <FileText className="h-10 w-10 text-muted-foreground/30 mb-3" />
-              <p className="text-[14px] text-muted-foreground">保存された下書きはありません</p>
-            </div>
+            {drafts.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <FileText className="h-10 w-10 text-muted-foreground/30 mb-3" />
+                <p className="text-[14px] text-muted-foreground">保存された下書きはありません</p>
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                {drafts.map((draft) => (
+                  <div key={draft.id} className="flex items-center gap-3 rounded-lg border px-4 py-3 hover:bg-accent/20 transition-colors">
+                    <div className="flex-1 min-w-0 cursor-pointer" onClick={() => handleLoadDraft(draft)}>
+                      <p className="text-[14px] font-medium truncate">{draft.subject || "（件名なし）"}</p>
+                      <p className="text-[12px] text-muted-foreground truncate">{draft.body || "（本文なし）"}</p>
+                      <p className="text-[11px] text-muted-foreground/60 mt-0.5">{draft.savedAt}</p>
+                    </div>
+                    <button onClick={() => handleDeleteDraft(draft.id)}
+                      className="rounded-md p-1.5 text-muted-foreground hover:text-destructive hover:bg-accent cursor-pointer shrink-0">
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}

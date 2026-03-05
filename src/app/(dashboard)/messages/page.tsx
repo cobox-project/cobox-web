@@ -44,6 +44,8 @@ import {
   Plus,
   UserPlus,
   FolderOpen,
+  Ban,
+  User,
 } from "lucide-react";
 
 const channelIcons: Record<Channel, React.ElementType> = {
@@ -59,12 +61,14 @@ const channelStyles: Record<Channel, { bg: string; text: string }> = {
   email: { bg: "bg-channel-email/10", text: "text-channel-email" },
   facebook: { bg: "bg-channel-facebook/10", text: "text-channel-facebook" },
 };
-const lineStamps = [
-  "\U0001f44d", "\u2764\ufe0f", "\U0001f60a", "\U0001f602", "\U0001f64f", "\U0001f44b",
-  "\U0001f389", "\U0001f4aa", "\U0001f62d", "\U0001f917", "\U0001f60d", "\U0001f97a",
-  "\u2728", "\U0001f525", "\U0001f338", "\u2600\ufe0f", "\U0001f64c", "\U0001f60e",
-  "\U0001f495", "\U0001f91d", "\U0001f44f", "\U0001fae1", "\U0001f923", "\U0001f622",
+// LINE stamp labels (displayed as styled placeholders, not emoji)
+const lineStampLabels = [
+  "OK", "ハート", "にこ", "笑", "お願い", "バイバイ",
+  "お祝い", "ガッツ", "泣", "ハグ", "好き", "うるうる",
+  "キラキラ", "炎", "桜", "太陽", "バンザイ", "クール",
+  "ラブ", "握手", "拍手", "ありがとう", "爆笑", "しくしく",
 ];
+const lineStampIds = lineStampLabels.map((_, i) => `stamp_${i}`);
 
 // folder structure
 type FolderFilter =
@@ -274,6 +278,16 @@ export default function MessagesPage() {
     );
   }, []);
 
+  const handleDeleteMemo = useCallback((convId: string, messageId: string) => {
+    setConversations((prev) =>
+      prev.map((c) =>
+        c.id === convId
+          ? { ...c, messages: c.messages.filter((m) => m.id !== messageId) }
+          : c
+      )
+    );
+  }, []);
+
   const handleUnlinkConversation = useCallback((convId: string, targetId: string) => {
     setConversations((prev) =>
       prev.map((c) => {
@@ -375,10 +389,11 @@ export default function MessagesPage() {
             <FolderItem icon={MessageCircleMore} label="対応中" count={counts.in_progress}
               isActive={folderFilter === "in_progress" && !accountFilter && !groupFilter}
               onClick={() => { setFolderFilter("in_progress"); setAccountFilter(null); setGroupFilter(null); }} />
-            <FolderItem icon={Check} label="完了" count={0}
+            <FolderItem icon={Check} label="完了"
+              count={0}
               isActive={folderFilter === "completed" && !accountFilter && !groupFilter}
               onClick={() => { setFolderFilter("completed"); setAccountFilter(null); setGroupFilter(null); }} />
-            <FolderItem icon={X} label="対応なし" count={counts.no_action}
+            <FolderItem icon={Ban} label="対応なし" count={0}
               isActive={folderFilter === "no_action" && !accountFilter && !groupFilter}
               onClick={() => { setFolderFilter("no_action"); setAccountFilter(null); setGroupFilter(null); }} />
           </div>
@@ -446,8 +461,8 @@ export default function MessagesPage() {
         {/* Change #2: Removed bottom 新規作成 button */}
       </div>
 
-      {/* Layer 3: Thread list (320px) */}
-      <div className="flex h-full w-[320px] shrink-0 flex-col border-r bg-background">
+      {/* Layer 3: Thread list (280px) */}
+      <div className="flex h-full w-[280px] shrink-0 flex-col border-r bg-background">
         <div className="shrink-0 px-3 pt-3 pb-2 space-y-2">
           <div className="flex items-center gap-2 rounded-xl border px-3 py-2">
             <Search className="h-4 w-4 text-muted-foreground" />
@@ -504,6 +519,7 @@ export default function MessagesPage() {
           onSendMessage={handleSendMessage}
           onLinkConversation={handleLinkConversation}
           onUnlinkConversation={handleUnlinkConversation}
+          onDeleteMemo={handleDeleteMemo}
           onNavigateToContact={(contactId) => {
             router.push(`/contacts?contact=${contactId}&edit=true`);
           }}
@@ -543,7 +559,7 @@ export default function MessagesPage() {
         </div>
       )}
 
-      {/* Image preview modal */}
+      {/* Image preview modal - overlay click to close */}
       {previewImage && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60"
           onClick={() => setPreviewImage(null)}>
@@ -632,7 +648,7 @@ function ConversationItem({ conversation, isSelected, isRecentlyRead, isSelfAssi
         if (isRecentlyRead && onAnimationComplete) onAnimationComplete();
       }}
       className={cn(
-        "flex w-full gap-3 border-b px-4 py-3 text-left transition-all duration-300 cursor-pointer",
+        "flex w-full gap-2.5 border-b px-3 py-2.5 text-left transition-all duration-300 cursor-pointer",
         isSelected
           ? "bg-brand text-white"
           : isSelfAssigned
@@ -698,7 +714,7 @@ function ConversationItem({ conversation, isSelected, isRecentlyRead, isSelfAssi
               <span className={cn("flex items-center gap-1 text-[12px] font-medium",
                 isSelected ? "text-white/50" : "text-muted-foreground/60")}>
                 <CircleDashed className="h-4 w-4" />
-                未アサイン
+                担当者なし
               </span>
             )}
           </div>
@@ -711,14 +727,103 @@ function ConversationItem({ conversation, isSelected, isRecentlyRead, isSelfAssi
   );
 }
 
+/* --- Assignee Popover (multi-select, focus-out close) --- */
+
+function AssigneePopover({ conversation, isSelfAssigned, onSetAssignee, onRemoveAssignee, onClearAssignees }: {
+  conversation: Conversation;
+  isSelfAssigned: boolean;
+  onSetAssignee: (id: string, assigneeId: string) => void;
+  onRemoveAssignee: (id: string, assigneeId: string) => void;
+  onClearAssignees: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const isNoOne = conversation.assignees.length === 0;
+
+  return (
+    <div ref={ref} className="relative">
+      <Button variant={isSelfAssigned ? "ghost" : "outline"} size="sm"
+        className={cn(
+          "h-9 gap-1 text-[14px] px-3",
+          !isSelfAssigned && "rounded-l-none",
+          isSelfAssigned && "border"
+        )}
+        onClick={() => setOpen(!open)}>
+        {conversation.assignees.length > 0 ? (
+          <span className="flex items-center gap-1">
+            {conversation.assignees.map((a) => (
+              <Avatar key={a.id} src={a.avatar} fallback={a.name} size="sm" className="h-4 w-4 text-[6px]" />
+            ))}
+            {conversation.assignees.length === 1
+              ? conversation.assignees[0].name
+              : `${conversation.assignees[0].name}+${conversation.assignees.length - 1}`}
+          </span>
+        ) : (
+          <span className="flex items-center gap-1 text-muted-foreground">
+            <CircleDashed className="h-3.5 w-3.5" />
+            担当者なし
+          </span>
+        )}
+        <ChevronDown className="h-2.5 w-2.5 text-muted-foreground" />
+      </Button>
+      {open && (
+        <div className="absolute right-0 z-50 mt-1 min-w-[200px] rounded-lg border bg-popover p-1 shadow-md">
+          {/* 担当者なし option */}
+          <button
+            onClick={() => {
+              if (!isNoOne) onClearAssignees(conversation.id);
+            }}
+            className={cn(
+              "flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-[15px] transition-colors cursor-pointer",
+              isNoOne ? "bg-accent text-foreground font-medium" : "text-muted-foreground hover:bg-accent hover:text-foreground"
+            )}>
+            <CircleDashed className="h-4 w-4" />
+            担当者なし
+            {isNoOne && <Check className="h-3 w-3 ml-auto text-brand" />}
+          </button>
+          <div className="my-1 border-t" />
+          {/* Team members */}
+          {teamMembers.map((m) => {
+            const isAssigned = conversation.assignees.some((a) => a.id === m.id);
+            return (
+              <button key={m.id}
+                onClick={() => isAssigned ? onRemoveAssignee(conversation.id, m.id) : onSetAssignee(conversation.id, m.id)}
+                className={cn(
+                  "flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-[15px] transition-colors cursor-pointer",
+                  isAssigned ? "bg-accent text-foreground font-medium" : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                )}>
+                <Avatar src={m.avatar} fallback={m.name} size="sm" className="h-4 w-4 text-[6px]" />
+                {m.name}
+                {isAssigned && <Check className="h-3 w-3 ml-auto text-brand" />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* --- Conversation Detail --- */
-/* Changes #10, #11, #12, #13, #16, #18 applied here */
 
 function ConversationDetail({ conversation, conversations: allConvs, onStatusChange,
   onAssignSelf, onRemoveAssignee, onSetAssignee,
   onOpenContactDetail, onToggleFavorite, onRequestDelete,
   onSendMessage, onLinkConversation, onUnlinkConversation,
   onNavigateToContact, onSelectConversation, onPreviewImage,
+  onDeleteMemo,
   showRightPane, onToggleRightPane }: {
   conversation: Conversation; conversations: Conversation[];
   onStatusChange: (id: string, status: Status) => void;
@@ -734,6 +839,7 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
   onNavigateToContact: (contactId: string) => void;
   onSelectConversation: (id: string) => void;
   onPreviewImage: (url: string) => void;
+  onDeleteMemo: (convId: string, messageId: string) => void;
   showRightPane: boolean;
   onToggleRightPane: () => void;
 }) {
@@ -769,6 +875,7 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
 
   // File input ref for attachments
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [attachedFiles, setAttachedFiles] = useState<{ name: string; size: string; type: string; url: string }[]>([]);
 
   const mentionCandidates = useMemo(() => {
     if (mentionQuery === null) return [];
@@ -863,9 +970,11 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
   };
 
   const handleSendReply = () => {
-    if (!replyText.trim()) return;
-    onSendMessage(conversation.id, replyText.trim(), false);
+    if (!replyText.trim() && attachedFiles.length === 0) return;
+    const content = replyText.trim() || (attachedFiles.length > 0 ? `[添付ファイル: ${attachedFiles.map(f => f.name).join(", ")}]` : "");
+    onSendMessage(conversation.id, content, false);
     setReplyText("");
+    setAttachedFiles([]);
   };
 
   const handleSendMemo = () => {
@@ -891,10 +1000,10 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
       {/* Main conversation area */}
       <div className="flex h-full min-w-[400px] flex-1 flex-col bg-background">
         {/* Action bar */}
-        <header className="flex shrink-0 items-center justify-between border-b px-5 py-3">
-          {/* Change #13: clicking contact name toggles right pane */}
+        <header className="flex shrink-0 items-center justify-between gap-2 border-b px-5 py-3 min-w-0">
+          {/* clicking contact name toggles right pane */}
           <button onClick={onToggleRightPane}
-            className="flex min-w-0 items-center gap-3 cursor-pointer rounded-lg px-2 py-1.5 -ml-2 transition-colors hover:bg-accent active:bg-accent/80">
+            className="flex min-w-0 items-center gap-3 cursor-pointer rounded-lg px-2 py-1.5 -ml-2 transition-colors hover:bg-accent active:bg-accent/80 shrink">
             <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-full", style.bg)}>
               <Icon className={cn("h-4 w-4", style.text)} />
             </div>
@@ -906,117 +1015,47 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
             </div>
           </button>
 
-          <div className="flex items-center gap-1.5">
-            {/* Change #12: Combined assign button with assignee dropdown */}
-            {!isSelfAssigned ? (
-              conversation.assignees.length === 0 ? (
-                <div className="flex items-center">
-                  <span className="inline-flex h-9 items-center rounded-l-md border border-r-0 bg-muted/40 px-3 text-[14px] text-muted-foreground">未アサイン</span>
-                  <Button variant="outline" size="sm" className="h-9 gap-1.5 text-[14px] px-3 rounded-none border-r-0"
-                    onClick={() => onAssignSelf(conversation.id)}>
-                    <UserPlus className="h-3.5 w-3.5" />
-                    自分にアサイン
-                  </Button>
-                  <Dropdown align="right"
-                    trigger={
-                      <Button variant="outline" size="sm" className="h-9 px-1.5 rounded-l-none">
-                        <ChevronDown className="h-3 w-3 text-muted-foreground" />
-                      </Button>
-                    }>
-                    {teamMembers.map((m) => {
-                      const isAssigned = conversation.assignees.some((a) => a.id === m.id);
-                      return (
-                        <DropdownItem key={m.id} active={isAssigned}
-                          onClick={() => isAssigned ? onRemoveAssignee(conversation.id, m.id) : onSetAssignee(conversation.id, m.id)}>
-                          <Avatar src={m.avatar} fallback={m.name} size="sm" className="h-4 w-4 text-[6px]" />
-                          {m.name}
-                          {isAssigned && <Check className="h-3 w-3 ml-auto text-brand" />}
-                        </DropdownItem>
-                      );
-                    })}
-                  </Dropdown>
-                </div>
-              ) : (
-                <div className="flex items-center">
-                  <Button variant="outline" size="sm" className="h-9 gap-1.5 text-[14px] px-3 rounded-r-none border-r-0"
-                    onClick={() => onAssignSelf(conversation.id)}>
-                    <UserPlus className="h-3.5 w-3.5" />
-                    自分をアサイン追加
-                  </Button>
-                  <Dropdown align="right"
-                    trigger={
-                      <Button variant="outline" size="sm" className="h-9 px-1.5 rounded-l-none">
-                        <ChevronDown className="h-3 w-3 text-muted-foreground" />
-                      </Button>
-                    }>
-                    {teamMembers.map((m) => {
-                      const isAssigned = conversation.assignees.some((a) => a.id === m.id);
-                      return (
-                        <DropdownItem key={m.id} active={isAssigned}
-                          onClick={() => isAssigned ? onRemoveAssignee(conversation.id, m.id) : onSetAssignee(conversation.id, m.id)}>
-                          <Avatar src={m.avatar} fallback={m.name} size="sm" className="h-4 w-4 text-[6px]" />
-                          {m.name}
-                          {isAssigned && <Check className="h-3 w-3 ml-auto text-brand" />}
-                        </DropdownItem>
-                      );
-                    })}
-                  </Dropdown>
-                </div>
-              )
-            ) : (
-              <Dropdown align="right"
-                trigger={
-                  <Button variant="ghost" size="sm" className="h-9 gap-1 text-[14px] px-3 border">
-                    {conversation.assignees.length > 0 ? (
-                      <span className="flex items-center gap-1">
-                        {conversation.assignees.map((a) => (
-                          <Avatar key={a.id} src={a.avatar} fallback={a.name} size="sm" className="h-4 w-4 text-[6px]" />
-                        ))}
-                        {conversation.assignees.length === 1
-                          ? conversation.assignees[0].name
-                          : `${conversation.assignees[0].name}+${conversation.assignees.length - 1}`}
-                      </span>
-                    ) : (
-                      <span className="flex items-center gap-1">
-                        <CircleDashed className="h-3.5 w-3.5" />
-                        担当者
-                      </span>
-                    )}
-                    <ChevronDown className="h-2.5 w-2.5 text-muted-foreground" />
-                  </Button>
-                }>
-                {teamMembers.map((m) => {
-                  const isAssigned = conversation.assignees.some((a) => a.id === m.id);
-                  return (
-                    <DropdownItem key={m.id} active={isAssigned}
-                      onClick={() => isAssigned ? onRemoveAssignee(conversation.id, m.id) : onSetAssignee(conversation.id, m.id)}>
-                      <Avatar src={m.avatar} fallback={m.name} size="sm" className="h-4 w-4 text-[6px]" />
-                      {m.name}
-                      {isAssigned && <Check className="h-3 w-3 ml-auto text-brand" />}
-                    </DropdownItem>
-                  );
-                })}
-              </Dropdown>
-            )}
+          <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
+            {/* Assign self + assignee dropdown */}
+            <div className="flex items-center">
+              {!isSelfAssigned && (
+                <Button variant="outline" size="sm" className="h-9 gap-1.5 text-[14px] px-3 rounded-r-none border-r-0"
+                  onClick={() => onAssignSelf(conversation.id)}>
+                  <Avatar src={currentUser.avatar} fallback={currentUser.name} size="sm" className="h-4 w-4 text-[6px]" />
+                  担当する
+                </Button>
+              )}
+              <AssigneePopover
+                conversation={conversation}
+                isSelfAssigned={isSelfAssigned}
+                onSetAssignee={onSetAssignee}
+                onRemoveAssignee={onRemoveAssignee}
+                onClearAssignees={(id) => {
+                  conversation.assignees.forEach((a) => onRemoveAssignee(id, a.id));
+                }}
+              />
+            </div>
 
-            {/* Change #10: Connected toggle button group for 完了 and 対応なし */}
+            {/* Connected toggle button group for 完了 and 対応なし with icons */}
             <div className="flex items-center">
               <Button size="sm"
                 variant={conversation.status === "completed" ? "default" : "outline"}
                 className={cn(
-                  "h-9 text-[14px] px-3 rounded-r-none border-r-0",
+                  "h-9 text-[14px] px-3 gap-1.5 rounded-r-none border-r-0",
                   conversation.status === "completed" && "bg-brand hover:bg-brand/90"
                 )}
                 onClick={() => onStatusChange(conversation.id, conversation.status === "completed" ? "open" : "completed")}>
+                <Check className="h-3.5 w-3.5" />
                 完了
               </Button>
               <Button size="sm"
                 variant={conversation.status === "no_action" ? "default" : "outline"}
                 className={cn(
-                  "h-9 text-[14px] px-3 rounded-l-none",
+                  "h-9 text-[14px] px-3 gap-1.5 rounded-l-none",
                   conversation.status === "no_action" && "bg-muted-foreground hover:bg-muted-foreground/90"
                 )}
                 onClick={() => onStatusChange(conversation.id, conversation.status === "no_action" ? "open" : "no_action")}>
+                <Ban className="h-3.5 w-3.5" />
                 対応なし
               </Button>
             </div>
@@ -1058,13 +1097,14 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
 
             {conversation.messages.map((message) => (
               <MessageBubble key={message.id} message={message} channel={conversation.channel}
-                contactEmail={contactObj?.email} onPreviewImage={onPreviewImage} />
+                contactEmail={contactObj?.email} onPreviewImage={onPreviewImage}
+                onDeleteMemo={(msgId) => onDeleteMemo(conversation.id, msgId)} />
             ))}
             <div ref={messagesEndRef} />
 
             {/* Reply input */}
             <div className="flex justify-end">
-              <div className="w-[70%] rounded-lg border bg-background focus-within:border-brand/30 overflow-hidden">
+              <div className="w-[70%] rounded-lg border bg-background focus-within:border-brand/30">
                 <ReplyHeader
                   channel={conversation.channel}
                   channelLabel={channelLabel}
@@ -1088,6 +1128,26 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
                     el.style.height = "auto";
                     el.style.height = Math.min(el.scrollHeight, 160) + "px";
                   }} />
+                {/* Attached files preview */}
+                {attachedFiles.length > 0 && (
+                  <div className="flex flex-wrap gap-2 px-3 py-2 border-t">
+                    {attachedFiles.map((file, i) => (
+                      <div key={i} className="flex items-center gap-2 rounded-lg border bg-accent/20 px-2.5 py-1.5 text-[13px]">
+                        {file.type === "image" ? (
+                          <img src={file.url} alt={file.name} className="h-8 w-8 rounded object-cover" />
+                        ) : (
+                          <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                        )}
+                        <span className="truncate max-w-[120px]">{file.name}</span>
+                        <span className="text-[11px] text-muted-foreground shrink-0">{file.size}</span>
+                        <button onClick={() => setAttachedFiles((prev) => prev.filter((_, j) => j !== i))}
+                          className="rounded p-0.5 text-muted-foreground hover:text-foreground hover:bg-accent cursor-pointer">
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <div className="flex items-center justify-between px-3 pb-2">
                   <div className="flex items-center gap-1">
                     {/* Attachment button */}
@@ -1098,7 +1158,18 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
                       </Button>
                     </Tooltip>
                     <input ref={fileInputRef} type="file" multiple className="hidden"
-                      onChange={() => { /* File upload would be handled here */ }} />
+                      onChange={(e) => {
+                        const files = e.target.files;
+                        if (!files) return;
+                        const newFiles = Array.from(files).map((f) => ({
+                          name: f.name,
+                          size: f.size < 1024 * 1024 ? `${Math.round(f.size / 1024)}KB` : `${(f.size / (1024 * 1024)).toFixed(1)}MB`,
+                          type: f.type.startsWith("image/") ? "image" : "file",
+                          url: URL.createObjectURL(f),
+                        }));
+                        setAttachedFiles((prev) => [...prev, ...newFiles]);
+                        e.target.value = "";
+                      }} />
                     {/* Change #19: stamp picker with bottom-full positioning */}
                     {isLine && (
                       <div ref={stampPickerRef} className="relative">
@@ -1109,14 +1180,14 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
                           </Button>
                         </Tooltip>
                         {showStampPicker && (
-                          <div className="absolute bottom-full left-0 mb-2 w-[280px] rounded-lg border bg-popover p-3 shadow-lg z-[200]">
+                          <div className="absolute bottom-full left-0 mb-2 w-[320px] rounded-lg border bg-popover p-3 shadow-lg z-[200]">
                             <p className="mb-2 text-[12px] font-medium text-muted-foreground">スタンプ</p>
-                            <div className="grid grid-cols-6 gap-1">
-                              {lineStamps.map((stamp, i) => (
+                            <div className="grid grid-cols-4 gap-2">
+                              {lineStampLabels.map((label, i) => (
                                 <button key={i}
-                                  className="flex h-10 w-10 items-center justify-center rounded-lg text-[22px] hover:bg-accent transition-colors cursor-pointer"
-                                  onClick={() => { onSendMessage(conversation.id, stamp, false); setShowStampPicker(false); }}>
-                                  {stamp}
+                                  className="flex h-16 items-center justify-center rounded-lg border bg-channel-line/5 text-[13px] font-medium text-channel-line hover:bg-channel-line/15 transition-colors cursor-pointer"
+                                  onClick={() => { onSendMessage(conversation.id, `[スタンプ: ${label}]`, false); setShowStampPicker(false); }}>
+                                  {label}
                                 </button>
                               ))}
                             </div>
@@ -1126,7 +1197,7 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
                     )}
                   </div>
                   <Button size="sm" className="h-8 rounded-md bg-brand hover:bg-brand/90 px-4 text-[14px]"
-                    disabled={!replyText.trim()} onClick={handleSendReply}>
+                    disabled={!replyText.trim() && attachedFiles.length === 0} onClick={handleSendReply}>
                     <Send className="h-3 w-3 mr-1" /> 送信
                   </Button>
                 </div>
@@ -1151,10 +1222,7 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
               </div>
             )}
 
-            {/* Change #16: Message ID below messages */}
-            <div className="text-center pt-2">
-              <span className="text-[12px] text-muted-foreground">メッセージID: {formatMessageNumber(conversation.messageNumber)}</span>
-            </div>
+            {/* Message ID removed from here - moved to contact pane */}
           </div>
         </div>
 
@@ -1246,8 +1314,11 @@ function RightSidePane({ conversation, allConversations, contactConversations, l
 
   return (
     <div className="flex h-full w-[300px] min-w-[260px] shrink-0 flex-col border-l bg-background overflow-y-auto">
-      {/* Change #13: Close button in header, Change #16: removed message ID from here */}
-      <div className="shrink-0 px-4 py-3 flex items-center justify-end">
+      {/* Header with message ID and close button - aligned with main header */}
+      <div className="shrink-0 border-b px-4 py-3 flex items-center justify-between">
+        <span className="text-[13px] font-medium text-muted-foreground">
+          メッセージID: {formatMessageNumber(conversation.messageNumber)}
+        </span>
         <button onClick={onClose} className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors cursor-pointer">
           <X className="h-4 w-4" />
         </button>
@@ -1374,9 +1445,10 @@ function ThreadHistoryItem({ conv, CIcon, channelStyle, isLinked, isCurrent, cur
     <div
       className={cn(
         "group relative flex items-center gap-2 rounded-md border px-2.5 py-2 transition-colors",
-        isCurrent ? "border-brand/30 bg-brand/5" : isLinked ? "border-brand/20 bg-brand/3" : "hover:bg-accent/30",
+        isCurrent ? "border-brand border-l-[3px] bg-background shadow-sm" : isLinked ? "border-brand/20" : "hover:bg-accent/30",
         !isCurrent && "cursor-pointer"
       )}
+      style={isCurrent ? { borderLeftColor: "var(--brand)", marginLeft: "-4px", paddingLeft: "calc(0.625rem + 1px)" } : undefined}
       onClick={() => !isCurrent && onSelect()}
     >
       <div className={cn("flex h-5 w-5 shrink-0 items-center justify-center rounded-full", channelStyle.bg)}>
@@ -1387,36 +1459,38 @@ function ThreadHistoryItem({ conv, CIcon, channelStyle, isLinked, isCurrent, cur
         <p className="text-[12px] text-muted-foreground">{conv.lastMessageAt}</p>
       </div>
 
-      {/* Link icon + Hover menu */}
+      {/* Link icon + menu */}
       {!isCurrent && (
         <div className="relative shrink-0 flex items-center gap-0.5" ref={menuRef}>
-          {isLinked && (
+          {isLinked ? (
+            /* Linked: show link icon always, click opens unlink popover */
             <button
-              onClick={(e) => { e.stopPropagation(); onUnlink(); }}
+              onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
               className="flex h-7 w-7 items-center justify-center rounded text-brand hover:bg-accent cursor-pointer"
-              title="紐づけ解除"
             >
               <Link2 className="h-4 w-4" />
             </button>
+          ) : (
+            /* Not linked: show ... on hover, click opens link popover */
+            <button
+              onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
+              className="hidden group-hover:flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent cursor-pointer self-center"
+            >
+              <MoreHorizontal className="h-4 w-4" />
+            </button>
           )}
-          <button
-            onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
-            className="hidden group-hover:flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent cursor-pointer self-center"
-          >
-            <MoreHorizontal className="h-4 w-4" />
-          </button>
           {showMenu && (
-            <div className="absolute right-0 top-8 z-[200] min-w-[200px] rounded-lg border bg-popover p-1 shadow-lg">
+            <div className="absolute right-0 top-8 z-[200] w-[220px] rounded-lg border bg-popover p-1 shadow-lg">
               {isLinked ? (
                 <button onClick={(e) => { e.stopPropagation(); onUnlink(); setShowMenu(false); }}
-                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-[14px] text-foreground hover:bg-accent transition-colors cursor-pointer">
-                  <Link2 className="h-3.5 w-3.5 text-destructive" />
+                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-[14px] text-left text-foreground hover:bg-accent transition-colors cursor-pointer">
+                  <Link2 className="h-3.5 w-3.5 text-destructive shrink-0" />
                   紐づけを解除
                 </button>
               ) : (
                 <button onClick={(e) => { e.stopPropagation(); onLink(); setShowMenu(false); }}
-                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-[14px] text-foreground hover:bg-accent transition-colors cursor-pointer">
-                  <Link2 className="h-3.5 w-3.5 text-brand" />
+                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-[14px] text-left text-foreground hover:bg-accent transition-colors cursor-pointer whitespace-nowrap">
+                  <Link2 className="h-3.5 w-3.5 text-brand shrink-0" />
                   このメッセージと紐づける
                 </button>
               )}
@@ -1430,17 +1504,49 @@ function ThreadHistoryItem({ conv, CIcon, channelStyle, isLinked, isCurrent, cur
 
 /* --- Message Bubble --- */
 
-function MessageBubble({ message, channel, contactEmail, onPreviewImage }: {
+function MessageBubble({ message, channel, contactEmail, onPreviewImage, onDeleteMemo }: {
   message: Message; channel: Channel; contactEmail?: string;
   onPreviewImage: (url: string) => void;
+  onDeleteMemo?: (messageId: string) => void;
 }) {
   const { content, timestamp, isInbound, senderName, isInternal, emailHeader, attachments } = message;
   const [headerExpanded, setHeaderExpanded] = useState(false);
+  const [showMemoMenu, setShowMemoMenu] = useState(false);
+  const memoMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showMemoMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (memoMenuRef.current && !memoMenuRef.current.contains(e.target as Node)) {
+        setShowMemoMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showMemoMenu]);
 
   if (isInternal) {
     return (
       <div className="flex justify-center">
-        <div className="min-w-[340px] max-w-md rounded-lg border border-amber-200/60 bg-amber-50/40 px-4 py-2.5">
+        <div className="group/memo relative min-w-[340px] max-w-md rounded-lg border border-amber-200/60 bg-amber-50/40 px-4 py-2.5">
+          {/* Hover dots menu for delete */}
+          <div className="absolute top-2 right-2" ref={memoMenuRef}>
+            <button
+              onClick={() => setShowMemoMenu(!showMemoMenu)}
+              className="hidden group-hover/memo:flex h-6 w-6 items-center justify-center rounded text-amber-400 hover:bg-amber-100 cursor-pointer"
+            >
+              <MoreHorizontal className="h-3.5 w-3.5" />
+            </button>
+            {showMemoMenu && (
+              <div className="absolute right-0 top-7 z-[200] min-w-[140px] rounded-lg border bg-popover p-1 shadow-lg">
+                <button onClick={() => { onDeleteMemo?.(message.id); setShowMemoMenu(false); }}
+                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-[14px] text-destructive hover:bg-accent transition-colors cursor-pointer">
+                  <Trash2 className="h-3.5 w-3.5" />
+                  削除
+                </button>
+              </div>
+            )}
+          </div>
           <div className="flex items-center gap-1.5 mb-1.5">
             <MessageSquareText className="h-3 w-3 text-amber-500" />
             <span className="text-[12px] font-medium text-amber-600">チーム内メモ</span>
@@ -1460,8 +1566,8 @@ function MessageBubble({ message, channel, contactEmail, onPreviewImage }: {
     <div className={cn("flex gap-2.5", isInbound ? "justify-start" : "justify-end")}>
       <div className={cn("max-w-[70%] space-y-1", !isInbound && "items-end")}>
         <div className={cn("flex items-center gap-1.5", !isInbound && "justify-end")}>
-          <span className="text-[13px] font-medium text-muted-foreground">{senderName}</span>
-          <span className="text-[13px] text-muted-foreground/50">{timestamp}</span>
+          <span className="text-[12px] font-medium text-muted-foreground">{senderName}</span>
+          <span className="text-[12px] text-muted-foreground/50">{timestamp}</span>
         </div>
 
         {channel === "email" && emailHeader ? (
@@ -1471,8 +1577,8 @@ function MessageBubble({ message, channel, contactEmail, onPreviewImage }: {
           )}>
             <div className="border-b bg-accent/20 px-3 py-2">
               <button onClick={() => setHeaderExpanded(!headerExpanded)}
-                className="flex cursor-pointer items-center gap-2 text-[14px] text-muted-foreground hover:text-foreground transition-colors">
-                <Mail className="h-4 w-4 text-channel-email" />
+                className="flex w-full cursor-pointer items-center gap-2 text-[14px] text-left text-muted-foreground hover:text-foreground transition-colors">
+                <Mail className="h-4 w-4 text-channel-email shrink-0" />
                 <span className="font-medium">{emailHeader.subject}</span>
                 <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", headerExpanded && "rotate-180")} />
               </button>
@@ -1517,8 +1623,10 @@ function MessageBubble({ message, channel, contactEmail, onPreviewImage }: {
               </div>
             )}
           </div>
-        ) : lineStamps.includes(content.trim()) ? (
-          <div className="text-[48px] leading-none py-1">{content}</div>
+        ) : content.trim().startsWith("[スタンプ:") ? (
+          <div className="flex h-20 w-20 items-center justify-center rounded-xl bg-channel-line/10 border border-channel-line/20">
+            <span className="text-[14px] font-medium text-channel-line">{content.replace(/^\[スタンプ:\s*/, "").replace(/\]$/, "")}</span>
+          </div>
         ) : (
           <div>
             <div className={cn(
@@ -1603,10 +1711,10 @@ function ReplyHeader({ channel, channelLabel, accountName, isEmail,
     <div className="border-b bg-accent/20 px-3 py-2">
       <button onClick={() => isEmail ? setExpanded(!expanded) : undefined}
         className={cn(
-          "flex items-center gap-2 text-[14px] text-muted-foreground",
+          "flex items-center gap-2 text-[14px] text-muted-foreground w-full text-left",
           isEmail && "cursor-pointer hover:text-foreground transition-colors"
         )}>
-        <CIcon className={cn("h-4 w-4", cStyle.text)} />
+        <CIcon className={cn("h-4 w-4 shrink-0", cStyle.text)} />
         <span className="font-medium">{channelLabel} {accountName} として返信</span>
         {isEmail && <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", expanded && "rotate-180")} />}
       </button>
