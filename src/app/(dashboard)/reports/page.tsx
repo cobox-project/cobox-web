@@ -122,18 +122,14 @@ function BarTooltip({ d, x, y }: { d: ReturnType<typeof generateMonthData>[0]; x
   );
 }
 
-// Pie chart component with hover tooltips
-function ChannelPieChart() {
+// Pie chart component with hover tooltips — accepts data as props
+function ChannelPieChart({ channelData }: { channelData: { channel: Channel; count: number }[] }) {
   const [hoveredSlice, setHoveredSlice] = useState<{ channel: Channel; count: number; x: number; y: number } | null>(null);
-  const channelCounts = (["instagram", "line", "email", "facebook"] as Channel[]).map((ch) => ({
-    channel: ch,
-    count: conversations.filter((c) => c.channel === ch).length,
-  }));
-  const total = channelCounts.reduce((sum, c) => sum + c.count, 0);
+  const total = channelData.reduce((sum, c) => sum + c.count, 0);
   if (total === 0) return null;
 
   let cumulative = 0;
-  const slices = channelCounts.filter((c) => c.count > 0).map((c) => {
+  const slices = channelData.filter((c) => c.count > 0).map((c) => {
     const startAngle = (cumulative / total) * 360;
     cumulative += c.count;
     const endAngle = (cumulative / total) * 360;
@@ -220,12 +216,29 @@ function SummaryReport({ monthOffset, setMonthOffset, year, month }: {
   monthOffset: number; setMonthOffset: (fn: (p: number) => number) => void;
   year: number; month: number;
 }) {
-  const total = conversations.length;
-  const resolvedCount = conversations.filter((c) => c.status === "completed").length;
-
   const stackedData = useMemo(() => generateMonthData(year, month), [year, month]);
+  const pastData = useMemo(() => stackedData.filter((d) => !d.isFuture), [stackedData]);
+
+  // Compute monthly totals from chart data for consistency
+  const totalIncoming = useMemo(() => pastData.reduce((s, d) => s + d.instagram + d.line + d.email + d.facebook, 0), [pastData]);
+  const totalResolved = useMemo(() => pastData.reduce((s, d) => s + d.resolved, 0), [pastData]);
+  const channelTotals = useMemo(() => (["instagram", "line", "email", "facebook"] as Channel[]).map((ch) => ({
+    channel: ch,
+    count: pastData.reduce((s, d) => s + (d[ch as keyof typeof d] as number), 0),
+  })), [pastData]);
+
+  // Previous month for comparison
+  const prevMonthData = useMemo(() => {
+    const d = new Date(year, month - 1, 1);
+    return generateMonthData(d.getFullYear(), d.getMonth());
+  }, [year, month]);
+  const prevTotal = prevMonthData.reduce((s, d) => s + d.instagram + d.line + d.email + d.facebook, 0);
+  const prevResolved = prevMonthData.reduce((s, d) => s + d.resolved, 0);
+  const incomingDiff = prevTotal > 0 ? Math.round(((totalIncoming - prevTotal) / prevTotal) * 100) : 0;
+  const resolvedDiff = prevResolved > 0 ? Math.round(((totalResolved - prevResolved) / prevResolved) * 100) : 0;
+
   const maxStacked = Math.max(...stackedData.map((d) => d.instagram + d.line + d.email + d.facebook));
-  const maxResolved = Math.max(...stackedData.map((d) => d.resolved));
+  const maxResolved = Math.max(...pastData.map((d) => d.resolved), 1);
 
   const [hoveredBar, setHoveredBar] = useState<{ d: typeof stackedData[0]; x: number; y: number } | null>(null);
 
@@ -243,23 +256,23 @@ function SummaryReport({ monthOffset, setMonthOffset, year, month }: {
             <Inbox className="h-4 w-4 text-muted-foreground" />
             <span className="text-[13px] text-muted-foreground">新着</span>
           </div>
-          <p className="text-[28px] font-semibold tabular-nums">{total}</p>
-          <div className="mt-2 text-[12px] text-muted-foreground">前月比 <span className="text-foreground font-medium">+12%</span></div>
+          <p className="text-[28px] font-semibold tabular-nums">{totalIncoming}</p>
+          <div className="mt-2 text-[12px] text-muted-foreground">前月比 <span className={cn("font-medium", incomingDiff >= 0 ? "text-foreground" : "text-destructive")}>{incomingDiff >= 0 ? "+" : ""}{incomingDiff}%</span></div>
         </div>
         <div className="rounded-lg border bg-white px-5 py-5 flex flex-col justify-between h-full">
           <div className="flex items-center gap-2 mb-2">
             <Check className="h-4 w-4 text-muted-foreground" />
             <span className="text-[13px] text-muted-foreground">完了数</span>
           </div>
-          <p className="text-[28px] font-semibold tabular-nums">{resolvedCount}</p>
-          <div className="mt-2 text-[12px] text-muted-foreground">前月比 <span className="text-foreground font-medium">+8%</span></div>
+          <p className="text-[28px] font-semibold tabular-nums">{totalResolved}</p>
+          <div className="mt-2 text-[12px] text-muted-foreground">前月比 <span className={cn("font-medium", resolvedDiff >= 0 ? "text-foreground" : "text-destructive")}>{resolvedDiff >= 0 ? "+" : ""}{resolvedDiff}%</span></div>
         </div>
         <div className="rounded-lg border bg-white px-5 py-5">
           <div className="flex items-center gap-2 mb-3">
             <BarChart3 className="h-4 w-4 text-muted-foreground" />
             <span className="text-[13px] text-muted-foreground">チャネル比率</span>
           </div>
-          <ChannelPieChart />
+          <ChannelPieChart channelData={channelTotals} />
         </div>
       </div>
 
@@ -269,21 +282,20 @@ function SummaryReport({ monthOffset, setMonthOffset, year, month }: {
           <h3 className="text-[15px] font-semibold">新着と完了数の推移</h3>
         </div>
         <div className="relative flex-1 min-h-[260px]">
-          {/* SVG polyline overlay - uses same grid positioning as bars */}
-          <svg className="absolute inset-0 w-full h-full pointer-events-none z-10" viewBox={`0 0 ${stackedData.length * 100} 260`} preserveAspectRatio="none">
-            <polyline fill="none" stroke="oklch(0.52 0.17 155)" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round"
-              vectorEffect="non-scaling-stroke"
-              points={stackedData.map((d, i) => {
-                const x = (i + 0.5) / stackedData.length * stackedData.length * 100;
-                const y = maxResolved > 0 ? 260 - (d.resolved / maxResolved) * 240 : 260;
-                return `${x},${y}`;
-              }).join(" ")} />
-            {stackedData.map((d, i) => {
-              const x = (i + 0.5) / stackedData.length * stackedData.length * 100;
-              const y = maxResolved > 0 ? 260 - (d.resolved / maxResolved) * 240 : 260;
-              return <circle key={i} cx={x} cy={y} r="4" fill="white" stroke="oklch(0.52 0.17 155)" strokeWidth="2" vectorEffect="non-scaling-stroke" />;
-            })}
-          </svg>
+          {/* SVG polyline overlay - only renders up to today, not future days */}
+          {pastData.length > 0 && (
+            <svg className="absolute inset-0 w-full h-full pointer-events-none z-10"
+              viewBox={`0 0 ${stackedData.length} 260`} preserveAspectRatio="none">
+              <polyline fill="none" stroke="oklch(0.52 0.17 155)" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round"
+                vectorEffect="non-scaling-stroke"
+                points={pastData.map((d) => {
+                  const i = d.dayNum - 1;
+                  const x = i + 0.5;
+                  const y = 260 - (d.resolved / maxResolved) * 230 - 10;
+                  return `${x},${y}`;
+                }).join(" ")} />
+            </svg>
+          )}
           {/* Bars grid - equal columns */}
           <div className="relative grid h-[260px]" style={{ gridTemplateColumns: `repeat(${stackedData.length}, 1fr)` }}>
             {stackedData.map((d, i) => {
