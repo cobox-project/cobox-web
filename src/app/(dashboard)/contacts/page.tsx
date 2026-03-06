@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useMemo, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useMemo, useEffect, useRef, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
   contacts as initialContacts,
@@ -46,16 +46,39 @@ function isAddMode(contact: Contact): boolean {
 }
 
 export default function ContactsPage() {
+  return (
+    <Suspense fallback={<div className="flex h-full items-center justify-center text-muted-foreground">読み込み中...</div>}>
+      <ContactsPageInner />
+    </Suspense>
+  );
+}
+
+function ContactsPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const initialContactId = searchParams.get("contact") || null;
+  const initialGroupId = searchParams.get("group") || null;
+  const initialEdit = searchParams.get("edit") === "true";
+
   const [contacts, setContacts] = useState(initialContacts);
   const [groups, setGroups] = useState(initialGroups);
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
-  const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
-  const [isEditing, setIsEditing] = useState(false);
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(initialGroupId);
+  const [selectedContactId, setSelectedContactId] = useState<string | null>(initialContactId);
+  const [isEditing, setIsEditing] = useState(initialEdit);
   const [showAddGroup, setShowAddGroup] = useState(false);
   const [showAddToGroup, setShowAddToGroup] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+  // Sync URL when state changes
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (selectedGroupId) params.set("group", selectedGroupId);
+    if (selectedContactId) params.set("contact", selectedContactId);
+    if (isEditing) params.set("edit", "true");
+    const qs = params.toString();
+    window.history.replaceState(null, "", `/contacts${qs ? `?${qs}` : ""}`);
+  }, [selectedGroupId, selectedContactId, isEditing]);
 
   const groupContacts = useMemo(() => {
     if (!selectedGroupId) return contacts;

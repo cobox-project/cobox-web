@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useRef, Suspense } from "react";
+import { useState, useMemo, useEffect, useRef, Suspense, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { contacts, contactGroups, composeTemplates, accounts } from "@/data/mock";
@@ -102,8 +102,23 @@ function ComposePageInner() {
       .replace(/\{\{会社名\}\}/g, contact.company ?? "");
   };
 
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
+
   const insertVariable = (variable: string) => {
-    setBody((prev) => prev + variable);
+    const el = bodyRef.current;
+    if (el) {
+      const start = el.selectionStart;
+      const end = el.selectionEnd;
+      const newBody = body.substring(0, start) + variable + body.substring(end);
+      setBody(newBody);
+      requestAnimationFrame(() => {
+        el.focus();
+        const cursorPos = start + variable.length;
+        el.setSelectionRange(cursorPos, cursorPos);
+      });
+    } else {
+      setBody((prev) => prev + variable);
+    }
   };
 
   const handleLoadTemplate = (templateId: string) => {
@@ -139,6 +154,15 @@ function ComposePageInner() {
   }, [searchQuery]);
 
   const hasContent = subject.trim() || body.trim();
+
+  // Detect undefined variables in subject + body
+  const undefinedVars = useMemo(() => {
+    const definedKeys = new Set(variableButtons.map((v) => v.variable));
+    const allText = subject + " " + body;
+    const matches = allText.match(/\{\{[^}]+\}\}/g) ?? [];
+    const unique = [...new Set(matches)];
+    return unique.filter((v) => !definedKeys.has(v));
+  }, [subject, body]);
 
   const handleSaveDraft = () => {
     const draft: Draft = {
@@ -363,7 +387,7 @@ function ComposePageInner() {
                 </div>
               )}
 
-              <textarea value={body} onChange={(e) => setBody(e.target.value)}
+              <textarea ref={bodyRef} value={body} onChange={(e) => setBody(e.target.value)}
                 placeholder="メッセージ本文を入力..."
                 rows={12}
                 className="w-full resize-none rounded-lg border px-3 py-2.5 text-[15px] leading-relaxed outline-none focus:border-brand/40 placeholder:text-muted-foreground/50" />
@@ -388,6 +412,14 @@ function ComposePageInner() {
                 </select>
               )}
             </div>
+
+            {undefinedVars.length > 0 && (
+              <div className="mb-4 rounded-lg border border-amber-300/50 bg-amber-50/50 px-3 py-2">
+                <p className="text-[12px] font-medium text-amber-700">
+                  念の為ご確認ください：未定義の変数が含まれています {undefinedVars.join(" ")}
+                </p>
+              </div>
+            )}
 
             {previewContact ? (
               <div className="rounded-lg border bg-background p-5">
