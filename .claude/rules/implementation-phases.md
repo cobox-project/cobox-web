@@ -24,14 +24,19 @@
 
 ## Phase 3: メッセージングチャネル
 
-1. Resend 統合（送信 + Webhook 受信 + 署名検証 + 冪等性）
-2. ThreadingService（7日ウィンドウ、メールヘッダマッチング）
-3. StatusMachine（requirements.md の遷移表を実装）
-4. LINE Messaging API 統合（送信 + Webhook 受信 + 署名検証）
-5. Instagram Graph API 統合（送信 + Webhook 受信 + 検証）
-6. Facebook Messenger API 統合（送信 + Webhook 受信 + 検証）
-7. ChannelGateway による統一メッセージ送信インターフェース
-8. チャネル別コンタクト解決（contact_channel_handles）
+1. StatusMachine（ステータス遷移表の純粋関数実装 + 単体テスト）
+2. ConversationResolver（7日ウィンドウ + ステータス判定 + 再浮上ロジック）
+3. ContactResolver（contact_channel_handles による自動コンタクト作成・解決）
+4. ChannelGateway 統一インターフェース + ChannelRouter
+5. EmailGateway 統合
+   - Gmail OAuth + Gmail API 送受信 + Push Notification
+   - Outlook OAuth + Microsoft Graph API 送受信 + Change Notification
+   - Resend API 送受信 + Inbound Webhook
+6. LINE Messaging API 統合（Reply/Push API + Webhook 受信 + 署名検証 + 冪等性）
+7. Instagram Graph API 統合（送信 + Webhook 受信 + 検証チャレンジ + 冪等性）
+8. Facebook Messenger API 統合（送信 + Webhook 受信 + 検証チャレンジ + 冪等性）
+9. メンション機能（@ユーザー名パース + message_mentions + 通知）
+10. 自動アサイン API（POST /conversations/:id/self-assign）
 
 ## Phase 4: 機能追加
 
