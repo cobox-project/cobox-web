@@ -28,10 +28,7 @@
 2. ConversationResolver（7日ウィンドウ + ステータス判定 + 再浮上ロジック）
 3. ContactResolver（contact_channel_handles による自動コンタクト作成・解決）
 4. ChannelGateway 統一インターフェース + ChannelRouter
-5. EmailGateway 統合
-   - Gmail OAuth + Gmail API 送受信 + Push Notification
-   - Outlook OAuth + Microsoft Graph API 送受信 + Change Notification
-   - Resend API 送受信 + Inbound Webhook
+5. EmailGateway 統合（Resend API 送受信 + Inbound Webhook + 署名検証 + 冪等性）
 6. LINE Messaging API 統合（Reply/Push API + Webhook 受信 + 署名検証 + 冪等性）
 7. Instagram Graph API 統合（送信 + Webhook 受信 + 検証チャレンジ + 冪等性）
 8. Facebook Messenger API 統合（送信 + Webhook 受信 + 検証チャレンジ + 冪等性）
@@ -40,11 +37,12 @@
 
 ## Phase 4: 機能追加
 
-1. テンプレート + 変数補間
-2. 一括メール送信（Cloudflare Queues + DLQ）
-3. チーム権限管理
-4. コンタクトグループ
-5. ファイル添付（R2）
+1. SSE リアルタイム通信（Durable Objects + EventSource）+ 入力ロック API
+2. テンプレート + 変数補間
+3. 一括メール送信（Cloudflare Queues + DLQ）
+4. チーム権限管理
+5. コンタクトグループ
+6. ファイル添付（R2）
 
 ## Phase 5: 課金・プラン
 
@@ -57,10 +55,10 @@
 
 ## Phase 6: Public API / M2M
 
-1. CallerIdentification ミドルウェア（Cookie / Bearer / API Key 判別）
+1. CallerIdentification ミドルウェア（Cookie / Bearer 判別）
 2. Authentication ミドルウェアの CallerType 分岐対応
-3. API Key テーブル + CRUD エンドポイント + BillingService 連携
-4. API Key スコープ → CASL Ability マッピング
+3. WorkOS Connect M2M アプリケーション管理エンドポイント
+4. M2M トークン permissions → CASL Ability マッピング
 5. CallerType 別レート制限（Cloudflare Rate Limiting）
 6. API バージョニング（`/api/v1` プレフィックス）+ フロントエンド URL 更新
 7. OpenAPI SecurityScheme 整備 + Scalar ドキュメント更新
