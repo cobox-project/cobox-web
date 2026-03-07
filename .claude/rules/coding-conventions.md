@@ -1252,6 +1252,11 @@ const sendLineMessage = (
 - [ ] 副作用のある POST エンドポイントが `Idempotency-Key` ヘッダーに対応しているか
 - [ ] 更新系エンドポイントが楽観的ロック（`superseded_at` チェック）を実装しているか
 - [ ] `ConflictError` が `409 Conflict` にマッピングされているか
+- [ ] 冪等な操作（self-assign, favorite, read mark）が `ON CONFLICT DO NOTHING` / UPSERT を使用しているか
+- [ ] ステータス遷移が WHERE に `status = $expectedCurrentStatus` を含む CAS パターンか
+- [ ] アサイン操作が親テーブル（`conversations.superseded_at`）の楽観的ロックを併用しているか
+- [ ] メッセージ送信時の `last_message_at` 更新が `GREATEST()` で安全に行われているか
+- [ ] フロントエンドが 409 Conflict 時にデータ再取得 + ユーザー通知を行うか
 
 ### ページネーション
 

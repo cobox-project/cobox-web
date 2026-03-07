@@ -1838,7 +1838,7 @@ export type IdempotencyService = {
 | `POST /conversations/:id/messages` | `Idempotency-Key` ヘッダー | クライアント生成の UUID |
 | `POST /bulk-email/send` | `Idempotency-Key` ヘッダー | クライアント生成の UUID |
 | `POST /billing/checkout` | Stripe 側で管理 | Stripe の冪等性キー |
-| `PATCH` 系 | 楽観的ロック | `updated_at` ベース |
+| `PATCH` 系 | 楽観的ロック | `superseded_at` ベース |
 
 ```typescript
 // ミドルウェアでの処理
@@ -1849,19 +1849,19 @@ export type IdempotencyService = {
 ### 楽観的ロック
 
 複数オペレーターが同一リソースを同時に更新するケースに対応する。
-`updated_at` を使用した楽観的ロックを実装する。
+`superseded_at` を使用した楽観的ロックを実装する。
 
 ```typescript
 // Repository での実装
-const update = (tenantId: TenantId, id: ConversationId, data: UpdateData, expectedUpdatedAt: Temporal.Instant) =>
+const update = (tenantId: TenantId, id: ConversationId, data: UpdateData, expectedSupersededAt: Temporal.Instant) =>
   Effect.gen(function* () {
     const result = yield* Effect.promise(() =>
       db.update(conversations)
-        .set({ ...data, updated_at: ctx.requestedAt.toString() })
+        .set({ ...data, superseded_at: ctx.requestedAt.toString() })
         .where(and(
           eq(conversations.tenantId, tenantId),
           eq(conversations.id, id),
-          eq(conversations.updatedAt, expectedUpdatedAt.toString()),  // 楽観的ロック
+          eq(conversations.supersededAt, expectedSupersededAt.toString()),  // 楽観的ロック
         ))
         .returning()
     )
@@ -1872,8 +1872,170 @@ const update = (tenantId: TenantId, id: ConversationId, data: UpdateData, expect
   })
 ```
 
-- クライアントは取得時の `updated_at` を更新リクエストに含める
+- クライアントは取得時の `superseded_at` を更新リクエストに含める
 - 不一致時は `409 Conflict` を返し、クライアントに再取得を促す
+
+### 並行操作の安全性（複数タブ・複数ユーザー）
+
+複数のブラウザタブや複数ユーザーが同一リソースを同時に操作するケースに対応する。
+
+#### データ鮮度の維持（フロントエンド）
+
+リアルタイム通信（WebSocket / SSE）は初期実装では導入しない。代わりにポーリング + フォーカス時再取得で鮮度を保つ。
+
+```typescript
+// @cobox/web でのデータ取得パターン（SWR / TanStack Query）
+const { data } = useSWR("/conversations", fetcher, {
+  refreshInterval: 15_000,        // 15秒ポーリング（一覧画面）
+  revalidateOnFocus: true,        // タブフォーカス時に再取得
+  revalidateOnReconnect: true,    // ネットワーク復帰時に再取得
+  dedupingInterval: 5_000,        // 5秒以内の重複リクエストを抑制
+})
+```
+
+| 画面 | ポーリング間隔 | 理由 |
+| --- | --- | --- |
+| 会話一覧 | 15秒 | 新着・ステータス変更を比較的早く検知 |
+| 会話詳細 | 10秒 | メッセージの追加を検知 |
+| コンタクト一覧 | 60秒 | 変更頻度が低い |
+| ダッシュボード | 60秒 | 集計値のため即時性不要 |
+
+#### 操作の分類と競合制御
+
+| 操作 | 競合制御方式 | 理由 |
+| --- | --- | --- |
+| PATCH（ステータス変更、コンタクト更新等） | 楽観的ロック（`superseded_at`） | 古いデータで上書きを防止 |
+| POST（メッセージ送信、一括メール送信） | `Idempotency-Key` ヘッダ | 重複送信を防止 |
+| self-assign | 冪等な UPSERT | ロック不要。既にアサイン済みなら何もしない |
+| favorite トグル | 冪等な UPSERT / DELETE | `ON CONFLICT DO NOTHING` で重複を許容 |
+| read マーク | 冪等な UPSERT | `last_read_at` を最新値で上書き |
+| アサイン追加/削除 | 楽観的ロック（`conversations.superseded_at`） | `conversation_assignees` 操作時に親の `superseded_at` もチェック |
+
+#### ステータス遷移の原子性
+
+ステータス変更は「現在のステータスを読む → StatusMachine で遷移計算 → 更新」の3ステップ。
+楽観的ロック（`superseded_at`）による検出に加え、DB レベルで原子性を保証する。
+
+```sql
+-- ステータス遷移の原子的更新（SELECT FOR UPDATE は不要）
+-- WHERE に現在のステータスを含めることで CAS（Compare-And-Swap）を実現
+UPDATE conversations
+SET status = $new_status, superseded_at = $requestedAt
+WHERE tenant_id = $tenantId
+  AND id = $conversationId
+  AND status = $expectedCurrentStatus
+  AND superseded_at = $expectedSupersededAt
+RETURNING *;
+-- 0 rows → 別の操作が先行。409 Conflict を返す
+```
+
+#### アサイン操作のレース保護
+
+`conversation_assignees` は物理 INSERT / DELETE のため、楽観的ロックの対象外。
+代わりに `conversations.superseded_at` を親レコードのバージョンとして利用する。
+
+```typescript
+// アサイン操作は conversations テーブルの superseded_at を同時に更新
+const assignUser = (conversationId, userId, expectedSupersededAt) =>
+  withTransaction((tx) =>
+    pipe(
+      // 1. 親の楽観的ロックチェック + superseded_at 更新
+      tx.update(conversations)
+        .set({ superseded_at: ctx.requestedAt })
+        .where(and(
+          eq(conversations.id, conversationId),
+          eq(conversations.supersededAt, expectedSupersededAt),
+        ))
+        .returning(),
+      // 2. アサイン追加（ON CONFLICT DO NOTHING で冪等に）
+      tx.insert(conversationAssignees)
+        .values({ conversationId, userId, tenantId, assignedAt: ctx.requestedAt })
+        .onConflictDoNothing(),
+    )
+  )
+```
+
+#### self-assign の冪等性
+
+フロントエンドが入力開始時に呼び出すため、連打・複数タブから同時に呼ばれる可能性が高い。
+楽観的ロックは使用せず、`ON CONFLICT DO NOTHING` で冪等に処理する。
+
+```typescript
+// POST /conversations/:id/self-assign
+// 楽観的ロック不要 — 追加的な操作で他ユーザーの操作と競合しない
+const selfAssign = (conversationId, userId) =>
+  db.insert(conversationAssignees)
+    .values({ conversationId, userId, tenantId, assignedAt: ctx.requestedAt })
+    .onConflictDoNothing()  // 既にアサイン済みなら何もしない（冪等）
+```
+
+#### favorite トグルのレース保護
+
+同一ユーザーが複数タブから同時にトグルした場合のレースを防ぐ。
+
+```typescript
+// PATCH /conversations/:id/favorite
+// 存在チェック + INSERT/DELETE を単一クエリで実現
+const toggleFavorite = (conversationId, userId) =>
+  db.execute(sql`
+    WITH existing AS (
+      SELECT 1 FROM conversation_favorites
+      WHERE conversation_id = ${conversationId}
+        AND user_id = ${userId}
+        AND tenant_id = ${tenantId}
+    )
+    DELETE FROM conversation_favorites
+    WHERE conversation_id = ${conversationId}
+      AND user_id = ${userId}
+      AND tenant_id = ${tenantId}
+      AND EXISTS (SELECT 1 FROM existing)
+    RETURNING 'removed' AS action;
+
+    -- 削除されなかった場合は INSERT
+    INSERT INTO conversation_favorites (conversation_id, user_id, tenant_id, recorded_at)
+    SELECT ${conversationId}, ${userId}, ${tenantId}, ${ctx.requestedAt}
+    WHERE NOT EXISTS (
+      SELECT 1 FROM conversation_favorites
+      WHERE conversation_id = ${conversationId}
+        AND user_id = ${userId}
+        AND tenant_id = ${tenantId}
+    );
+  `)
+```
+
+#### 同一会話への同時返信
+
+複数ユーザーが同じ会話で同時に返信する場合、メッセージ自体は INSERT（競合なし）だが、
+`conversations.last_message_at` と `status` の更新が競合する。
+
+```sql
+-- last_message_at は「最新値が勝つ」ので GREATEST で安全に更新
+UPDATE conversations
+SET last_message_at = GREATEST(last_message_at, $messageRecordedAt),
+    status = CASE
+      WHEN status IN ('completed', 'no_action') THEN 'in_progress'
+      WHEN status = 'new' THEN 'in_progress'
+      ELSE status
+    END,
+    superseded_at = $requestedAt
+WHERE tenant_id = $tenantId AND id = $conversationId;
+```
+
+この UPDATE は楽観的ロックを使用しない（メッセージ送信は「追加的」操作のため、他ユーザーの送信と競合しても両方成功すべき）。
+
+#### 409 Conflict 時のフロントエンド対応
+
+```typescript
+// @cobox/web でのエラーハンドリング
+const handleConflict = async (error: ApiError) => {
+  if (error.status === 409) {
+    // 1. 最新データを再取得
+    await mutate(`/conversations/${id}`)
+    // 2. ユーザーに通知（トーストで表示）
+    toast.warn("他のユーザーが先に更新しました。最新の状態を確認してください。")
+  }
+}
+```
 
 ---
 
