@@ -46,6 +46,7 @@ import {
   FolderOpen,
   Ban,
   User,
+  Lock,
 } from "lucide-react";
 
 const channelIcons: Record<Channel, React.ElementType> = {
@@ -1131,12 +1132,26 @@ function ConversationItem({ conversation, isSelected, isRecentlyRead, isSelfAssi
           </span>
         </div>
 
-        <p className={cn(
-          "mt-0.5 truncate text-[13px] leading-relaxed",
-          isSelected ? "text-white/70" : "text-muted-foreground"
-        )}>
-          {displayText}
-        </p>
+        {conversation.typingUser && conversation.typingUser.id !== currentUser.id ? (
+          <p className={cn(
+            "mt-0.5 flex items-center gap-1 text-[13px] leading-relaxed",
+            isSelected ? "text-white/70" : "text-amber-600"
+          )}>
+            <span className="inline-flex gap-0.5">
+              <span className="animate-bounce" style={{ animationDelay: "0ms", animationDuration: "1s" }}>&bull;</span>
+              <span className="animate-bounce" style={{ animationDelay: "150ms", animationDuration: "1s" }}>&bull;</span>
+              <span className="animate-bounce" style={{ animationDelay: "300ms", animationDuration: "1s" }}>&bull;</span>
+            </span>
+            <span className="truncate">{conversation.typingUser.name} が入力中</span>
+          </p>
+        ) : (
+          <p className={cn(
+            "mt-0.5 truncate text-[13px] leading-relaxed",
+            isSelected ? "text-white/70" : "text-muted-foreground"
+          )}>
+            {displayText}
+          </p>
+        )}
 
         {/* Assignees / Status */}
         <div className="mt-1.5 flex items-center justify-between">
@@ -1391,6 +1406,7 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
   const isEmail = conversation.channel === "email";
   const isLine = conversation.channel === "line";
   const isSelfAssigned = conversation.assignees.some((a) => a.id === currentUser.id);
+  const isLockedByOther = conversation.typingUser != null && conversation.typingUser.id !== currentUser.id;
 
   const contactObj = contacts.find((c) => c.id === conversation.contactId);
   const accountObj = accounts.find((a) => a.id === conversation.accountId);
@@ -1578,7 +1594,23 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
 
             {/* Reply input */}
             <div className="flex justify-end">
-              <div className="w-[70%] rounded-lg border bg-background focus-within:border-brand/30">
+              <div className={cn("relative w-[70%] rounded-lg border bg-background", isLockedByOther ? "border-amber-300/60" : "focus-within:border-brand/30")}>
+                {/* Typing lock overlay */}
+                {isLockedByOther && (
+                  <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-amber-50/80 backdrop-blur-[1px]">
+                    <div className="flex items-center gap-2 rounded-full bg-white/90 border border-amber-200 px-4 py-2 shadow-sm">
+                      <Lock className="h-3.5 w-3.5 text-amber-500" />
+                      <span className="text-[13px] font-medium text-amber-700">
+                        {conversation.typingUser!.name} が入力中...
+                      </span>
+                      <span className="flex gap-0.5 text-amber-500">
+                        <span className="animate-bounce" style={{ animationDelay: "0ms", animationDuration: "1s" }}>&bull;</span>
+                        <span className="animate-bounce" style={{ animationDelay: "150ms", animationDuration: "1s" }}>&bull;</span>
+                        <span className="animate-bounce" style={{ animationDelay: "300ms", animationDuration: "1s" }}>&bull;</span>
+                      </span>
+                    </div>
+                  </div>
+                )}
                 <ReplyHeader
                   channel={conversation.channel}
                   channelLabel={channelLabel}
@@ -1591,7 +1623,8 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
                   emailSubject={emailSubject} setEmailSubject={setEmailSubject}
                 />
                 <textarea value={replyText} onChange={(e) => handleReplyChange(e.target.value)}
-                  placeholder="メッセージを入力..."
+                  placeholder={isLockedByOther ? `${conversation.typingUser!.name} が入力中...` : "メッセージを入力..."}
+                  disabled={isLockedByOther}
                   rows={3}
                   className="w-full resize-none bg-transparent px-3 pt-2.5 pb-0 text-[15px] leading-relaxed outline-none placeholder:text-muted-foreground/50"
                   onKeyDown={(e) => {
@@ -1678,7 +1711,7 @@ function ConversationDetail({ conversation, conversations: allConvs, onStatusCha
                     )}
                   </div>
                   <Button size="sm" className="h-8 rounded-md bg-brand hover:bg-brand/90 px-4 text-[14px]"
-                    disabled={!replyText.trim() && attachedFiles.length === 0} onClick={handleSendReply}>
+                    disabled={isLockedByOther || (!replyText.trim() && attachedFiles.length === 0)} onClick={handleSendReply}>
                     <Send className="h-3 w-3 mr-1" /> 送信
                   </Button>
                 </div>
