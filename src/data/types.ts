@@ -88,6 +88,7 @@ export interface Conversation {
   isFavorite?: boolean;
   linkedConversationIds?: string[];
   linkedContactId?: string;
+  typingUser?: { id: string; name: string } | null;
 }
 
 export interface AccountPermission {
