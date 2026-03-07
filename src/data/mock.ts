@@ -666,6 +666,7 @@ export const conversations: Conversation[] = [
     unreadCount: 1,
     isRead: false,
     linkedContactId: "ct5",
+    typingUser: { id: "u2", name: "佐藤 健太" },
     messages: [
       {
         id: "m29",
